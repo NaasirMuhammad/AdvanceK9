@@ -2,6 +2,13 @@
 
 All published AdvancedK9 versions are beta builds.
 
+## 1.7.5-beta
+
+- Fixes the controller-ending `address cannot be zero` error caused by named native resolution in RPH.
+- Reads LSPDFR's own current-session on-duty/off-duty messages as the authoritative cross-AppDomain duty signal.
+- Uses a direct native hash and relationship group only as contained fallbacks.
+- Prevents any duty-probe failure from terminating the AdvancedK9 controller.
+
 ## 1.7.4-beta
 
 - Detects LSPDFR duty using GTA's native player cop flag, supporting EUP/freemode officers whose relationship group remains unchanged.
