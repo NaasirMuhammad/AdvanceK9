@@ -1,3 +1,4 @@
+ 1 file changed, 1 insertion(+), 1 deletion(-)
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -458,7 +459,7 @@ namespace AdvancedK9
                 return;
             }
             _state = K9State.Tracking;
-            float rain=NativeFunction.Natives.GET_RAIN_LEVEL<float>();float ageMinutes=_scentCollectedAt==0?0:(Game.GameTime-_scentCollectedAt)/60000f;float distance=target.DistanceTo(Game.LocalPlayer.Character);bool inVehicle=target.CurrentVehicle!=null;int scentQuality=Math.Max(5,100-(int)(ageMinutes*8)-(int)(rain*35)-(int)(distance/12)-(inVehicle?22:0));
+            float rain=NativeFunction.Natives.GET_RAIN_LEVEL<float>();float ageMinutes=_scentCollectedAt==0?0:(Game.GameTime-_scentCollectedAt)/60000f;float initialDistance=target.DistanceTo(Game.LocalPlayer.Character);bool inVehicle=target.CurrentVehicle!=null;int scentQuality=Math.Max(5,100-(int)(ageMinutes*8)-(int)(rain*35)-(int)(initialDistance/12)-(inVehicle?22:0));
             if(scentQuality<18){Game.DisplayNotification("~r~Scent trail is too degraded.~s~~n~Collect a fresh scent article; rain, age, distance, and vehicles weaken odor.");return;}
             Game.DisplayNotification("~b~K9 scent track started.~s~ Quality "+scentQuality+"%~n~Rain, trail age, distance, and vehicle travel affect the track.");K9IncidentLog.Write(_profile.Name,"Track","Started quality "+scentQuality+"%",target.Position);
             var end = Game.GameTime + 120000;
