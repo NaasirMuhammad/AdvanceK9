@@ -25,9 +25,12 @@ namespace AdvancedK9
         public int Stamina { get; private set; } = 100;
         public string Injury { get; private set; } = "None";
         public bool ObedienceCertified { get; private set; }
+        public bool AgilityCertified { get; private set; }
         public bool DetectionCertified { get; private set; }
         public bool TrackingCertified { get; private set; }
         public bool ApprehensionCertified { get; private set; }
+        public int TrainingLevel { get; private set; } = 1;
+        public int TrainingLevelProgress { get; private set; }
         public int Deployments { get; private set; }
         public int SuccessfulSearches { get; private set; }
         public float HudX { get; private set; } = .865f;
@@ -51,6 +54,7 @@ namespace AdvancedK9
             CustomModel = config.CustomDogModel;
             VestComponent = config.VestComponent;
             Load();
+            MigrateTrainingProgress();
         }
 
         public void NextBreed() { BreedIndex = (BreedIndex + 1) % Breeds.Length; Save(); }
@@ -66,7 +70,9 @@ namespace AdvancedK9
         public void AdjustEquipmentTexture(Ped dog,int delta){int count=GetVestTextureCount(dog);VestTexture=Wrap(VestTexture+delta,Math.Max(1,count));Save();Apply(dog);}
         public void PrepareDeployment(){if(Health<=25){Health=100;Stamina=100;Injury="None";Save();}}
         public void SetName(string value) { if (!string.IsNullOrWhiteSpace(value)) { Name=value.Trim(); Save(); } }
-        public void AddXp(int value) { TrainingXp=Math.Max(0,TrainingXp+value); if(TrainingXp>=25)ObedienceCertified=true; if(TrainingXp>=60)DetectionCertified=true; if(TrainingXp>=100)TrackingCertified=true; if(TrainingXp>=150)ApprehensionCertified=true; Save(); }
+        public void AddXp(int value) { TrainingXp=Math.Max(0,TrainingXp+value); Save(); }
+        public bool ApplyTrainingProgress(int level,int points){if(level!=TrainingLevel||TrainingLevelProgress>=100)return false;TrainingLevelProgress=Clamp(TrainingLevelProgress+Math.Max(0,points),0,100);TrainingXp+=Math.Max(0,points/4);bool completed=TrainingLevelProgress>=100;if(completed){if(level==1)ObedienceCertified=true;else if(level==2)AgilityCertified=true;else if(level==3)DetectionCertified=true;else if(level==4)TrackingCertified=true;else if(level==5)ApprehensionCertified=true;if(level<5){TrainingLevel++;TrainingLevelProgress=0;}}Save();return completed;}
+        public string CurrentTrainingName=>TrainingLevel==1?"Basic Obedience":TrainingLevel==2?"Agility / Handler Control":TrainingLevel==3?"Detection":TrainingLevel==4?"Tracking":"Apprehension";
         public void ChangeTrust(int value){Trust=Clamp(Trust+value,0,100);Save();}
         public void UseStamina(int value){Stamina=Clamp(Stamina-value,0,100);if(Stamina<15)ChangeTrust(-1);Save();}
         public void Recover(int value){Stamina=Clamp(Stamina+value,0,100);Health=Clamp(Health+value/2,0,100);Save();}
@@ -97,7 +103,7 @@ namespace AdvancedK9
             {
                 var directory = Path.GetDirectoryName(_path);
                 if (!Directory.Exists(directory)) Directory.CreateDirectory(directory);
-                File.WriteAllLines(_path, new[]{"Version=3","Name="+Name,"Breed="+BreedIndex,"Skin="+CoatVariation,"Equipment="+VestIndex,"Texture="+VestTexture,"XP="+TrainingXp,"Trust="+Trust,"Health="+Health,"Stamina="+Stamina,"Injury="+Injury,"CertObedience="+ObedienceCertified,"CertDetection="+DetectionCertified,"CertTracking="+TrackingCertified,"CertApprehension="+ApprehensionCertified,"Deployments="+Deployments,"Searches="+SuccessfulSearches,"HudX="+HudX,"HudY="+HudY,"HudScale="+HudScale,"HudMode="+HudMode});
+                File.WriteAllLines(_path, new[]{"Version=4","Name="+Name,"Breed="+BreedIndex,"Skin="+CoatVariation,"Equipment="+VestIndex,"Texture="+VestTexture,"XP="+TrainingXp,"Trust="+Trust,"Health="+Health,"Stamina="+Stamina,"Injury="+Injury,"TrainingLevel="+TrainingLevel,"TrainingProgress="+TrainingLevelProgress,"CertObedience="+ObedienceCertified,"CertAgility="+AgilityCertified,"CertDetection="+DetectionCertified,"CertTracking="+TrackingCertified,"CertApprehension="+ApprehensionCertified,"Deployments="+Deployments,"Searches="+SuccessfulSearches,"HudX="+HudX,"HudY="+HudY,"HudScale="+HudScale,"HudMode="+HudMode});
             }
             catch (Exception ex) { Game.LogTrivial("AdvancedK9 profile save: " + ex.Message); }
         }
@@ -108,7 +114,7 @@ namespace AdvancedK9
             {
                 if (!File.Exists(_path)) return;
                 var values = File.ReadAllLines(_path);
-                if(values.Length>0 && values[0].StartsWith("Version=")) { foreach(string line in values){int split=line.IndexOf('=');if(split<1)continue;string k=line.Substring(0,split),v=line.Substring(split+1);int n;float f;bool flag;switch(k){case "Name":if(!string.IsNullOrWhiteSpace(v))Name=v;break;case "Breed":if(int.TryParse(v,out n))BreedIndex=Clamp(n,0,Breeds.Length-1);break;case "Skin":if(int.TryParse(v,out n))CoatVariation=Math.Max(0,n);break;case "Equipment":if(int.TryParse(v,out n))VestIndex=Clamp(n,0,Vests.Length-1);break;case "Texture":if(int.TryParse(v,out n))VestTexture=Math.Max(0,n);break;case "XP":if(int.TryParse(v,out n))TrainingXp=Math.Max(0,n);break;case "Trust":if(int.TryParse(v,out n))Trust=Clamp(n,0,100);break;case "Health":if(int.TryParse(v,out n))Health=Clamp(n,0,100);break;case "Stamina":if(int.TryParse(v,out n))Stamina=Clamp(n,0,100);break;case "Injury":Injury=v;break;case "CertObedience":if(bool.TryParse(v,out flag))ObedienceCertified=flag;break;case "CertDetection":if(bool.TryParse(v,out flag))DetectionCertified=flag;break;case "CertTracking":if(bool.TryParse(v,out flag))TrackingCertified=flag;break;case "CertApprehension":if(bool.TryParse(v,out flag))ApprehensionCertified=flag;break;case "Deployments":if(int.TryParse(v,out n))Deployments=n;break;case "Searches":if(int.TryParse(v,out n))SuccessfulSearches=n;break;case "HudX":if(float.TryParse(v,out f))HudX=f;break;case "HudY":if(float.TryParse(v,out f))HudY=f;break;case "HudScale":if(float.TryParse(v,out f))HudScale=f;break;case "HudMode":if(int.TryParse(v,out n))HudMode=Clamp(n,0,2);break;}} return; }
+                if(values.Length>0 && values[0].StartsWith("Version=")) { foreach(string line in values){int split=line.IndexOf('=');if(split<1)continue;string k=line.Substring(0,split),v=line.Substring(split+1);int n;float f;bool flag;switch(k){case "Name":if(!string.IsNullOrWhiteSpace(v))Name=v;break;case "Breed":if(int.TryParse(v,out n))BreedIndex=Clamp(n,0,Breeds.Length-1);break;case "Skin":if(int.TryParse(v,out n))CoatVariation=Math.Max(0,n);break;case "Equipment":if(int.TryParse(v,out n))VestIndex=Clamp(n,0,Vests.Length-1);break;case "Texture":if(int.TryParse(v,out n))VestTexture=Math.Max(0,n);break;case "XP":if(int.TryParse(v,out n))TrainingXp=Math.Max(0,n);break;case "Trust":if(int.TryParse(v,out n))Trust=Clamp(n,0,100);break;case "Health":if(int.TryParse(v,out n))Health=Clamp(n,0,100);break;case "Stamina":if(int.TryParse(v,out n))Stamina=Clamp(n,0,100);break;case "Injury":Injury=v;break;case "TrainingLevel":if(int.TryParse(v,out n))TrainingLevel=Clamp(n,1,5);break;case "TrainingProgress":if(int.TryParse(v,out n))TrainingLevelProgress=Clamp(n,0,100);break;case "CertObedience":if(bool.TryParse(v,out flag))ObedienceCertified=flag;break;case "CertAgility":if(bool.TryParse(v,out flag))AgilityCertified=flag;break;case "CertDetection":if(bool.TryParse(v,out flag))DetectionCertified=flag;break;case "CertTracking":if(bool.TryParse(v,out flag))TrackingCertified=flag;break;case "CertApprehension":if(bool.TryParse(v,out flag))ApprehensionCertified=flag;break;case "Deployments":if(int.TryParse(v,out n))Deployments=n;break;case "Searches":if(int.TryParse(v,out n))SuccessfulSearches=n;break;case "HudX":if(float.TryParse(v,out f))HudX=f;break;case "HudY":if(float.TryParse(v,out f))HudY=f;break;case "HudScale":if(float.TryParse(v,out f))HudScale=f;break;case "HudMode":if(int.TryParse(v,out n))HudMode=Clamp(n,0,2);break;}} return; }
                 int number;
                 // Name remains sourced from AdvancedK9.ini so renaming does not
                 // require deleting the persisted appearance profile.
@@ -135,6 +141,8 @@ namespace AdvancedK9
             for (int i = 0; i < Breeds.Length; i++) if (Breeds[i].Equals(value, StringComparison.OrdinalIgnoreCase)) return i;
             return 0;
         }
+
+        private void MigrateTrainingProgress(){if(TrainingLevel!=1||TrainingLevelProgress!=0)return;if(ApprehensionCertified){TrainingLevel=5;TrainingLevelProgress=100;AgilityCertified=true;}else if(TrackingCertified){TrainingLevel=5;AgilityCertified=true;}else if(DetectionCertified){TrainingLevel=4;AgilityCertified=true;}else if(ObedienceCertified){TrainingLevel=2;}Save();}
 
         private static int FindVestComponent(Ped dog)
         {
