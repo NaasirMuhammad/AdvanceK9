@@ -1,14 +1,14 @@
-# Advanced K9 v1.6.2 for LSPDFR
+# Advanced K9 v1.7.0 for LSPDFR
 
-AdvancedK9 v1.6.2 is a persistent LSPDFR/RAGE Plugin Hook police-dog partner with live voice control, per-dog progression, health and a full in-game command/profile interface.
+AdvancedK9 v1.7.0 is a persistent LSPDFR/RAGE Plugin Hook police-dog partner with live voice control, per-dog progression, health and a LemonUI command/profile interface.
 
 AdvancedK9 runs as an RPH plugin and starts its controller directly. It does not use a reflection-based LSPDFR duty gate because RPH plugins run in isolated AppDomains; commands therefore remain available throughout the Story Mode session, including after LSPDFR goes on duty.
 
 ## Drag-and-drop installation
 
-Use the compiled release ZIP, not the source ZIP. Close GTA V, then drag its `Plugins` folder into the folder containing `GTA5.exe` and allow the folders to merge. In RAGE Plugin Hook settings, enable **Load all plugins on startup**. Start Story Mode, load LSPDFR, and go on duty.
+Use the compiled release ZIP, not the source ZIP. Close GTA V, then drag everything in the ZIP into the folder containing `GTA5.exe`; this installs `LemonUI.RagePluginHook.dll` in the GTA V root and merges the `Plugins` folder. In RAGE Plugin Hook settings, enable **Load all plugins on startup**. Start Story Mode, load LSPDFR, and go on duty.
 
-The compiled release includes only AdvancedK9 and its configuration. It does not redistribute NAudio support assemblies, Microsoft.Win32.Registry, System.Security assemblies, GTA V, RAGE Plugin Hook, LSPDFR, Policing Redefined, Common Data Framework, or third-party dog models.
+The compiled release includes AdvancedK9, its configuration, and the MIT-licensed LemonUI RAGE Plugin Hook runtime. It does not redistribute NAudio support assemblies, Microsoft.Win32.Registry, System.Security assemblies, ScriptHookV, GTA V, RAGE Plugin Hook, LSPDFR, Policing Redefined, Common Data Framework, or third-party dog models.
 
 ## Features
 
