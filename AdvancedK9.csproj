@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>AdvancedK9</AssemblyName>
+    <RootNamespace>AdvancedK9</RootNamespace>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="Microsoft.CSharp" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="RagePluginHook" Version="1.124.0" ExcludeAssets="runtime" />
+    <PackageReference Include="NAudio" Version="2.2.1" />
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+  </ItemGroup>
+  <Target Name="CopyModFiles" AfterTargets="Build" Condition="'$(GtaVDir)' != ''">
+    <MakeDir Directories="$(GtaVDir)\Plugins\LSPDFR\AdvancedK9" />
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(GtaVDir)\Plugins\LSPDFR" />
+    <Copy SourceFiles="@(ReferenceCopyLocalPaths)" DestinationFolder="$(GtaVDir)\Plugins\LSPDFR" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="Config\AdvancedK9.ini;Config\AcademyCourses.json;Config\CompatibilityPresets.json" DestinationFolder="$(GtaVDir)\Plugins\LSPDFR\AdvancedK9" />
+  </Target>
+</Project>
