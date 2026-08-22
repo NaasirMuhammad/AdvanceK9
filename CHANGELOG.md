@@ -4,6 +4,10 @@ All published AdvancedK9 versions are beta builds.
 
 ## 0.20-beta
 
+- Adds persistent 0–100 food and water needs, working-dog consumption rates, low-care warnings and HUD readouts.
+- Adds a dedicated Give Water command and bowl interaction; Feed and Drink restore their separate needs.
+- Makes low food/water realistically reduce stamina and command reliability without silently killing the K9.
+- Replaces standing pet feedback with a synchronized kneeling handler interaction and K9 petting response.
 - Splits detection into independently trainable narcotics (NAR), explosives/bomb (BOMB), and weapons/firearm (WPN) specialties.
 - Adds separate persistent 0–100 specialty progress and certifications; handlers may train any combination or earn all three.
 - Adds dedicated five-station academy setups and distinct voice/field commands for each detection specialty.
