@@ -31,7 +31,6 @@ namespace AdvancedK9
             _menu.MouseBehavior = MenuMouseBehavior.Disabled;
             _menu.BannerText.Text = "ADVANCED K9";
             _menu.BannerText.Scale = 0.56f;
-            _menu.BannerText.Font = LemonUI.Font.ChaletLondon;
             _menu.BannerText.Color = Color.White;
             _menu.KeepNameCasing = true;
         }
