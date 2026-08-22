@@ -2,6 +2,29 @@
 
 All published AdvancedK9 versions are beta builds.
 
+## 0.20-beta
+
+- Adds twelve realism systems: rear kennel-door staging, weather/heat exposure, rest and fatigue recovery, veterinary treatment, scent articles, scent aging, remote door-pop, varied suspect reactions, whistle/hand signals, persistent duty equipment, CSV incident logging, and GPS K9-camera telemetry.
+- Makes rain, trail age, subject distance and vehicle travel degrade scent quality; weak trails require a fresh bagged article.
+- Adds vehicle heat warnings and extra water loss when a K9 is left in a stopped vehicle with the engine off during peak daytime heat.
+- Adds meals, water bottles, first-aid kits, scent bags and treats to the persistent profile, with patrol-vehicle restocking.
+- Adds persistent 0–100 food and water needs, working-dog consumption rates, low-care warnings and HUD readouts.
+- Adds a dedicated Give Water command and bowl interaction; Feed and Drink restore their separate needs.
+- Makes low food/water realistically reduce stamina and command reliability without silently killing the K9.
+- Replaces standing pet feedback with a synchronized kneeling handler interaction and K9 petting response.
+- Splits detection into independently trainable narcotics (NAR), explosives/bomb (BOMB), and weapons/firearm (WPN) specialties.
+- Adds separate persistent 0–100 specialty progress and certifications; handlers may train any combination or earn all three.
+- Adds dedicated five-station academy setups and distinct voice/field commands for each detection specialty.
+- Keeps every checkpoint silent. Negative results sit without sound; barking happens only after the final result is positive.
+- Locks the aimed suspect when push-to-talk begins and removes trust hesitation from a valid apprehension, preventing repeated voice commands while transcription completes.
+- Records the handler's recent route so a distant following K9 works back along the handler's scent trail instead of becoming stranded.
+- Teleports the handler and K9 to a dedicated off-street academy ground for training, then returns both to the original patrol location.
+- Adds five persistent gated training levels. Each level contains five exercises worth 20%, must reach 100% before the next unlocks, and awards its own OB, AGI, DET, TRK or APP certification.
+- Makes vehicle-search sniffing face the vehicle at every exterior checkpoint.
+- Adds multiple natural verbal alternatives for every K9 command and expands the AI transcription vocabulary.
+- Replaces the drawn leash line with GTA's physical rope system and continuously walks the leashed K9 beside the handler.
+- Automatically detaches the leash and continues when search, tracking, fetch or apprehension is commanded.
+
 ## 1.7.9-beta
 
 - Raises and moves the sitting K9 rearward from the rear-seat bone so it rests on the cushion instead of the floor or front seat.

@@ -1,6 +1,6 @@
-# Advanced K9 v1.7.9-beta for LSPDFR
+# Advanced K9 v0.20-beta for LSPDFR
 
-AdvancedK9 v1.7.9-beta is a persistent LSPDFR/RAGE Plugin Hook police-dog partner with push-to-talk voice control, per-dog progression, health and a compact EUP-style LemonUI command/profile interface. All published builds are beta builds while gameplay and model compatibility continue to be tested.
+AdvancedK9 v0.20-beta is a persistent LSPDFR/RAGE Plugin Hook police-dog partner with push-to-talk voice control, per-dog progression, health and a compact EUP-style LemonUI command/profile interface. All published builds are beta builds while gameplay and model compatibility continue to be tested.
 
 AdvancedK9 runs as an RPH plugin and starts its controller directly. It avoids a reflection-based LSPDFR duty gate because RPH plugins run in isolated AppDomains. Instead, it follows LSPDFR's own duty-state messages from the active RAGEPluginHook log. GTA's native cop flag is diagnostic only because LSPDFR may set it while the player is still off duty. While off duty, the K9, HUD, menus, shortcuts and voice capture remain disabled. Going off duty closes the UI, stops voice capture and dismisses the active dog.
 
@@ -13,22 +13,34 @@ The compiled release includes AdvancedK9, its configuration, and the MIT-license
 ## Features
 
 - Deploy/dismiss and follow/heel
-- Sit, lie down, pet, feed, leash and dog-mounted camera
+- Sit, lie down, pet, feed, physical rope leash with handler-follow movement, and dog-mounted camera
+- Persistent food and water care HUD, low-need warnings, separate feed/drink interactions and working-dog consumption
+- Kneeling handler petting interaction with a synchronized K9 response
+- Automatic operational leash release when search, tracking, fetch or apprehension is deployed
 - Pedestrian and full-perimeter vehicle odor searches; silent sit means clear, sit plus repeated bark means positive
 - Track a nearby suspect or missing person for up to two minutes
 - Non-lethal apprehension with automatic recall, a configurable health floor and hands-up surrender
 - Fetch minigame
-- Five-level interactive K9 academy with obedience, place/stay, recall, agility and blind scent-lineup work
+- Dedicated off-street K9 training ground with five persistent gated levels; every level must reach 100% before the next unlocks
+- Certification-specific OB, AGI, DET, TRK and APP courses with five scored exercises per level
+- Independent optional narcotics (NAR), explosives/bomb (BOMB), and weapons/firearm (WPN) detection specialties, each with its own 0–100 progress and five-station academy setup
+- Separate field and voice commands for narcotics, explosives and weapons searches; a dog may hold any combination or all specialty certifications
 - Weapon-aim target identification before apprehension, with officer rejection and automatic non-lethal recall
 - Push-to-talk voice recognition using OpenAI or Groq transcription; the microphone opens only while `V` is held
 - Persistent command and profile menus that remain open until explicitly closed
-- Runtime command registry shared by menu and voice recognition
+- Runtime command registry shared by menu and voice recognition, with multiple natural verbal alternatives for every action
 - Movable, scalable compact/expanded K9 status HUD
 - Per-dog XP, certifications, health, injuries, stamina, trust and statistics
 - Optional runtime bridge to Policing Redefined/Common Data Framework search records
 - Persistent 0–100 handler trust with obedience, response-time, detection and deployment effects
 - Handler-safety interlock: friendly relationship group, attack prevention and automatic emergency recall
 - Persistent kennel profile for breed, coat variation, vest style/color and custom K9 name
+- Rear-door kennel staging and remote door-pop deployment from a stopped patrol vehicle
+- Heat, rain, fatigue, injury/limp, rest and veterinary-care simulation
+- Bagged scent articles with age, rain, distance and vehicle-travel degradation
+- Surrender, freeze, flee or fight suspect reactions plus whistle and silent hand-signal recall
+- Persistent duty equipment, patrol-vehicle restocking and CSV incident records in `Plugins/LSPDFR/AdvancedK9/K9IncidentLog.csv`
+- GPS K9-camera overlay with heading, handler distance, state and live condition telemetry
 
 ## Build
 
@@ -54,6 +66,7 @@ The build copies the RAGE Plugin Hook entry-point assembly `AdvancedK9.dll` to `
 
 Voice phrases begin with the configured dog name or “K nine”: “Rex, sit”, “Rex, search”, “K nine, recall”, and so on. Commands without the wake name are ignored.
 Wake-word variants `K9`, `K-9`, `K nine`, `kay nine` and `canine` are accepted. Natural phrases such as “K9 sit down,” “K9 fetch the ball,” and “K9 search the vehicle” are normalized before matching.
+Specialty examples include “K9 search for narcotics,” “K9 bomb search,” “K9 weapons search,” “K9 narcotics training,” “K9 explosives training,” and “K9 weapons training.”
 
 ## Dog profile and appearance
 

@@ -1,9 +1,14 @@
 {
   "levels": [
-    { "level": 1, "name": "Obedience", "skills": ["Sit", "Down"] },
-    { "level": 2, "name": "Place and Stay", "skills": ["Place", "Stay", "HandlerDistance"] },
-    { "level": 3, "name": "Distance Recall", "skills": ["Recall", "Heel"] },
-    { "level": 4, "name": "Agility", "skills": ["ConeWeave", "Navigation"] },
-    { "level": 5, "name": "Blind Scent Lineup", "skills": ["MultiStationSearch", "PositiveSitBark"] }
+    { "level": 1, "name": "Basic Obedience", "certification": "OB", "skills": ["Sit", "Down", "Place", "Stay", "Recall"] },
+    { "level": 2, "name": "Agility and Handler Control", "certification": "AGI", "skills": ["FiveGateWeave", "Navigation"] },
+    { "level": 3, "name": "Detection", "certification": "DET", "skills": ["BlindFiveStationSearch", "PositiveSitBark"] },
+    { "level": 4, "name": "Tracking", "certification": "TRK", "skills": ["ScentArticle", "FiveSegmentTrail", "FinalIndication"] },
+    { "level": 5, "name": "Apprehension", "certification": "APP", "skills": ["AimIdentification", "ControlledDeployment", "EmergencyRecall", "Guard", "Release"] }
+  ],
+  "optionalDetectionSpecialties": [
+    { "name": "Narcotics Detection", "certification": "NAR", "progressRequired": 100, "setup": "Five concealed narcotics odor stations" },
+    { "name": "Explosives Detection", "certification": "BOMB", "progressRequired": 100, "setup": "Five bomb-safe standoff crate stations" },
+    { "name": "Weapons Detection", "certification": "WPN", "progressRequired": 100, "setup": "Five concealed firearm odor stations" }
   ]
 }

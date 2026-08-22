@@ -1,4 +1,4 @@
-ADVANCED K9 v1.7.9-beta — DRAG-AND-DROP INSTALL
+ADVANCED K9 v0.20-beta — DRAG-AND-DROP INSTALL
 
 1. Close GTA V and RAGE Plugin Hook.
 2. Open the compiled release ZIP.
@@ -27,9 +27,19 @@ Controls
   Left Ctrl + L   Leash
   Hold V          AI push-to-talk
 
+K9 care
+  FOOD and H2O are shown on the HUD and persist in profile.dat. Use Feed and
+  Give Water from the command menu or say commands such as "K9, feed" and
+  "K9, give water." Active deployments consume water and food more quickly.
+
 Apprehension safety
   Aim a taser or firearm directly at the intended suspect, then issue the
   Apprehend command. The K9 will not select the nearest person automatically.
+
+Detection specialties
+  Complete core academy Level 3 to unlock independent narcotics, explosives
+  and weapons programs. Each specialty must reach 100% before its field search
+  command becomes available. The K9 may earn one, several or all specialties.
 
 AI voice is optional. Keyboard controls need no key or internet connection.
 Voice can be activated or disabled from either AdvancedK9 menu. Put the key
