@@ -1,11 +1,11 @@
-name: Build AdvancedK9 v1.7
+name: Build AdvancedK9 v1.7.1
 # Produces the verified Windows drag-and-drop artifact.
 on:
   workflow_dispatch:
   pull_request:
     branches: [ main ]
   push:
-    branches: [ main, codex/advancedk9-v1.7-runtime-fixes ]
+    branches: [ main, codex/advancedk9-v1.7.1-menu-vest ]
 jobs:
   build:
     runs-on: windows-latest
@@ -26,14 +26,14 @@ jobs:
         run: |
           $dll = Resolve-Path 'bin/Release/net48/AdvancedK9.dll'
           $version = [System.Reflection.AssemblyName]::GetAssemblyName($dll).Version
-          if ($version -ne [Version]'1.7.0.0') { throw "Expected v1.7.0 assembly, got $version" }
+          if ($version -ne [Version]'1.7.1.0') { throw "Expected v1.7.1 assembly, got $version" }
           $stale = '0b4a652673cc9a7237b5473c4c0854a702007da5c32e25042d810f263d8a190c'
           $hash = (Get-FileHash $dll -Algorithm SHA256).Hash.ToLowerInvariant()
           if ($hash -eq $stale) { throw 'Build produced the stale uploaded v1.5 DLL.' }
           dotnet tool install --global ilspycmd
           ilspycmd $dll -o verified-source
           $compiled = Get-ChildItem verified-source -Recurse -File | Get-Content -Raw
-          foreach ($marker in @('CommandRegistry','ToggleVoice','StopListening','LemonUI','GET_PED_BONE_COORDS','indicate_low','GET_PED_BONE_INDEX','AdjustEquipmentTexture')) {
+          foreach ($marker in @('PreviewBreed','VestTextureName','GetVestTextureCount','MenuMouseBehavior','ColorSet','MaxItems','ToggleVoice','GET_PED_BONE_COORDS')) {
             if ($compiled -notmatch [regex]::Escape($marker)) { throw "Missing compiled v1.7 marker: $marker" }
           }
           "AssemblyVersion=$version`nSHA256=$hash`nBuiltUtc=$([DateTime]::UtcNow.ToString('o'))" | Set-Content build-verification.txt
@@ -52,9 +52,9 @@ jobs:
           if (-not (Test-Path 'package/Plugins/AdvancedK9.dll')) { throw 'RPH plugin DLL is not in Plugins root.' }
           if (Test-Path 'package/Plugins/LSPDFR/AdvancedK9.dll') { throw 'DLL must not be packaged as an LSPDFR API plugin.' }
           if (-not (Test-Path 'package/LemonUI.RagePluginHook.dll')) { throw 'LemonUI RPH runtime is missing from GTA V root.' }
-          Compress-Archive -Path 'package/*' -DestinationPath 'AdvancedK9-v1.7.0-DragAndDrop.zip' -Force
+          Compress-Archive -Path 'package/*' -DestinationPath 'AdvancedK9-v1.7.1-DragAndDrop.zip' -Force
       - uses: actions/upload-artifact@v4
         with:
-          name: AdvancedK9-v1.7.0-DragAndDrop
-          path: AdvancedK9-v1.7.0-DragAndDrop.zip
+          name: AdvancedK9-v1.7.1-DragAndDrop
+          path: AdvancedK9-v1.7.1-DragAndDrop.zip
           if-no-files-found: error
