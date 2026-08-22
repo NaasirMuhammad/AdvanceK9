@@ -15,7 +15,7 @@ namespace AdvancedK9
         public Keys PushToTalkKey = Keys.V;
         public Keys KennelKey = Keys.U;
         public bool VoiceEnabled = true;
-        public bool ContinuousListening = true;
+        public bool ContinuousListening = false;
         public string VoiceProvider = "Groq";
         public string VoiceModel = "whisper-large-v3-turbo";
         public string VoiceLanguage = "en";
@@ -51,7 +51,9 @@ namespace AdvancedK9
             result.PushToTalkKey = ini.ReadEnum("Keys", "PushToTalk", result.PushToTalkKey);
             result.KennelKey = ini.ReadEnum("Keys", "KennelProfile", result.KennelKey);
             result.VoiceEnabled = ini.ReadBoolean("Voice", "Enabled", result.VoiceEnabled);
-            result.ContinuousListening = ini.ReadBoolean("Voice", "ContinuousListening", result.ContinuousListening);
+            // Continuous capture is intentionally disabled. Voice is push-to-talk only so
+            // ambient game, radio and room audio cannot trigger K9 commands.
+            result.ContinuousListening = false;
             result.VoiceProvider = ini.ReadString("Voice", "Provider", result.VoiceProvider);
             result.VoiceModel = ini.ReadString("Voice", "Model", result.VoiceModel);
             result.VoiceLanguage = ini.ReadString("Voice", "Language", result.VoiceLanguage);

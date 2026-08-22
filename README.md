@@ -1,6 +1,6 @@
-# Advanced K9 v1.7.7-beta for LSPDFR
+# Advanced K9 v1.7.8-beta for LSPDFR
 
-AdvancedK9 v1.7.7-beta is a persistent LSPDFR/RAGE Plugin Hook police-dog partner with live voice control, per-dog progression, health and a compact EUP-style LemonUI command/profile interface. All published builds are beta builds while gameplay and model compatibility continue to be tested.
+AdvancedK9 v1.7.8-beta is a persistent LSPDFR/RAGE Plugin Hook police-dog partner with push-to-talk voice control, per-dog progression, health and a compact EUP-style LemonUI command/profile interface. All published builds are beta builds while gameplay and model compatibility continue to be tested.
 
 AdvancedK9 runs as an RPH plugin and starts its controller directly. It avoids a reflection-based LSPDFR duty gate because RPH plugins run in isolated AppDomains. Instead, it follows LSPDFR's own duty-state messages from the active RAGEPluginHook log. GTA's native cop flag is diagnostic only because LSPDFR may set it while the player is still off duty. While off duty, the K9, HUD, menus, shortcuts and voice capture remain disabled. Going off duty closes the UI, stops voice capture and dismisses the active dog.
 
@@ -19,7 +19,7 @@ The compiled release includes AdvancedK9, its configuration, and the MIT-license
 - Non-lethal apprehension with automatic recall, a configurable health floor and hands-up surrender
 - Fetch minigame
 - Four-stage in-game K9 academy (obedience, recall and detection)
-- Live voice-activity recognition using OpenAI or Groq transcription; push-to-talk remains an optional fallback
+- Push-to-talk voice recognition using OpenAI or Groq transcription; the microphone opens only while `V` is held
 - Persistent command and profile menus that remain open until explicitly closed
 - Runtime command registry shared by menu and voice recognition
 - Movable, scalable compact/expanded K9 status HUD
@@ -49,7 +49,7 @@ The build copies the RAGE Plugin Hook entry-point assembly `AdvancedK9.dll` to `
 - `Left Ctrl + L`: leash
 - `Left Ctrl + U`: open the persistent K9 profile/kennel menu
 - `Left Ctrl + J`: open the persistent command menu
-- `V`: optional push-to-talk only when `ContinuousListening=false`
+- `V`: hold to open the microphone and speak a command
 
 Voice phrases begin with the configured dog name or “K nine”: “Rex, sit”, “Rex, search”, “K nine, recall”, and so on. Commands without the wake name are ignored.
 Wake-word variants `K9`, `K-9`, `K nine`, `kay nine` and `canine` are accepted. Natural phrases such as “K9 sit down,” “K9 fetch the ball,” and “K9 search the vehicle” are normalized before matching.
@@ -85,7 +85,7 @@ The default provider is Groq with `whisper-large-v3-turbo`. Put the key directly
 ```ini
 [Voice]
 Enabled=true
-ContinuousListening=true
+ContinuousListening=false
 Provider=Groq
 Model=whisper-large-v3-turbo
 Language=en
@@ -104,7 +104,7 @@ ApiKey=sk_your_key_here
 ApiKeyEnvironmentVariable=OPENAI_API_KEY
 ```
 
-AI voice requires internet access and may incur provider charges. Audio is sent while push-to-talk is held, or while continuous listening is enabled. Set `Enabled=false` for keyboard-only play; all commands remain accessible through `Left Ctrl + J`.
+AI voice requires internet access and may incur provider charges. Audio is sent only while push-to-talk is held. `ContinuousListening` is retained as a legacy setting but is intentionally ignored. Set `Enabled=false` for keyboard-only play; all commands remain accessible through `Left Ctrl + J`.
 
 ## Trust and handler safety
 
