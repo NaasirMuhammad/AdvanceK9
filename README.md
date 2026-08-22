@@ -1,6 +1,6 @@
-# Advanced K9 v1.7.6-beta for LSPDFR
+# Advanced K9 v1.7.7-beta for LSPDFR
 
-AdvancedK9 v1.7.6-beta is a persistent LSPDFR/RAGE Plugin Hook police-dog partner with live voice control, per-dog progression, health and a compact EUP-style LemonUI command/profile interface. All published builds are beta builds while gameplay and model compatibility continue to be tested.
+AdvancedK9 v1.7.7-beta is a persistent LSPDFR/RAGE Plugin Hook police-dog partner with live voice control, per-dog progression, health and a compact EUP-style LemonUI command/profile interface. All published builds are beta builds while gameplay and model compatibility continue to be tested.
 
 AdvancedK9 runs as an RPH plugin and starts its controller directly. It avoids a reflection-based LSPDFR duty gate because RPH plugins run in isolated AppDomains. Instead, it follows LSPDFR's own duty-state messages from the active RAGEPluginHook log. GTA's native cop flag is diagnostic only because LSPDFR may set it while the player is still off duty. While off duty, the K9, HUD, menus, shortcuts and voice capture remain disabled. Going off duty closes the UI, stops voice capture and dismisses the active dog.
 
@@ -52,6 +52,7 @@ The build copies the RAGE Plugin Hook entry-point assembly `AdvancedK9.dll` to `
 - `V`: optional push-to-talk only when `ContinuousListening=false`
 
 Voice phrases begin with the configured dog name or “K nine”: “Rex, sit”, “Rex, search”, “K nine, recall”, and so on. Commands without the wake name are ignored.
+Wake-word variants `K9`, `K-9`, `K nine`, `kay nine` and `canine` are accepted. Natural phrases such as “K9 sit down,” “K9 fetch the ball,” and “K9 search the vehicle” are normalized before matching.
 
 ## Dog profile and appearance
 
@@ -68,6 +69,8 @@ GTA's standard animal models have limited clothing components, so vest and coat 
 - The compatible [protective vest texture collection](https://www.lcpdfr.com/downloads/gta5mods/character/43951-improved-k-9-protective-vests-for-your-furry-friend/) adds multicam, tan, black, green, grey, blue, yellow, red and orange textures for the martinct model. Use the vest-color option to cycle the installed textures.
 
 Third-party model and texture files are not redistributed. Install the chosen model from its author first. `CompatibilityPresets.json` records model names, fallback behavior, published variants and source links. Runtime bounds checks prevent an unavailable drawable or texture index from being applied.
+
+Fetch attaches the ball to the dog head/mouth bone. Custom models with different bone orientation can be fine-tuned under `[Fetch]` using `BallOffsetX`, `BallOffsetY`, and `BallOffsetZ` in `AdvancedK9.ini`.
 
 ### Doberman and Cane Corso compatibility
 
