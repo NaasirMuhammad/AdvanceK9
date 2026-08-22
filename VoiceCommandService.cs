@@ -4,6 +4,7 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Threading.Tasks;
 using System.Linq;
+using System.Collections.Concurrent;
 using NAudio.Wave;
 using Rage;
 
@@ -19,6 +20,8 @@ namespace AdvancedK9
         private DateTime _started;
         private bool _continuous, _speechDetected, _segmenting;
         private DateTime _lastVoice;
+        private readonly ConcurrentQueue<VoiceResult> _results = new ConcurrentQueue<VoiceResult>();
+        private volatile bool _restartRequested;
 
         public bool IsAvailable { get; }
         public bool IsRecording => _input != null;
@@ -73,21 +76,21 @@ namespace AdvancedK9
             byte[] bytes = _audio.ToArray();
             Cleanup();
             if (elapsed.TotalMilliseconds < 350 || bytes.Length < 1000) return;
-            Game.DisplaySubtitle("~b~AI K9 voice: transcribing…");
+            _results.Enqueue(VoiceResult.Status("Recognizing", "~b~AI K9 voice: transcribing…"));
             System.Threading.Tasks.Task.Run(() => TranscribeAsync(bytes));
         }
 
         private void OnData(object sender, WaveInEventArgs e)
         {
-            try { _writer?.Write(e.Buffer, 0, e.BytesRecorded); _writer?.Flush(); if(_continuous&&!_segmenting){int peak=0;for(int i=0;i+1<e.BytesRecorded;i+=2){int sample=Math.Abs((short)(e.Buffer[i]|(e.Buffer[i+1]<<8)));if(sample>peak)peak=sample;}if(peak>1100){_speechDetected=true;_lastVoice=DateTime.UtcNow;StatusChanged?.Invoke("Voice detected");}else if(_speechDetected&&(DateTime.UtcNow-_lastVoice).TotalMilliseconds>750&&(DateTime.UtcNow-_started).TotalMilliseconds>500){_segmenting=true;System.Threading.Tasks.Task.Run(()=>StopAndTranscribe());}} }
-            catch (Exception ex) { Game.LogTrivial("AdvancedK9 capture error: " + ex.Message); }
+            try { _writer?.Write(e.Buffer, 0, e.BytesRecorded); _writer?.Flush(); if(_continuous&&!_segmenting){int peak=0;for(int i=0;i+1<e.BytesRecorded;i+=2){int sample=Math.Abs((short)(e.Buffer[i]|(e.Buffer[i+1]<<8)));if(sample>peak)peak=sample;}if(peak>1100){_speechDetected=true;_lastVoice=DateTime.UtcNow;_results.Enqueue(VoiceResult.Status("Voice detected", null));}else if(_speechDetected&&(DateTime.UtcNow-_lastVoice).TotalMilliseconds>750&&(DateTime.UtcNow-_started).TotalMilliseconds>500){_segmenting=true;System.Threading.Tasks.Task.Run(()=>StopAndTranscribe());}} }
+            catch (Exception ex) { _results.Enqueue(VoiceResult.Log("AdvancedK9 capture error: " + ex.Message)); }
         }
 
         private async System.Threading.Tasks.Task TranscribeAsync(byte[] wave)
         {
+            int restartDelay = 1000;
             try
             {
-                StatusChanged?.Invoke("Recognizing");
                 using (var form = new MultipartFormDataContent())
                 using (var audio = new ByteArrayContent(wave))
                 using (var request = new HttpRequestMessage(HttpMethod.Post, _endpoint))
@@ -105,27 +108,45 @@ namespace AdvancedK9
                         string text = (await response.Content.ReadAsStringAsync().ConfigureAwait(false)).Trim();
                         if (!response.IsSuccessStatusCode)
                         {
-                            Game.LogTrivial("AdvancedK9 AI voice HTTP " + (int)response.StatusCode + ": " + Short(text));
-                            Game.DisplayNotification("~r~AI voice request failed.~s~ Keyboard commands remain available.");
+                            restartDelay = 10000;
+                            _results.Enqueue(VoiceResult.Failure("AdvancedK9 AI voice HTTP " + (int)response.StatusCode + ": " + Short(text)));
                             return;
                         }
                         K9Command command;
                         if (CommandRegistry.TryMatch(text, _dogName, out command))
                         {
-                            Game.DisplayNotification("~b~AI heard:~s~ “" + text + "”");
-                            CommandRecognized?.Invoke(command);
-                            StatusChanged?.Invoke("Recognized: "+CommandRegistry.All.First(x=>x.Command==command).Label);
+                            _results.Enqueue(VoiceResult.Command(command, text));
                         }
-                        else { Game.DisplayNotification("~o~AI command not recognized:~s~ “" + text + "”"); StatusChanged?.Invoke("Not recognized"); }
+                        else { _results.Enqueue(VoiceResult.NotRecognized(text)); }
                     }
                 }
             }
             catch (Exception ex)
             {
-                Game.LogTrivial("AdvancedK9 AI transcription error: " + ex.Message);
-                Game.DisplayNotification("~r~AI voice unavailable.~s~ Keyboard commands remain available.");
+                restartDelay = 10000;
+                _results.Enqueue(VoiceResult.Failure("AdvancedK9 AI transcription error: " + ex));
             }
-            finally { if(_continuous){await System.Threading.Tasks.Task.Delay(250).ConfigureAwait(false);_speechDetected=false;_segmenting=false;StartRecording();} }
+            finally { if(_continuous){await System.Threading.Tasks.Task.Delay(restartDelay).ConfigureAwait(false);_speechDetected=false;_segmenting=false;_restartRequested=true;} }
+        }
+
+        // Must be called from the owning RAGE game fiber. Background microphone and HTTP
+        // callbacks only enqueue plain data; they never invoke RAGE natives or game objects.
+        public void Tick()
+        {
+            VoiceResult result;
+            while (_results.TryDequeue(out result))
+            {
+                if (!string.IsNullOrWhiteSpace(result.LogText)) Game.LogTrivial(result.LogText);
+                if (!string.IsNullOrWhiteSpace(result.Subtitle)) Game.DisplaySubtitle(result.Subtitle);
+                if (!string.IsNullOrWhiteSpace(result.Notification)) Game.DisplayNotification(result.Notification);
+                if (!string.IsNullOrWhiteSpace(result.StatusText)) StatusChanged?.Invoke(result.StatusText);
+                if (result.HasCommand) CommandRecognized?.Invoke(result.RecognizedCommand);
+            }
+            if (_restartRequested && _continuous && !IsRecording)
+            {
+                _restartRequested = false;
+                StartRecording();
+            }
         }
 
         private static string Short(string text) => text.Length > 300 ? text.Substring(0, 300) : text;
@@ -138,6 +159,18 @@ namespace AdvancedK9
         }
 
         public void Dispose() { StopListening(); _client.Dispose(); }
+
+        private sealed class VoiceResult
+        {
+            public string LogText, Subtitle, Notification, StatusText;
+            public bool HasCommand;
+            public K9Command RecognizedCommand;
+            public static VoiceResult Log(string log) => new VoiceResult { LogText = log };
+            public static VoiceResult Status(string status, string subtitle) => new VoiceResult { StatusText = status, Subtitle = subtitle };
+            public static VoiceResult Failure(string log) => new VoiceResult { LogText = log, StatusText = "Request failed", Notification = "~r~AI voice unavailable.~s~ Keyboard commands remain available." };
+            public static VoiceResult Command(K9Command command, string text) => new VoiceResult { HasCommand = true, RecognizedCommand = command, StatusText = "Recognized: " + CommandRegistry.All.First(x => x.Command == command).Label, Notification = "~b~AI heard:~s~ “" + text + "”" };
+            public static VoiceResult NotRecognized(string text) => new VoiceResult { StatusText = "Not recognized", Notification = "~o~AI command not recognized:~s~ “" + text + "”" };
+        }
 
         private sealed class NonClosingStream : Stream
         {
