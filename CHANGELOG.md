@@ -2,6 +2,14 @@
 
 All published AdvancedK9 versions are beta builds.
 
+## 1.7.8-beta
+
+- Makes voice strictly push-to-talk; the microphone opens only while V is held and ignores ambient room/game audio.
+- Seats and anchors the K9 at the vehicle's actual rear-seat bone with a sitting animation instead of allowing cabin walking.
+- Protects the K9 while seated and safely detaches it beside a stopped vehicle while preserving live health.
+- Makes a negative detection sit silently; only a positive detection sits and barks.
+- Replaces text-only academy commands with visible obedience, distance recall and prop-based scent detection stages.
+
 ## 1.7.7-beta
 
 - Normalizes punctuation and wake-word variants including K9, K-9, K nine, kay nine and canine.
