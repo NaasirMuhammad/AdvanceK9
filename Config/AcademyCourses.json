@@ -1,8 +1,9 @@
 {
-  "courses": [
-    { "name": "Obedience", "commands": ["Sit", "LieDown", "Follow", "Heel"] },
-    { "name": "Detection", "commands": ["SearchPed", "SearchVehicle"] },
-    { "name": "Tracking", "commands": ["Track"] },
-    { "name": "Apprehension", "commands": ["Apprehend", "Recall"] }
+  "levels": [
+    { "level": 1, "name": "Obedience", "skills": ["Sit", "Down"] },
+    { "level": 2, "name": "Place and Stay", "skills": ["Place", "Stay", "HandlerDistance"] },
+    { "level": 3, "name": "Distance Recall", "skills": ["Recall", "Heel"] },
+    { "level": 4, "name": "Agility", "skills": ["ConeWeave", "Navigation"] },
+    { "level": 5, "name": "Blind Scent Lineup", "skills": ["MultiStationSearch", "PositiveSitBark"] }
   ]
 }
