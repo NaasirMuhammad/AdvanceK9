@@ -38,6 +38,12 @@ namespace AdvancedK9
         private bool? _lspdfrDutyFromLog;
         private uint _nextVitalsUpdate;
         private Ped _voiceAimedTarget;
+        private Ped _scentTarget;
+        private uint _scentCollectedAt;
+        private float _scentRainAtCollection;
+        private uint _nextEnvironmentUpdate;
+        private uint _nextHeatWarning;
+        private int _dogVehicleDoor=3;
         private readonly Queue<Vector3> _handlerTrail = new Queue<Vector3>();
         private uint _nextTrailSample;
         private uint _nextTrailRecovery;
@@ -225,13 +231,17 @@ namespace AdvancedK9
                     case K9Command.LieDown: LieDown(); break;
                     case K9Command.Stay: Stay(); break;
                     case K9Command.Recall: Follow(); break;
+                    case K9Command.WhistleRecall: WhistleRecall(); break;
+                    case K9Command.HandSignal: HandSignal(); break;
                     case K9Command.SearchArea: Search(false); break;
                     case K9Command.SearchVehicle: Search(true); break;
                     case K9Command.SearchNarcotics: Search(false,DetectionSpecialty.Narcotics); break;
                     case K9Command.SearchExplosives: Search(false,DetectionSpecialty.Explosives); break;
                     case K9Command.SearchWeapons: Search(false,DetectionSpecialty.Weapons); break;
+                    case K9Command.CollectScent: CollectScent(); break;
                     case K9Command.Track: Track(); break;
                     case K9Command.Apprehend: Apprehend(); break;
+                    case K9Command.DoorPop: DoorPop(); break;
                     case K9Command.Release: Follow(); break;
                     case K9Command.Guard: Guard(); break;
                     case K9Command.Bark: Bark(2); break;
@@ -241,8 +251,11 @@ namespace AdvancedK9
                     case K9Command.Pet: Pet(); break;
                     case K9Command.Feed: Feed(); break;
                     case K9Command.Drink: Drink(); break;
+                    case K9Command.Rest: Rest(); break;
                     case K9Command.Inspect: Inspect(); break;
                     case K9Command.FirstAid: FirstAid(); break;
+                    case K9Command.VeterinaryCare: VeterinaryCare(); break;
+                    case K9Command.Restock: Restock(); break;
                     case K9Command.ToggleLeash: ToggleLeash(); break;
                     case K9Command.ToggleCamera: _camera.Toggle(_dog); break;
                     case K9Command.Training: RunAcademy(); break;
@@ -349,14 +362,21 @@ namespace AdvancedK9
         private void Stay(){if(!DogExists())return;_dog.Tasks.Clear();_state=K9State.Staying;Acknowledge("Staying.");}
         private void Guard(){if(!DogExists())return;_dog.Tasks.Clear();NativeFunction.Natives.TASK_GUARD_CURRENT_POSITION(_dog,25f,25f,true);_state=K9State.Guarding;Acknowledge("Guarding this position.");}
 
-        private void EnterVehicle(){if(!DogExists())return;var handler=Game.LocalPlayer.Character;Vehicle vehicle=handler.CurrentVehicle;if(vehicle==null||!vehicle.Exists()){vehicle=World.GetAllVehicles().Where(v=>v.Exists()&&v.DistanceTo(handler)<8f).OrderBy(v=>v.DistanceTo(handler)).FirstOrDefault();}if(vehicle==null){Game.DisplayNotification("~y~No vehicle nearby.");return;}int seat=-99;foreach(int candidate in new[]{1,2,0})if(NativeFunction.Natives.IS_VEHICLE_SEAT_FREE<bool>(vehicle,candidate,false)){seat=candidate;break;}if(seat==-99){Game.DisplayNotification("~y~No open rear/passenger seat for the K9.");return;}NativeFunction.Natives.TASK_ENTER_VEHICLE(_dog,vehicle,8000,seat,2f,1,0);uint timeout=Game.GameTime+8000;while(DogExists()&&_dog.CurrentVehicle!=vehicle&&Game.GameTime<timeout)GameFiber.Yield();if(_dog.CurrentVehicle!=vehicle)NativeFunction.Natives.TASK_WARP_PED_INTO_VEHICLE(_dog,vehicle,seat);GameFiber.Wait(250);_dogVehicle=vehicle;string boneName=seat==1?"seat_pside_r":seat==2?"seat_dside_r":"seat_pside_f";int seatBone=NativeFunction.Natives.GET_ENTITY_BONE_INDEX_BY_NAME<int>(vehicle,boneName);PlayDogAnimation("creatures@rottweiler@amb@world_dog_sitting@base","base",-1,1);if(seatBone>=0){NativeFunction.Natives.SET_ENTITY_COLLISION(_dog,false,false);NativeFunction.Natives.ATTACH_ENTITY_TO_ENTITY(_dog,vehicle,seatBone,_config.VehicleSeatOffsetX,_config.VehicleSeatOffsetY,_config.VehicleSeatOffsetZ,0f,0f,0f,false,false,false,false,2,true);_dogSeatAttached=true;}NativeFunction.Natives.SET_ENTITY_INVINCIBLE(_dog,true);_state=K9State.InVehicle;Acknowledge("Sitting safely in the rear seat.");}
-        private void ExitVehicle(){if(_dog==null||!_dog.Exists())return;var vehicle=_dogVehicle!=null&&_dogVehicle.Exists()?_dogVehicle:_dog.CurrentVehicle;if(vehicle==null||!vehicle.Exists()){ReleaseVehicleSeat();Follow();return;}if(vehicle.Speed>1.5f){Game.DisplayNotification("~y~Stop the vehicle before unloading the K9.");return;}int savedHealth=Math.Max(100,_dog.Health);Vector3 exit=vehicle.GetOffsetPosition(new Vector3(1.35f,-1.25f,.15f));_dog.Tasks.ClearImmediately();ReleaseVehicleSeat();_dog.Position=exit;_dog.Heading=vehicle.Heading;if(_dog.IsDead)NativeFunction.Natives.RESURRECT_PED(_dog);_dog.Health=savedHealth;GameFiber.Wait(250);Follow();}
+        private void EnterVehicle(){if(!DogExists())return;var handler=Game.LocalPlayer.Character;Vehicle vehicle=handler.CurrentVehicle;if(vehicle==null||!vehicle.Exists())vehicle=World.GetAllVehicles().Where(v=>v.Exists()&&v.DistanceTo(handler)<8f).OrderBy(v=>v.DistanceTo(handler)).FirstOrDefault();if(vehicle==null){Game.DisplayNotification("~y~No vehicle nearby.");return;}int seat=-99;foreach(int candidate in new[]{1,2,0})if(NativeFunction.Natives.IS_VEHICLE_SEAT_FREE<bool>(vehicle,candidate,false)){seat=candidate;break;}if(seat==-99){Game.DisplayNotification("~y~No open rear/passenger seat for the K9.");return;}_dogVehicleDoor=seat==2?2:seat==1?3:1;NativeFunction.Natives.SET_VEHICLE_DOOR_OPEN(vehicle,_dogVehicleDoor,false,false);Vector3 kennel=vehicle.GetOffsetPosition(new Vector3(seat==2?-1.15f:1.15f,-1.25f,0f));_dog.Tasks.FollowNavigationMeshToPosition(kennel,vehicle.Heading,1.6f).WaitForCompletion(4500);Sit();Game.DisplaySubtitle("~b~K9 waiting at the open kennel door. Loading...",900);GameFiber.Wait(750);NativeFunction.Natives.TASK_ENTER_VEHICLE(_dog,vehicle,8000,seat,2f,1,0);uint timeout=Game.GameTime+8000;while(DogExists()&&_dog.CurrentVehicle!=vehicle&&Game.GameTime<timeout)GameFiber.Yield();if(_dog.CurrentVehicle!=vehicle)NativeFunction.Natives.TASK_WARP_PED_INTO_VEHICLE(_dog,vehicle,seat);GameFiber.Wait(250);_dogVehicle=vehicle;string boneName=seat==1?"seat_pside_r":seat==2?"seat_dside_r":"seat_pside_f";int seatBone=NativeFunction.Natives.GET_ENTITY_BONE_INDEX_BY_NAME<int>(vehicle,boneName);PlayDogAnimation("creatures@rottweiler@amb@world_dog_sitting@base","base",-1,1);if(seatBone>=0){NativeFunction.Natives.SET_ENTITY_COLLISION(_dog,false,false);NativeFunction.Natives.ATTACH_ENTITY_TO_ENTITY(_dog,vehicle,seatBone,_config.VehicleSeatOffsetX,_config.VehicleSeatOffsetY,_config.VehicleSeatOffsetZ,0f,0f,0f,false,false,false,false,2,true);_dogSeatAttached=true;}NativeFunction.Natives.SET_VEHICLE_DOOR_SHUT(vehicle,_dogVehicleDoor,false);NativeFunction.Natives.SET_ENTITY_INVINCIBLE(_dog,true);_state=K9State.InVehicle;K9IncidentLog.Write(_profile.Name,"Kennel","Loaded",vehicle.Position);Acknowledge("Sitting safely in the rear kennel.");}
+        private void ExitVehicle(){if(_dog==null||!_dog.Exists())return;var vehicle=_dogVehicle!=null&&_dogVehicle.Exists()?_dogVehicle:_dog.CurrentVehicle;if(vehicle==null||!vehicle.Exists()){ReleaseVehicleSeat();Follow();return;}if(vehicle.Speed>1.5f){Game.DisplayNotification("~y~Stop the vehicle before unloading the K9.");return;}NativeFunction.Natives.SET_VEHICLE_DOOR_OPEN(vehicle,_dogVehicleDoor,false,false);GameFiber.Wait(650);int savedHealth=Math.Max(100,_dog.Health);Vector3 exit=vehicle.GetOffsetPosition(new Vector3(_dogVehicleDoor==2?-1.35f:1.35f,-1.25f,.15f));_dog.Tasks.ClearImmediately();ReleaseVehicleSeat();_dog.Position=exit;_dog.Heading=vehicle.Heading;if(_dog.IsDead)NativeFunction.Natives.RESURRECT_PED(_dog);_dog.Health=savedHealth;GameFiber.Wait(650);NativeFunction.Natives.SET_VEHICLE_DOOR_SHUT(vehicle,_dogVehicleDoor,false);K9IncidentLog.Write(_profile.Name,"Kennel","Unloaded",exit);Follow();}
 
         private void ReleaseVehicleSeat(){if(_dog!=null&&_dog.Exists()){if(_dogSeatAttached)NativeFunction.Natives.DETACH_ENTITY(_dog,true,true);NativeFunction.Natives.SET_ENTITY_COLLISION(_dog,true,true);NativeFunction.Natives.SET_ENTITY_INVINCIBLE(_dog,false);}_dogSeatAttached=false;_dogVehicle=null;}
 
-        private void Inspect(){Game.DisplayNotification("~b~K9 "+_profile.Name+" — FIELD INSPECTION~s~~n~Health: "+_profile.Health+"%  Stamina: "+_profile.Stamina+"%~n~Food: "+_profile.Food+"%  Water: "+_profile.Water+"%~n~Training: Level "+_profile.TrainingLevel+"/5 "+_profile.TrainingLevelProgress+"%~n~Certifications: "+Certifications());Game.DisplayNotification("~b~DETECTION SPECIALTIES~s~~n~Narcotics: "+_profile.NarcoticsProgress+"%~n~Explosives/Bomb: "+_profile.ExplosivesProgress+"%~n~Weapons/Firearms: "+_profile.WeaponsProgress+"%");}
+        private void Inspect(){Game.DisplayNotification("~b~K9 "+_profile.Name+" — FIELD INSPECTION~s~~n~Health: "+_profile.Health+"%  Stamina: "+_profile.Stamina+"%~n~Food: "+_profile.Food+"%  Water: "+_profile.Water+"%~n~Training: Level "+_profile.TrainingLevel+"/5 "+_profile.TrainingLevelProgress+"%~n~Certifications: "+Certifications());Game.DisplayNotification("~b~DUTY EQUIPMENT~s~~n~Meals "+_profile.FoodMeals+"  Water "+_profile.WaterBottles+"  First aid "+_profile.FirstAidKits+"~n~Scent bags "+_profile.ScentBags+"  Treats "+_profile.Treats);}
         private string Certifications(){string s="";if(_profile.ObedienceCertified)s+="OB ";if(_profile.AgilityCertified)s+="AGI ";if(_profile.DetectionCertified)s+="DET ";if(_profile.NarcoticsCertified)s+="NAR ";if(_profile.ExplosivesCertified)s+="BOMB ";if(_profile.WeaponsCertified)s+="WPN ";if(_profile.TrackingCertified)s+="TRK ";if(_profile.ApprehensionCertified)s+="APP ";return s.Length==0?"In training":s.Trim();}
-        private void FirstAid(){if(!DogExists())return;if(_profile.Health>=95){Game.DisplayNotification("~g~No field treatment required.");return;}Sit();GameFiber.Wait(1800);_profile.FirstAid();_dog.Health=Math.Max(_dog.Health,(int)(_dog.MaxHealth*_profile.Health/100f));_profile.ChangeTrust(2);Game.DisplayNotification("~g~Field first aid applied.~s~~n~Serious injuries still require veterinary care.");}
+        private void FirstAid(){if(!DogExists())return;if(_profile.Health>=95){Game.DisplayNotification("~g~No field treatment required.");return;}if(!_profile.UseFirstAid()){Game.DisplayNotification("~r~No first-aid kits. Restock at the patrol vehicle.");return;}Sit();GameFiber.Wait(1800);_dog.Health=Math.Max(_dog.Health,(int)(_dog.MaxHealth*_profile.Health/100f));_profile.ChangeTrust(2);K9IncidentLog.Write(_profile.Name,"Medical","Field first aid",_dog.Position);Game.DisplayNotification("~g~Field first aid applied.~s~~n~Serious injuries still require veterinary care.");}
+
+        private void Rest(){if(!DogExists())return;LieDown();Game.DisplayNotification("~b~K9 rest cycle started.~s~ Maintain a safe perimeter.");GameFiber.Wait(8000);_profile.Rest();K9IncidentLog.Write(_profile.Name,"Care","Rest cycle",_dog.Position);Game.DisplayNotification("~g~K9 rested.~s~ Stamina restored.");}
+        private void VeterinaryCare(){if(!DogExists())return;var handler=Game.LocalPlayer.Character;Vector3 p=handler.Position;float h=handler.Heading;NativeFunction.Natives.DO_SCREEN_FADE_OUT(450);GameFiber.Wait(550);handler.Position=new Vector3(306.7f,-595.2f,43.3f);_dog.Position=handler.GetOffsetPosition(new Vector3(1f,0f,0f));GameFiber.Wait(1800);_profile.VeterinaryTreat();_dog.Health=_dog.MaxHealth;handler.Position=p;handler.Heading=h;_dog.Position=handler.GetOffsetPosition(new Vector3(-1f,-1f,0f));NativeFunction.Natives.DO_SCREEN_FADE_IN(450);K9IncidentLog.Write(_profile.Name,"Medical","Veterinary cleared",p);Game.DisplayNotification("~g~Veterinary clearance complete.~s~ K9 returned to service.");Follow();}
+        private void Restock(){var handler=Game.LocalPlayer.Character;var vehicle=World.GetAllVehicles().Where(v=>v.Exists()&&v.DistanceTo(handler)<5f).FirstOrDefault();if(vehicle==null){Game.DisplayNotification("~y~Stand beside a patrol vehicle to restock.");return;}_profile.Restock();K9IncidentLog.Write(_profile.Name,"Equipment","Restocked",handler.Position);Game.DisplayNotification("~g~K9 duty equipment restocked.");}
+        private void WhistleRecall(){NativeFunction.Natives.PLAY_SOUND_FRONTEND(-1,"NAV_UP_DOWN","HUD_FRONTEND_DEFAULT_SOUNDSET",true);Game.DisplaySubtitle("~b~Handler whistle recall",1200);Follow();}
+        private void HandSignal(){var handler=Game.LocalPlayer.Character;NativeFunction.Natives.REQUEST_ANIM_DICT("gestures@m@standing@casual");GameFiber.Wait(150);handler.Tasks.PlayAnimation("gestures@m@standing@casual","gesture_come_here_soft",4f,AnimationFlags.None);GameFiber.Wait(700);Follow();}
+        private void CollectScent(){var handler=Game.LocalPlayer.Character;Ped target=GetValidAimedSuspect(false)??FindNearestPed(_config.TrackRadius,true);if(target==null){Game.DisplayNotification("~y~Aim at or stand near the track subject first.");return;}if(!_profile.UseScentBag()){Game.DisplayNotification("~r~No clean scent bags. Restock equipment.");return;}_scentTarget=target;_scentCollectedAt=Game.GameTime;_scentRainAtCollection=NativeFunction.Natives.GET_RAIN_LEVEL<float>();K9IncidentLog.Write(_profile.Name,"Scent article","Collected",target.Position);Game.DisplayNotification("~g~Scent article bagged.~s~~n~Subject trail is now assigned to "+_profile.Name+".");}
 
         private void Search(bool vehicleOnly=false,DetectionSpecialty specialty=DetectionSpecialty.General)
         {
@@ -431,14 +451,16 @@ namespace AdvancedK9
 
         private void Track()
         {
-            var target = FindNearestPed(_config.TrackRadius, true);
+            var target = _scentTarget!=null&&_scentTarget.Exists()&&!_scentTarget.IsDead?_scentTarget:FindNearestPed(_config.TrackRadius, true);
             if (target == null)
             {
                 Game.DisplayNotification("~y~No trackable person nearby. Face the wanted/missing person and retry.");
                 return;
             }
             _state = K9State.Tracking;
-            Game.DisplayNotification("~b~K9 scent track started.~s~ Follow " + _profile.Name + " and allow room to work.");
+            float rain=NativeFunction.Natives.GET_RAIN_LEVEL<float>();float ageMinutes=_scentCollectedAt==0?0:(Game.GameTime-_scentCollectedAt)/60000f;float distance=target.DistanceTo(Game.LocalPlayer.Character);bool inVehicle=target.CurrentVehicle!=null;int scentQuality=Math.Max(5,100-(int)(ageMinutes*8)-(int)(rain*35)-(int)(distance/12)-(inVehicle?22:0));
+            if(scentQuality<18){Game.DisplayNotification("~r~Scent trail is too degraded.~s~~n~Collect a fresh scent article; rain, age, distance, and vehicles weaken odor.");return;}
+            Game.DisplayNotification("~b~K9 scent track started.~s~ Quality "+scentQuality+"%~n~Rain, trail age, distance, and vehicle travel affect the track.");K9IncidentLog.Write(_profile.Name,"Track","Started quality "+scentQuality+"%",target.Position);
             var end = Game.GameTime + 120000;
             while (_running && DogExists() && target.Exists() && !target.IsDead && Game.GameTime < end && _state == K9State.Tracking)
             {
@@ -446,7 +468,7 @@ namespace AdvancedK9
                 {
                     Bark(2);
                     Sit();
-                    Game.DisplayNotification("~g~Track complete.~s~ Person located.");
+                    Game.DisplayNotification("~g~Track complete.~s~ Person located.");K9IncidentLog.Write(_profile.Name,"Track","Subject located",target.Position);
                     _trust.Change(2, "successful track");
                     return;
                 }
@@ -461,7 +483,7 @@ namespace AdvancedK9
                                            destination.Z);
                 _dog.Tasks.Clear();
                 PlayDogAnimation("creatures@rottweiler@indication@", "indicate_low", 650, 0);
-                _dog.Tasks.FollowNavigationMeshToPosition(waypoint, target.Heading, 3.25f).WaitForCompletion(10000);
+                _dog.Tasks.FollowNavigationMeshToPosition(waypoint, target.Heading, rain>.35f?2.25f:3.25f).WaitForCompletion(10000);
                 _profile.UseStamina(1);
                 GameFiber.Wait(150);
             }
@@ -475,8 +497,10 @@ namespace AdvancedK9
             if(target==null&&_voiceAimedTarget!=null&&_voiceAimedTarget.Exists()&&!_voiceAimedTarget.IsDead&&_voiceAimedTarget.DistanceTo(handler)<=80f&&!LspdfrBridge.IsPedCop(_voiceAimedTarget))target=_voiceAimedTarget;
             _voiceAimedTarget=null;
             if(target==null){Game.DisplayNotification("~y~No valid suspect identified.~s~~n~Aim your taser or firearm directly at the intended person, then issue APPREHEND.");return;}
+            if(_state==K9State.InVehicle)DoorPop(false);
             _state = K9State.Apprehending;
             _dog.Tasks.Clear();
+            string reaction=ApplySuspectReaction(target,handler);K9IncidentLog.Write(_profile.Name,"Apprehension","Suspect reaction: "+reaction,target.Position);
             NativeFunction.Natives.TASK_COMBAT_PED(_dog, target, 0, 16);
             Game.DisplayNotification("~o~K9 deployed on positively identified aimed suspect.~s~~n~Recall automatically engages at the safety threshold.");
             var end = Game.GameTime + 25000;
@@ -496,6 +520,10 @@ namespace AdvancedK9
             }
             Follow();
         }
+
+        private string ApplySuspectReaction(Ped target,Ped handler){int roll=_random.Next(100);if(roll<30){NativeFunction.Natives.TASK_HANDS_UP(target,12000,handler,-1,true);Game.DisplayNotification("~g~Suspect surrendered to K9 warning.");return "surrender";}if(roll<55){target.Tasks.Clear();NativeFunction.Natives.TASK_STAND_STILL(target,5000);Game.DisplayNotification("~y~Suspect froze on K9 deployment.");return "freeze";}if(roll<88){NativeFunction.Natives.TASK_SMART_FLEE_PED(target,handler,120f,-1,false,false);Game.DisplayNotification("~o~Suspect fled from K9.");return "flee";}NativeFunction.Natives.TASK_COMBAT_PED(target,handler,0,16);Game.DisplayNotification("~r~Suspect chose to fight.");return "fight";}
+        private void DoorPop(){DoorPop(true);}
+        private void DoorPop(bool followAfter){if(!DogExists()||_state!=K9State.InVehicle){if(followAfter)Game.DisplayNotification("~y~K9 is not secured in the vehicle.");return;}var vehicle=_dogVehicle;if(vehicle==null||!vehicle.Exists()||vehicle.Speed>2f){Game.DisplayNotification("~y~Vehicle must be stopped for door-pop deployment.");return;}NativeFunction.Natives.SET_VEHICLE_DOOR_OPEN(vehicle,_dogVehicleDoor,false,false);GameFiber.Wait(450);Vector3 exit=vehicle.GetOffsetPosition(new Vector3(_dogVehicleDoor==2?-1.4f:1.4f,-1.2f,.15f));ReleaseVehicleSeat();_dog.Position=exit;_dog.Health=Math.Max(_dog.Health,100);GameFiber.Wait(350);NativeFunction.Natives.SET_VEHICLE_DOOR_SHUT(vehicle,_dogVehicleDoor,false);K9IncidentLog.Write(_profile.Name,"Door pop","Deployed",exit);if(followAfter)Follow();}
 
         private Ped GetValidAimedSuspect(bool notify)
         {
@@ -550,13 +578,13 @@ namespace AdvancedK9
         private void Feed()
         {
             if (_dog.DistanceTo(Game.LocalPlayer.Character) > 2.5f) { Game.DisplayNotification("~y~Move closer to your K9."); return; }
-            UseBowl(false);_profile.FeedMeal();
+            if(!_profile.FeedMeal()){Game.DisplayNotification("~r~No K9 meals remaining. Restock at the patrol vehicle.");return;}UseBowl(false);
             Game.DisplayNotification("~b~You fed " + _profile.Name + ".~s~ Food restored to 100%.");
             _trust.Change(2, "care and feeding");
             _profile.ChangeTrust(2);_profile.Recover(8);
         }
 
-        private void Drink(){if(_dog.DistanceTo(Game.LocalPlayer.Character)>2.5f){Game.DisplayNotification("~y~Move closer to your K9.");return;}UseBowl(true);_profile.GiveWater();Game.DisplayNotification("~b~"+_profile.Name+" drank fresh water.~s~ Water restored to 100%.");_trust.Change(1,"handler care");_profile.ChangeTrust(1);}
+        private void Drink(){if(_dog.DistanceTo(Game.LocalPlayer.Character)>2.5f){Game.DisplayNotification("~y~Move closer to your K9.");return;}if(!_profile.GiveWater()){Game.DisplayNotification("~r~No water bottles remaining. Restock at the patrol vehicle.");return;}UseBowl(true);Game.DisplayNotification("~b~"+_profile.Name+" drank fresh water.~s~ Water restored to 100%.");_trust.Change(1,"handler care");_profile.ChangeTrust(1);}
 
         private void UseBowl(bool water)
         {
@@ -592,7 +620,8 @@ namespace AdvancedK9
             EnforceHandlerSafety();
             RecordHandlerTrail();
             UpdateNeeds();
-            if(Game.GameTime>=_nextVitalsUpdate){_nextVitalsUpdate=Game.GameTime+5000;int liveHealth=(int)(100f*_dog.Health/Math.Max(1,_dog.MaxHealth));if(liveHealth<_profile.Health){string injury=liveHealth<=25?"Serious — veterinary treatment required":liveHealth<=55?"Moderate":"Minor";_profile.SetInjury(injury,liveHealth);}if(_state==K9State.Searching||_state==K9State.Tracking||_state==K9State.Apprehending)_profile.UseStamina(2);else _profile.Recover(1);}
+            UpdateEnvironment();
+            if(Game.GameTime>=_nextVitalsUpdate){_nextVitalsUpdate=Game.GameTime+5000;int liveHealth=(int)(100f*_dog.Health/Math.Max(1,_dog.MaxHealth));if(liveHealth<_profile.Health){string injury=liveHealth<=25?"Serious — veterinary treatment required":liveHealth<=55?"Moderate":"Minor";_profile.SetInjury(injury,liveHealth);K9IncidentLog.Write(_profile.Name,"Injury",injury,_dog.Position);}NativeFunction.Natives.SET_PED_MOVE_RATE_OVERRIDE(_dog,_profile.Health<=55?.65f:1f);if(_state==K9State.Searching||_state==K9State.Tracking||_state==K9State.Apprehending)_profile.UseStamina(2);else _profile.Recover(1);}
             if (_state == K9State.Leashed)
             {
                 var officer = Game.LocalPlayer.Character;
@@ -610,7 +639,10 @@ namespace AdvancedK9
 
         private void UpdateNeeds(){if(Game.GameTime<_nextNeedsUpdate)return;_nextNeedsUpdate=Game.GameTime+60000;bool working=_state==K9State.Searching||_state==K9State.Tracking||_state==K9State.Apprehending||_state==K9State.Fetching;_profile.UseNeeds(working?2:1,working?3:2);if((_profile.Food<=25||_profile.Water<=25)&&Game.GameTime>=_nextNeedsWarning){_nextNeedsWarning=Game.GameTime+120000;Game.DisplayNotification("~o~K9 care needed:~s~~n~Food "+_profile.Food+"%  Water "+_profile.Water+"%~n~Use Feed or Give Water from the command menu.");}}
 
-        private void DrawHud(){int mode=_profile.HudMode;if(mode==0)return;float x=_profile.HudX,y=_profile.HudY,s=_profile.HudScale,w=.285f*s,h=(mode==1?.106f:.174f)*s;NativeFunction.Natives.DRAW_RECT(x,y,w,h,5,16,25,210);DrawText("K9 "+_profile.Name+"  |  "+_state,x-w/2+.01f,y-h/2+.008f,.31f*s);DrawText("HP "+_profile.Health+"  STA "+_profile.Stamina+"  FOOD "+_profile.Food+"  H2O "+_profile.Water,x-w/2+.01f,y-h/2+.040f*s,.245f*s);DrawText("VOICE "+_voiceStatus,x-w/2+.01f,y-h/2+.070f*s,.245f*s);if(mode==2){DrawText("Trust "+_profile.Trust+"  XP "+_profile.TrainingXp+"  "+Certifications(),x-w/2+.01f,y-h/2+.102f*s,.245f*s);DrawText("Injury: "+_profile.Injury,x-w/2+.01f,y-h/2+.134f*s,.245f*s);}}
+        private void UpdateEnvironment(){if(Game.GameTime<_nextEnvironmentUpdate)return;_nextEnvironmentUpdate=Game.GameTime+60000;float rain=NativeFunction.Natives.GET_RAIN_LEVEL<float>();int hour=World.DateTime.Hour;bool hot=rain<.1f&&hour>=11&&hour<=18;if(hot)_profile.UseNeeds(0,2);if(hot&&_state==K9State.InVehicle&&_dogVehicle!=null&&_dogVehicle.Exists()&&!NativeFunction.Natives.GET_IS_VEHICLE_ENGINE_RUNNING<bool>(_dogVehicle)){_profile.UseNeeds(0,5);if(Game.GameTime>=_nextHeatWarning){_nextHeatWarning=Game.GameTime+90000;Game.DisplayNotification("~r~K9 VEHICLE HEAT WARNING~s~~n~Engine is off during peak heat. Remove the K9 or provide water.");K9IncidentLog.Write(_profile.Name,"Safety","Vehicle heat warning",_dogVehicle.Position);}}}
+
+        private void DrawHud(){int mode=_profile.HudMode;if(mode!=0){float x=_profile.HudX,y=_profile.HudY,s=_profile.HudScale,w=.285f*s,h=(mode==1?.106f:.174f)*s;NativeFunction.Natives.DRAW_RECT(x,y,w,h,5,16,25,210);DrawText("K9 "+_profile.Name+"  |  "+_state,x-w/2+.01f,y-h/2+.008f,.31f*s);DrawText("HP "+_profile.Health+"  STA "+_profile.Stamina+"  FOOD "+_profile.Food+"  H2O "+_profile.Water,x-w/2+.01f,y-h/2+.040f*s,.245f*s);DrawText("VOICE "+_voiceStatus,x-w/2+.01f,y-h/2+.070f*s,.245f*s);if(mode==2){DrawText("Trust "+_profile.Trust+"  XP "+_profile.TrainingXp+"  "+Certifications(),x-w/2+.01f,y-h/2+.102f*s,.245f*s);DrawText("Injury: "+_profile.Injury,x-w/2+.01f,y-h/2+.134f*s,.245f*s);}}if(_camera.Active&&DogExists()){float d=_dog.DistanceTo(Game.LocalPlayer.Character);NativeFunction.Natives.DRAW_RECT(.5f,.91f,.52f,.09f,0,0,0,180);DrawText("K9 CAM  GPS "+_dog.Position.X.ToString("0")+","+_dog.Position.Y.ToString("0")+"  HDG "+HeadingCardinal(_dog.Heading)+"  HANDLER "+d.ToString("0.0")+"m",.25f,.875f,.31f);DrawText("STATE "+_state+"  HP "+_profile.Health+"  STA "+_profile.Stamina+"  H2O "+_profile.Water,.25f,.91f,.27f);}}
+        private static string HeadingCardinal(float h){h=(h%360+360)%360;return h<22.5f||h>=337.5f?"N":h<67.5f?"NE":h<112.5f?"E":h<157.5f?"SE":h<202.5f?"S":h<247.5f?"SW":h<292.5f?"W":"NW";}
         private static void DrawText(string value,float x,float y,float scale){NativeFunction.Natives.SET_TEXT_FONT(0);NativeFunction.Natives.SET_TEXT_SCALE(scale,scale);NativeFunction.Natives.SET_TEXT_COLOUR(235,245,255,255);NativeFunction.Natives.SET_TEXT_OUTLINE();NativeFunction.Natives.BEGIN_TEXT_COMMAND_DISPLAY_TEXT("STRING");NativeFunction.Natives.ADD_TEXT_COMPONENT_SUBSTRING_PLAYER_NAME(value);NativeFunction.Natives.END_TEXT_COMMAND_DISPLAY_TEXT(x,y);}
 
         private void EnforceHandlerSafety()
