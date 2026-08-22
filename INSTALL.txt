@@ -1,4 +1,4 @@
-ADVANCED K9 v1.6.0 — DRAG-AND-DROP INSTALL
+ADVANCED K9 v1.6.1 — DRAG-AND-DROP INSTALL
 
 1. Close GTA V and RAGE Plugin Hook.
 2. Open the compiled release ZIP.
@@ -18,7 +18,7 @@ the LSPDFR sub-plugin loader.
 Controls
   Left Ctrl + K   Deploy/dismiss K9
   Left Ctrl + J   Command menu
-  Left Ctrl + P   Kennel/profile menu
+  Left Ctrl + U   Kennel/profile menu
   Left Ctrl + C   Dog camera
   Left Ctrl + L   Leash
   Hold V          AI push-to-talk
