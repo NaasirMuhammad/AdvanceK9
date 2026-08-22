@@ -4,6 +4,10 @@ All published AdvancedK9 versions are beta builds.
 
 ## 0.20-beta
 
+- Adds twelve realism systems: rear kennel-door staging, weather/heat exposure, rest and fatigue recovery, veterinary treatment, scent articles, scent aging, remote door-pop, varied suspect reactions, whistle/hand signals, persistent duty equipment, CSV incident logging, and GPS K9-camera telemetry.
+- Makes rain, trail age, subject distance and vehicle travel degrade scent quality; weak trails require a fresh bagged article.
+- Adds vehicle heat warnings and extra water loss when a K9 is left in a stopped vehicle with the engine off during peak daytime heat.
+- Adds meals, water bottles, first-aid kits, scent bags and treats to the persistent profile, with patrol-vehicle restocking.
 - Adds persistent 0–100 food and water needs, working-dog consumption rates, low-care warnings and HUD readouts.
 - Adds a dedicated Give Water command and bowl interaction; Feed and Drink restore their separate needs.
 - Makes low food/water realistically reduce stamina and command reliability without silently killing the K9.
