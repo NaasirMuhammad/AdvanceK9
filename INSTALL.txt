@@ -1,0 +1,26 @@
+ADVANCED K9 v1.5.0 — DRAG-AND-DROP INSTALL
+
+1. Close GTA V and RAGE Plugin Hook.
+2. Open the compiled release ZIP.
+3. Drag the Plugins folder into the folder containing GTA5.exe.
+4. Allow Windows to merge the Plugins folders. This does not replace LSPDFR.
+5. Start RAGE Plugin Hook and ensure "Load all plugins on startup" is enabled.
+6. Enter Story Mode, start LSPDFR, and go on duty.
+
+Controls
+  Left Ctrl + K   Deploy/dismiss K9
+  Left Ctrl + J   Command menu
+  Left Ctrl + P   Kennel/profile menu
+  Left Ctrl + C   Dog camera
+  Left Ctrl + L   Leash
+  Hold V          AI push-to-talk
+
+AI voice is optional. Keyboard controls need no key or internet connection.
+For Groq voice, create a Windows user environment variable named GROQ_API_KEY.
+For OpenAI, see Plugins\LSPDFR\AdvancedK9\AdvancedK9.ini and README.md.
+
+Required before installation
+  GTA V Story Mode, RAGE Plugin Hook, LSPDFR, Policing Redefined,
+  and Common Data Framework.
+
+Optional breed models are not bundled. Follow the links in README.md if wanted.
