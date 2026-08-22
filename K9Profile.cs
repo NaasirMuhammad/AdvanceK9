@@ -35,6 +35,8 @@ namespace AdvancedK9
         public int NarcoticsProgress { get; private set; }
         public int ExplosivesProgress { get; private set; }
         public int WeaponsProgress { get; private set; }
+        public int Food { get; private set; } = 100;
+        public int Water { get; private set; } = 100;
         public int TrainingLevel { get; private set; } = 1;
         public int TrainingLevelProgress { get; private set; }
         public int Deployments { get; private set; }
@@ -61,6 +63,7 @@ namespace AdvancedK9
             VestComponent = config.VestComponent;
             Load();
             LoadSpecialtyProgress();
+            LoadNeeds();
             MigrateTrainingProgress();
         }
 
@@ -86,6 +89,10 @@ namespace AdvancedK9
         public void ChangeTrust(int value){Trust=Clamp(Trust+value,0,100);Save();}
         public void UseStamina(int value){Stamina=Clamp(Stamina-value,0,100);if(Stamina<15)ChangeTrust(-1);Save();}
         public void Recover(int value){Stamina=Clamp(Stamina+value,0,100);Health=Clamp(Health+value/2,0,100);Save();}
+        public void UseNeeds(int food,int water){Food=Clamp(Food-Math.Max(0,food),0,100);Water=Clamp(Water-Math.Max(0,water),0,100);if(Food<20||Water<20)Stamina=Clamp(Stamina-2,0,100);Save();}
+        public void FeedMeal(){Food=100;Stamina=Clamp(Stamina+12,0,100);Save();}
+        public void GiveWater(){Water=100;Stamina=Clamp(Stamina+10,0,100);Save();}
+        public double NeedsFactor=>Math.Max(.35,Math.Min(1.0,(Food/100.0*.45)+(Water/100.0*.55)));
         public void RecordDeployment(){Deployments++;Save();} public void RecordSearch(){SuccessfulSearches++;AddXp(3);}
         public void SetInjury(string injury,int health){Injury=injury??"None";Health=Clamp(health,0,100);Save();}
         public void FirstAid(){Health=Clamp(Health+20,0,100);if(Health>=70)Injury="Minor/treated";Save();}
@@ -113,7 +120,7 @@ namespace AdvancedK9
             {
                 var directory = Path.GetDirectoryName(_path);
                 if (!Directory.Exists(directory)) Directory.CreateDirectory(directory);
-                File.WriteAllLines(_path, new[]{"Version=5","Name="+Name,"Breed="+BreedIndex,"Skin="+CoatVariation,"Equipment="+VestIndex,"Texture="+VestTexture,"XP="+TrainingXp,"Trust="+Trust,"Health="+Health,"Stamina="+Stamina,"Injury="+Injury,"TrainingLevel="+TrainingLevel,"TrainingProgress="+TrainingLevelProgress,"CertObedience="+ObedienceCertified,"CertAgility="+AgilityCertified,"CertDetection="+DetectionCertified,"CertTracking="+TrackingCertified,"CertApprehension="+ApprehensionCertified,"NarcoticsProgress="+NarcoticsProgress,"ExplosivesProgress="+ExplosivesProgress,"WeaponsProgress="+WeaponsProgress,"CertNarcotics="+NarcoticsCertified,"CertExplosives="+ExplosivesCertified,"CertWeapons="+WeaponsCertified,"Deployments="+Deployments,"Searches="+SuccessfulSearches,"HudX="+HudX,"HudY="+HudY,"HudScale="+HudScale,"HudMode="+HudMode});
+                File.WriteAllLines(_path, new[]{"Version=6","Name="+Name,"Breed="+BreedIndex,"Skin="+CoatVariation,"Equipment="+VestIndex,"Texture="+VestTexture,"XP="+TrainingXp,"Trust="+Trust,"Health="+Health,"Stamina="+Stamina,"Injury="+Injury,"Food="+Food,"Water="+Water,"TrainingLevel="+TrainingLevel,"TrainingProgress="+TrainingLevelProgress,"CertObedience="+ObedienceCertified,"CertAgility="+AgilityCertified,"CertDetection="+DetectionCertified,"CertTracking="+TrackingCertified,"CertApprehension="+ApprehensionCertified,"NarcoticsProgress="+NarcoticsProgress,"ExplosivesProgress="+ExplosivesProgress,"WeaponsProgress="+WeaponsProgress,"CertNarcotics="+NarcoticsCertified,"CertExplosives="+ExplosivesCertified,"CertWeapons="+WeaponsCertified,"Deployments="+Deployments,"Searches="+SuccessfulSearches,"HudX="+HudX,"HudY="+HudY,"HudScale="+HudScale,"HudMode="+HudMode});
             }
             catch (Exception ex) { Game.LogTrivial("AdvancedK9 profile save: " + ex.Message); }
         }
@@ -154,6 +161,7 @@ namespace AdvancedK9
 
         private void MigrateTrainingProgress(){if(TrainingLevel!=1||TrainingLevelProgress!=0)return;if(ApprehensionCertified){TrainingLevel=5;TrainingLevelProgress=100;AgilityCertified=true;}else if(TrackingCertified){TrainingLevel=5;AgilityCertified=true;}else if(DetectionCertified){TrainingLevel=4;AgilityCertified=true;}else if(ObedienceCertified){TrainingLevel=2;}Save();}
         private void LoadSpecialtyProgress(){try{if(!File.Exists(_path))return;foreach(var line in File.ReadAllLines(_path)){int split=line.IndexOf('=');if(split<1)continue;string key=line.Substring(0,split),value=line.Substring(split+1);int number;bool flag;if(key=="NarcoticsProgress"&&int.TryParse(value,out number))NarcoticsProgress=Clamp(number,0,100);else if(key=="ExplosivesProgress"&&int.TryParse(value,out number))ExplosivesProgress=Clamp(number,0,100);else if(key=="WeaponsProgress"&&int.TryParse(value,out number))WeaponsProgress=Clamp(number,0,100);else if(key=="CertNarcotics"&&bool.TryParse(value,out flag))NarcoticsCertified=flag;else if(key=="CertExplosives"&&bool.TryParse(value,out flag))ExplosivesCertified=flag;else if(key=="CertWeapons"&&bool.TryParse(value,out flag))WeaponsCertified=flag;}}catch(Exception ex){Game.LogTrivial("AdvancedK9 specialty profile load: "+ex.Message);}}
+        private void LoadNeeds(){try{if(!File.Exists(_path))return;foreach(var line in File.ReadAllLines(_path)){int split=line.IndexOf('=');if(split<1)continue;string key=line.Substring(0,split),value=line.Substring(split+1);int number;if(key=="Food"&&int.TryParse(value,out number))Food=Clamp(number,0,100);else if(key=="Water"&&int.TryParse(value,out number))Water=Clamp(number,0,100);}}catch(Exception ex){Game.LogTrivial("AdvancedK9 needs profile load: "+ex.Message);}}
 
         private static int FindVestComponent(Ped dog)
         {
