@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.7.1
+
+- Corrected LemonUI width units and added opaque EUP-style dark rows with a blue active selection.
+- Reduced the menu to six visible rows with native scrolling.
+- Detects vest components using both drawable and texture variation counts.
+- Shows recognized vest texture names and queries texture counts against the resolved drawable.
+- Breed preview replaces the active ped in place while preserving position and leash/follow state instead of dismissing and redeploying at the handler.
+
 ## 1.7.0
 
 - Replaced the custom menu renderer with LemonUI 2.2.0 for RAGE Plugin Hook.
