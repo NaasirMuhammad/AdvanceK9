@@ -4,6 +4,10 @@ All published AdvancedK9 versions are beta builds.
 
 ## 0.20-beta
 
+- Splits detection into independently trainable narcotics (NAR), explosives/bomb (BOMB), and weapons/firearm (WPN) specialties.
+- Adds separate persistent 0–100 specialty progress and certifications; handlers may train any combination or earn all three.
+- Adds dedicated five-station academy setups and distinct voice/field commands for each detection specialty.
+- Keeps every checkpoint silent. Negative results sit without sound; barking happens only after the final result is positive.
 - Locks the aimed suspect when push-to-talk begins and removes trust hesitation from a valid apprehension, preventing repeated voice commands while transcription completes.
 - Records the handler's recent route so a distant following K9 works back along the handler's scent trail instead of becoming stranded.
 - Teleports the handler and K9 to a dedicated off-street academy ground for training, then returns both to the original patrol location.
