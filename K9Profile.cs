@@ -29,6 +29,12 @@ namespace AdvancedK9
         public bool DetectionCertified { get; private set; }
         public bool TrackingCertified { get; private set; }
         public bool ApprehensionCertified { get; private set; }
+        public bool NarcoticsCertified { get; private set; }
+        public bool ExplosivesCertified { get; private set; }
+        public bool WeaponsCertified { get; private set; }
+        public int NarcoticsProgress { get; private set; }
+        public int ExplosivesProgress { get; private set; }
+        public int WeaponsProgress { get; private set; }
         public int TrainingLevel { get; private set; } = 1;
         public int TrainingLevelProgress { get; private set; }
         public int Deployments { get; private set; }
@@ -54,6 +60,7 @@ namespace AdvancedK9
             CustomModel = config.CustomDogModel;
             VestComponent = config.VestComponent;
             Load();
+            LoadSpecialtyProgress();
             MigrateTrainingProgress();
         }
 
@@ -73,6 +80,9 @@ namespace AdvancedK9
         public void AddXp(int value) { TrainingXp=Math.Max(0,TrainingXp+value); Save(); }
         public bool ApplyTrainingProgress(int level,int points){if(level!=TrainingLevel||TrainingLevelProgress>=100)return false;TrainingLevelProgress=Clamp(TrainingLevelProgress+Math.Max(0,points),0,100);TrainingXp+=Math.Max(0,points/4);bool completed=TrainingLevelProgress>=100;if(completed){if(level==1)ObedienceCertified=true;else if(level==2)AgilityCertified=true;else if(level==3)DetectionCertified=true;else if(level==4)TrackingCertified=true;else if(level==5)ApprehensionCertified=true;if(level<5){TrainingLevel++;TrainingLevelProgress=0;}}Save();return completed;}
         public string CurrentTrainingName=>TrainingLevel==1?"Basic Obedience":TrainingLevel==2?"Agility / Handler Control":TrainingLevel==3?"Detection":TrainingLevel==4?"Tracking":"Apprehension";
+        public int SpecialtyProgress(DetectionSpecialty specialty)=>specialty==DetectionSpecialty.Narcotics?NarcoticsProgress:specialty==DetectionSpecialty.Explosives?ExplosivesProgress:specialty==DetectionSpecialty.Weapons?WeaponsProgress:0;
+        public bool HasSpecialty(DetectionSpecialty specialty)=>specialty==DetectionSpecialty.Narcotics?NarcoticsCertified:specialty==DetectionSpecialty.Explosives?ExplosivesCertified:specialty==DetectionSpecialty.Weapons?WeaponsCertified:DetectionCertified;
+        public bool ApplySpecialtyProgress(DetectionSpecialty specialty,int points){if(!DetectionCertified)return false;int value=Clamp(SpecialtyProgress(specialty)+Math.Max(0,points),0,100);if(specialty==DetectionSpecialty.Narcotics){NarcoticsProgress=value;NarcoticsCertified=value>=100;}else if(specialty==DetectionSpecialty.Explosives){ExplosivesProgress=value;ExplosivesCertified=value>=100;}else if(specialty==DetectionSpecialty.Weapons){WeaponsProgress=value;WeaponsCertified=value>=100;}TrainingXp+=Math.Max(0,points/4);Save();return value>=100;}
         public void ChangeTrust(int value){Trust=Clamp(Trust+value,0,100);Save();}
         public void UseStamina(int value){Stamina=Clamp(Stamina-value,0,100);if(Stamina<15)ChangeTrust(-1);Save();}
         public void Recover(int value){Stamina=Clamp(Stamina+value,0,100);Health=Clamp(Health+value/2,0,100);Save();}
@@ -103,7 +113,7 @@ namespace AdvancedK9
             {
                 var directory = Path.GetDirectoryName(_path);
                 if (!Directory.Exists(directory)) Directory.CreateDirectory(directory);
-                File.WriteAllLines(_path, new[]{"Version=4","Name="+Name,"Breed="+BreedIndex,"Skin="+CoatVariation,"Equipment="+VestIndex,"Texture="+VestTexture,"XP="+TrainingXp,"Trust="+Trust,"Health="+Health,"Stamina="+Stamina,"Injury="+Injury,"TrainingLevel="+TrainingLevel,"TrainingProgress="+TrainingLevelProgress,"CertObedience="+ObedienceCertified,"CertAgility="+AgilityCertified,"CertDetection="+DetectionCertified,"CertTracking="+TrackingCertified,"CertApprehension="+ApprehensionCertified,"Deployments="+Deployments,"Searches="+SuccessfulSearches,"HudX="+HudX,"HudY="+HudY,"HudScale="+HudScale,"HudMode="+HudMode});
+                File.WriteAllLines(_path, new[]{"Version=5","Name="+Name,"Breed="+BreedIndex,"Skin="+CoatVariation,"Equipment="+VestIndex,"Texture="+VestTexture,"XP="+TrainingXp,"Trust="+Trust,"Health="+Health,"Stamina="+Stamina,"Injury="+Injury,"TrainingLevel="+TrainingLevel,"TrainingProgress="+TrainingLevelProgress,"CertObedience="+ObedienceCertified,"CertAgility="+AgilityCertified,"CertDetection="+DetectionCertified,"CertTracking="+TrackingCertified,"CertApprehension="+ApprehensionCertified,"NarcoticsProgress="+NarcoticsProgress,"ExplosivesProgress="+ExplosivesProgress,"WeaponsProgress="+WeaponsProgress,"CertNarcotics="+NarcoticsCertified,"CertExplosives="+ExplosivesCertified,"CertWeapons="+WeaponsCertified,"Deployments="+Deployments,"Searches="+SuccessfulSearches,"HudX="+HudX,"HudY="+HudY,"HudScale="+HudScale,"HudMode="+HudMode});
             }
             catch (Exception ex) { Game.LogTrivial("AdvancedK9 profile save: " + ex.Message); }
         }
@@ -143,6 +153,7 @@ namespace AdvancedK9
         }
 
         private void MigrateTrainingProgress(){if(TrainingLevel!=1||TrainingLevelProgress!=0)return;if(ApprehensionCertified){TrainingLevel=5;TrainingLevelProgress=100;AgilityCertified=true;}else if(TrackingCertified){TrainingLevel=5;AgilityCertified=true;}else if(DetectionCertified){TrainingLevel=4;AgilityCertified=true;}else if(ObedienceCertified){TrainingLevel=2;}Save();}
+        private void LoadSpecialtyProgress(){try{if(!File.Exists(_path))return;foreach(var line in File.ReadAllLines(_path)){int split=line.IndexOf('=');if(split<1)continue;string key=line.Substring(0,split),value=line.Substring(split+1);int number;bool flag;if(key=="NarcoticsProgress"&&int.TryParse(value,out number))NarcoticsProgress=Clamp(number,0,100);else if(key=="ExplosivesProgress"&&int.TryParse(value,out number))ExplosivesProgress=Clamp(number,0,100);else if(key=="WeaponsProgress"&&int.TryParse(value,out number))WeaponsProgress=Clamp(number,0,100);else if(key=="CertNarcotics"&&bool.TryParse(value,out flag))NarcoticsCertified=flag;else if(key=="CertExplosives"&&bool.TryParse(value,out flag))ExplosivesCertified=flag;else if(key=="CertWeapons"&&bool.TryParse(value,out flag))WeaponsCertified=flag;}}catch(Exception ex){Game.LogTrivial("AdvancedK9 specialty profile load: "+ex.Message);}}
 
         private static int FindVestComponent(Ped dog)
         {
