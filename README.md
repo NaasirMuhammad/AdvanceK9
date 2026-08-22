@@ -35,6 +35,12 @@ The compiled release includes AdvancedK9, its configuration, and the MIT-license
 - Persistent 0–100 handler trust with obedience, response-time, detection and deployment effects
 - Handler-safety interlock: friendly relationship group, attack prevention and automatic emergency recall
 - Persistent kennel profile for breed, coat variation, vest style/color and custom K9 name
+- Rear-door kennel staging and remote door-pop deployment from a stopped patrol vehicle
+- Heat, rain, fatigue, injury/limp, rest and veterinary-care simulation
+- Bagged scent articles with age, rain, distance and vehicle-travel degradation
+- Surrender, freeze, flee or fight suspect reactions plus whistle and silent hand-signal recall
+- Persistent duty equipment, patrol-vehicle restocking and CSV incident records in `Plugins/LSPDFR/AdvancedK9/K9IncidentLog.csv`
+- GPS K9-camera overlay with heading, handler distance, state and live condition telemetry
 
 ## Build
 
