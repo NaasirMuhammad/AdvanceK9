@@ -14,162 +14,230 @@ namespace AdvancedK9
 
         public AcademySession(Ped dog, string name) { _dog = dog; _name = name; }
 
-        public void Run(Action sit, Action down, Action follow)
+        public int Run(int level, Action sit, Action down, Action follow)
         {
-            Game.DisplayNotification("~b~K9 TRAINING ACADEMY~s~~n~Five handler-controlled levels are beginning. Follow the prompts and press Y when ready.");
-            var score = 0;
-            score += ObedienceLevel(sit, down);
-            score += PlaceAndStayLevel(sit);
-            score += RecallLevel(follow);
-            score += AgilityLevel();
-            score += DetectionLineupLevel(sit);
+            Game.DisplayNotification("~b~ADVANCED K9 ACADEMY~s~~n~Level " + level + "/5: " + LevelName(level) + "~n~Each completed exercise awards 20%.");
+            int points;
+            if (level == 1) points = ObedienceCourse(sit, down, follow);
+            else if (level == 2) points = AgilityCourse();
+            else if (level == 3) points = DetectionCourse(sit);
+            else if (level == 4) points = TrackingCourse(sit);
+            else points = ApprehensionCourse(sit, follow);
             follow();
-            var grade = score == 5 ? "PASS — Excellent" : score >= 4 ? "PASS" : "RETRAIN";
-            Game.DisplayNotification("~b~ACADEMY COMPLETE~s~~n~Handler: Player~n~K9: " + _name + "~n~Score: " + score + "/5 — " + grade);
+            Game.DisplayNotification("~b~ACADEMY SESSION COMPLETE~s~~n~K9: " + _name + "~n~Progress earned: " + points + "%");
+            return points;
         }
 
-        private int ObedienceLevel(Action sit, Action down)
+        private int ObedienceCourse(Action sit, Action down, Action follow)
         {
-            if (!WaitForHandler("LEVEL 1/5 — OBEDIENCE", "Press ~y~Y~s~ to begin the sit/down sequence")) return 0;
-            try
-            {
-                sit(); GameFiber.Wait(1800);
-                Game.DisplaySubtitle("~b~Handler command: DOWN", 1800);
-                down(); GameFiber.Wait(2200);
-                return DogReady() ? 1 : 0;
-            }
-            catch { return 0; }
+            var score = 0;
+            if (CommandExercise("1/5 SIT", sit)) score += 20;
+            if (CommandExercise("2/5 DOWN", down)) score += 20;
+            if (CommandExercise("3/5 SIT FROM DOWN", sit)) score += 20;
+            if (PlaceStayExercise(sit)) score += 20;
+            if (RecallExercise(follow)) score += 20;
+            return score;
         }
 
-        private int PlaceAndStayLevel(Action sit)
+        private bool CommandExercise(string title, Action action)
         {
-            if (!WaitForHandler("LEVEL 2/5 — PLACE AND STAY", "Press ~y~Y~s~ to send the K9 to the marked position")) return 0;
+            if (!WaitForHandler(title, "Press ~y~Y~s~ to issue the command")) return false;
+            try { action(); GameFiber.Wait(2200); return DogReady(); } catch { return false; }
+        }
+
+        private bool PlaceStayExercise(Action sit)
+        {
+            if (!WaitForHandler("4/5 PLACE AND STAY", "Press ~y~Y~s~ to send the K9 to place")) return false;
             try
             {
                 var handler = Game.LocalPlayer.Character;
-                var place = handler.GetOffsetPosition(new Vector3(-4f, 7f, 0f));
-                DrawMarkerFor(place, 1200);
-                _dog.Tasks.Clear();
-                _dog.Tasks.FollowNavigationMeshToPosition(place, handler.Heading + 180f, 1.8f).WaitForCompletion(7000);
-                if (!DogReady() || _dog.DistanceTo(place) > 3.5f) return 0;
+                var place = handler.GetOffsetPosition(new Vector3(-4f, 8f, 0f));
+                DrawMarkerFor(place, 1000);
+                if (!Navigate(place, handler.Heading + 180f, false, 7000)) return false;
                 sit();
-                Game.DisplaySubtitle("~b~STAY~s~ — handler must move at least six metres away", 4500);
-                var end = Game.GameTime + 8000;
+                Game.DisplaySubtitle("~b~STAY~s~ — move at least six metres from the K9", 5000);
+                var end = Game.GameTime + 9000;
                 while (DogReady() && handler.DistanceTo(_dog) < 6f && Game.GameTime < end) GameFiber.Yield();
-                if (handler.DistanceTo(_dog) < 6f) { Game.DisplayNotification("~o~Level incomplete: handler did not create enough distance."); return 0; }
-                GameFiber.Wait(2500);
-                return DogReady() ? 1 : 0;
+                if (handler.DistanceTo(_dog) < 6f) return false;
+                GameFiber.Wait(2200);
+                return DogReady();
             }
-            catch { return 0; }
+            catch { return false; }
         }
 
-        private int RecallLevel(Action follow)
+        private bool RecallExercise(Action follow)
         {
-            if (!WaitForHandler("LEVEL 3/5 — DISTANCE RECALL", "Move into position, then press ~y~Y~s~ to recall the K9")) return 0;
+            if (!WaitForHandler("5/5 DISTANCE RECALL", "Create distance, then press ~y~Y~s~ to recall")) return false;
             try
             {
                 var handler = Game.LocalPlayer.Character;
-                var startingDistance = _dog.DistanceTo(handler);
-                if (startingDistance < 5f) { Game.DisplayNotification("~o~Recall begins from the academy start line."); _dog.Position=handler.GetOffsetPosition(new Vector3(0f,10f,0f)); }
-                Game.DisplaySubtitle("~g~RECALL!~s~ Watch the K9 cover the distance to heel", 5000);
+                if (_dog.DistanceTo(handler) < 6f) _dog.Position = handler.GetOffsetPosition(new Vector3(0f, 12f, 0f));
                 follow();
-                var timeout = Game.GameTime + 7000;
-                while (DogReady() && _dog.DistanceTo(handler) > 2.5f && Game.GameTime < timeout) GameFiber.Yield();
-                return DogReady() && _dog.DistanceTo(handler) <= 3.5f ? 1 : 0;
+                var end = Game.GameTime + 8000;
+                while (DogReady() && _dog.DistanceTo(handler) > 2.8f && Game.GameTime < end) GameFiber.Yield();
+                return DogReady() && _dog.DistanceTo(handler) <= 3.5f;
             }
-            catch { return 0; }
+            catch { return false; }
         }
 
-        private int AgilityLevel()
+        private int AgilityCourse()
         {
-            if (!WaitForHandler("LEVEL 4/5 — AGILITY", "Press ~y~Y~s~ to send the K9 through the cone weave")) return 0;
+            if (!WaitForHandler("AGILITY COURSE", "Press ~y~Y~s~ to start the five-gate weave")) return 0;
             var props = new List<Rage.Object>();
+            var score = 0;
             try
             {
                 var handler = Game.LocalPlayer.Character;
-                var model = new Model("prop_mp_cone_02");
-                model.LoadAndWait();
-                if (!model.IsLoaded) return 0;
-                for (var i = 0; i < 5; i++)
-                {
-                    var conePosition = handler.GetOffsetPosition(new Vector3(i % 2 == 0 ? -1.4f : 1.4f, 4f + i * 2.2f, 0f));
-                    props.Add(new Rage.Object(model, conePosition));
-                }
+                var model = new Model("prop_mp_cone_02"); model.LoadAndWait(); if (!model.IsLoaded) return 0;
+                for (var i = 0; i < 5; i++) props.Add(new Rage.Object(model, handler.GetOffsetPosition(new Vector3(i % 2 == 0 ? -1.5f : 1.5f, 5f + i * 3f, 0f))));
                 model.Dismiss();
                 for (var i = 0; i < props.Count; i++)
                 {
-                    if (!DogReady()) return 0;
-                    var passPoint = props[i].GetOffsetPosition(new Vector3(i % 2 == 0 ? 1.1f : -1.1f, 0f, 0f));
-                    Game.DisplaySubtitle("~b~Agility gate " + (i + 1) + "/5", 1300);
-                    _dog.Tasks.FollowNavigationMeshToPosition(passPoint, handler.Heading, 2.5f).WaitForCompletion(4500);
+                    var gate = props[i].GetOffsetPosition(new Vector3(i % 2 == 0 ? 1.15f : -1.15f, 0f, 0f));
+                    Game.DisplaySubtitle("~b~Agility gate " + (i + 1) + "/5", 1400);
+                    if (Navigate(gate, handler.Heading, false, 5000)) score += 20;
                 }
-                return DogReady() ? 1 : 0;
+                return score;
             }
-            catch { return 0; }
-            finally { foreach (var prop in props) if (prop != null && prop.Exists()) prop.Delete(); }
+            catch { return score; }
+            finally { DeleteAll(props); }
         }
 
-        private int DetectionLineupLevel(Action sit)
+        private int DetectionCourse(Action sit)
         {
-            if (!WaitForHandler("LEVEL 5/5 — SCENT LINEUP", "Press ~y~Y~s~ to begin a three-station blind search")) return 0;
+            if (!WaitForHandler("DETECTION CERTIFICATION", "Press ~y~Y~s~ to start the blind five-station scent lineup")) return 0;
             var props = new List<Rage.Object>();
+            var score = 0;
             try
             {
                 var handler = Game.LocalPlayer.Character;
-                var model = new Model("prop_cs_rub_binbag_01");
-                model.LoadAndWait();
-                if (!model.IsLoaded) return 0;
-                var positive = _random.Next(0, 3);
-                for (var i = 0; i < 3; i++) props.Add(new Rage.Object(model, handler.GetOffsetPosition(new Vector3(-4f + i * 4f, 10f, 0f))));
+                var model = new Model("prop_cs_rub_binbag_01"); model.LoadAndWait(); if (!model.IsLoaded) return 0;
+                var positive = _random.Next(0, 5);
+                for (var i = 0; i < 5; i++) props.Add(new Rage.Object(model, handler.GetOffsetPosition(new Vector3(-8f + i * 4f, 13f, 0f))));
                 model.Dismiss();
-                Game.DisplayNotification("~b~Blind scent lineup:~s~ one of three stations contains the training odor.");
                 for (var i = 0; i < props.Count; i++)
                 {
-                    if (!DogReady()) return 0;
-                    var station = props[i].Position;
-                    Game.DisplaySubtitle("~b~Inspecting scent station " + (i + 1) + "/3", 2200);
-                    _dog.Tasks.Clear();
-                    _dog.Tasks.FollowNavigationMeshToPosition(station, handler.Heading, 1.7f).WaitForCompletion(6500);
-                    _dog.Tasks.PlayAnimation("creatures@rottweiler@indication@", "indicate_low", 4f, AnimationFlags.None).WaitForCompletion(900);
-                    if (i != positive) Game.DisplaySubtitle("~g~Clear station~s~ — continue searching", 1300);
+                    Game.DisplaySubtitle("~b~Scent station " + (i + 1) + "/5", 1700);
+                    if (!Navigate(props[i].Position, handler.Heading, true, 6500)) continue;
+                    NativeFunction.Natives.TASK_TURN_PED_TO_FACE_ENTITY(_dog, props[i], 800); GameFiber.Wait(800);
+                    PlaySniff(); score += 20;
                 }
-                Game.DisplaySubtitle("~b~K9 returning to the trained odor source", 1800);
-                _dog.Tasks.FollowNavigationMeshToPosition(props[positive].Position, handler.Heading, 1.5f).WaitForCompletion(5000);
-                sit();
-                NativeFunction.Natives.PLAY_PED_AMBIENT_SPEECH_NATIVE(_dog, "BARK", "SPEECH_PARAMS_FORCE");
-                Game.DisplaySubtitle("~r~POSITIVE TRAINING ALERT~s~ at station " + (positive + 1), 2800);
-                GameFiber.Wait(2800);
-                return DogReady() && _dog.DistanceTo(props[positive]) < 4.5f ? 1 : 0;
+                if (DogReady())
+                {
+                    Navigate(props[positive].Position, handler.Heading, true, 5000);
+                    sit();
+                    NativeFunction.Natives.PLAY_PED_AMBIENT_SPEECH_NATIVE(_dog, "BARK", "SPEECH_PARAMS_FORCE");
+                    Game.DisplaySubtitle("~r~Correct positive indication~s~ — station " + (positive + 1), 2500);
+                    GameFiber.Wait(2500);
+                }
+                return score;
             }
-            catch { return 0; }
-            finally { foreach (var prop in props) if (prop != null && prop.Exists()) prop.Delete(); }
+            catch { return score; }
+            finally { DeleteAll(props); }
         }
 
-        private bool WaitForHandler(string level, string instruction)
+        private int TrackingCourse(Action sit)
         {
-            if (!DogReady()) return false;
-            Game.DisplayNotification("~b~" + level + "~s~~n~" + instruction);
-            var timeout = Game.GameTime + 20000;
-            while (DogReady() && Game.GameTime < timeout)
+            if (!WaitForHandler("TRACKING CERTIFICATION", "Press ~y~Y~s~ to present the scent article")) return 0;
+            var props = new List<Rage.Object>();
+            var score = 0;
+            try
             {
-                Game.DisplaySubtitle(instruction + "  ~c~(" + Math.Max(0, (int)((timeout - Game.GameTime) / 1000)) + "s)", 200);
-                if (Game.IsKeyDown(Keys.Y)) { GameFiber.Wait(250); return true; }
+                var handler = Game.LocalPlayer.Character;
+                var model = new Model("prop_cs_rub_binbag_01"); model.LoadAndWait(); if (!model.IsLoaded) return 0;
+                var offsets = new[]{new Vector3(2f,7f,0f),new Vector3(7f,14f,0f),new Vector3(3f,22f,0f),new Vector3(-5f,29f,0f),new Vector3(-10f,38f,0f)};
+                foreach (var offset in offsets) props.Add(new Rage.Object(model, handler.GetOffsetPosition(offset)));
+                model.Dismiss();
+                for (var i = 0; i < props.Count; i++)
+                {
+                    Game.DisplaySubtitle("~b~Tracking trail segment " + (i + 1) + "/5~s~ — follow your K9", 2200);
+                    PlaySniff();
+                    if (Navigate(props[i].Position, handler.Heading, true, 9000)) score += 20;
+                }
+                if (DogReady()) { sit(); NativeFunction.Natives.PLAY_PED_AMBIENT_SPEECH_NATIVE(_dog, "BARK", "SPEECH_PARAMS_FORCE"); }
+                return score;
+            }
+            catch { return score; }
+            finally { DeleteAll(props); }
+        }
+
+        private int ApprehensionCourse(Action sit, Action follow)
+        {
+            Ped suspect = null;
+            var score = 0;
+            try
+            {
+                var handler = Game.LocalPlayer.Character;
+                var model = new Model("s_m_y_prisoner_01"); model.LoadAndWait(); if (!model.IsLoaded) return 0;
+                suspect = new Ped(model, handler.GetOffsetPosition(new Vector3(0f, 18f, 0f)), handler.Heading + 180f); model.Dismiss();
+                suspect.IsPersistent = true; NativeFunction.Natives.SET_ENTITY_INVINCIBLE(suspect, true); suspect.BlockPermanentEvents = true;
+                if (WaitForAimedTarget(suspect, "1/5 THREAT IDENTIFICATION")) score += 20;
+                if (WaitForHandler("2/5 CONTROLLED DEPLOYMENT", "Aim at the training suspect and press ~y~Y~s~ to send the K9") && Game.LocalPlayer.GetFreeAimingTarget() == suspect)
+                {
+                    NativeFunction.Natives.TASK_COMBAT_PED(_dog, suspect, 0, 16); GameFiber.Wait(2500); score += DogReady() ? 20 : 0;
+                    _dog.Tasks.ClearImmediately(); suspect.Tasks.ClearImmediately();
+                }
+                if (WaitForHandler("3/5 EMERGENCY RECALL", "Press ~y~Y~s~ to recall before contact resumes"))
+                {
+                    follow(); var end=Game.GameTime+6000; while(DogReady()&&_dog.DistanceTo(handler)>3f&&Game.GameTime<end)GameFiber.Yield(); if(_dog.DistanceTo(handler)<=4f)score+=20;
+                }
+                if (WaitForHandler("4/5 SUSPECT GUARD", "Press ~y~Y~s~ to place the K9 on a controlled guard"))
+                {
+                    Navigate(suspect.GetOffsetPosition(new Vector3(0f,-2f,0f)),suspect.Heading, false,6000); sit(); NativeFunction.Natives.TASK_HANDS_UP(suspect,-1,handler,-1,true); if(_dog.DistanceTo(suspect)<4f)score+=20;
+                }
+                if (WaitForHandler("5/5 FINAL RELEASE", "Press ~y~Y~s~ to end the deployment and return to heel"))
+                {
+                    follow(); var end=Game.GameTime+6000; while(DogReady()&&_dog.DistanceTo(handler)>3f&&Game.GameTime<end)GameFiber.Yield(); if(_dog.DistanceTo(handler)<=4f)score+=20;
+                }
+                return score;
+            }
+            catch { return score; }
+            finally { if (suspect != null && suspect.Exists()) suspect.Delete(); }
+        }
+
+        private bool WaitForAimedTarget(Ped target, string title)
+        {
+            Game.DisplayNotification("~b~"+title+"~s~~n~Aim your taser or firearm directly at the training suspect.");
+            var end=Game.GameTime+20000;
+            while(DogReady()&&target.Exists()&&Game.GameTime<end)
+            {
+                uint weapon=NativeFunction.Natives.GET_SELECTED_PED_WEAPON<uint>(Game.LocalPlayer.Character);
+                uint unarmed=NativeFunction.Natives.GET_HASH_KEY<uint>("WEAPON_UNARMED");
+                if(weapon!=unarmed&&Game.LocalPlayer.GetFreeAimingTarget()==target){Game.DisplaySubtitle("~g~Target positively identified",1200);GameFiber.Wait(1200);return true;}
+                Game.DisplaySubtitle("Keep the sights on the training suspect",200);
                 GameFiber.Yield();
             }
-            Game.DisplayNotification("~o~Training level skipped: handler response timed out.");
             return false;
         }
 
-        private void DrawMarkerFor(Vector3 position, int duration)
+        private bool Navigate(Vector3 position, float heading, bool sniff, int timeout)
         {
-            var end = Game.GameTime + (uint)duration;
-            while (Game.GameTime < end)
-            {
-                NativeFunction.Natives.DRAW_MARKER(1, position.X, position.Y, position.Z - .9f, 0f, 0f, 0f, 0f, 0f, 0f, 1.2f, 1.2f, .35f, 30, 120, 220, 170, false, false, 2, false, 0, 0, false);
-                GameFiber.Yield();
-            }
+            if (!DogReady()) return false;
+            _dog.Tasks.Clear();
+            if (sniff) PlaySniff();
+            _dog.Tasks.FollowNavigationMeshToPosition(position, heading, 2.2f).WaitForCompletion(timeout);
+            return DogReady() && _dog.DistanceTo(position) <= 4f;
         }
 
-        private bool DogReady() => _dog != null && _dog.Exists() && !_dog.IsDead;
+        private void PlaySniff(){if(!DogReady())return;_dog.Tasks.PlayAnimation("creatures@rottweiler@indication@","indicate_low",4f,AnimationFlags.None).WaitForCompletion(650);}
+
+        private bool WaitForHandler(string title, string instruction)
+        {
+            if (!DogReady()) return false;
+            Game.DisplayNotification("~b~" + title + "~s~~n~" + instruction);
+            var end = Game.GameTime + 20000;
+            while (DogReady() && Game.GameTime < end)
+            {
+                Game.DisplaySubtitle(instruction + "  ~c~(" + Math.Max(0, (int)((end - Game.GameTime) / 1000)) + "s)", 200);
+                if (Game.IsKeyDown(Keys.Y)) { GameFiber.Wait(300); return true; }
+                GameFiber.Yield();
+            }
+            return false;
+        }
+
+        private void DrawMarkerFor(Vector3 position, int duration){var end=Game.GameTime+(uint)duration;while(Game.GameTime<end){NativeFunction.Natives.DRAW_MARKER(1,position.X,position.Y,position.Z-.9f,0f,0f,0f,0f,0f,0f,1.2f,1.2f,.35f,30,120,220,170,false,false,2,false,0,0,false);GameFiber.Yield();}}
+        private static string LevelName(int level)=>level==1?"Basic Obedience":level==2?"Agility / Handler Control":level==3?"Detection Certification":level==4?"Tracking Certification":"Apprehension Certification";
+        private static void DeleteAll(List<Rage.Object> props){foreach(var prop in props)if(prop!=null&&prop.Exists())prop.Delete();}
+        private bool DogReady()=>_dog!=null&&_dog.Exists()&&!_dog.IsDead;
     }
 }
