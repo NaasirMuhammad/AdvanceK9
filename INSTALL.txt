@@ -1,4 +1,4 @@
-ADVANCED K9 v1.7.1 — DRAG-AND-DROP INSTALL
+ADVANCED K9 v1.7.2-beta — DRAG-AND-DROP INSTALL
 
 1. Close GTA V and RAGE Plugin Hook.
 2. Open the compiled release ZIP.
@@ -25,10 +25,16 @@ Controls
   Hold V          AI push-to-talk
 
 AI voice is optional. Keyboard controls need no key or internet connection.
-Voice can be activated or disabled from either AdvancedK9 menu. If the menu
-shows KEY MISSING, set the configured Windows environment variable and restart RPH.
-For Groq voice, create a Windows user environment variable named GROQ_API_KEY.
-For OpenAI, see Plugins\LSPDFR\AdvancedK9\AdvancedK9.ini and README.md.
+Voice can be activated or disabled from either AdvancedK9 menu. Put the key
+directly in Plugins\LSPDFR\AdvancedK9\AdvancedK9.ini, without quotes:
+
+  [Voice]
+  Provider=Groq
+  ApiKey=gsk_your_key_here
+
+Save the file, then restart RAGE Plugin Hook so the plugin reloads it. The key
+is never displayed or logged. ApiKeyEnvironmentVariable remains an optional
+fallback when ApiKey is blank. See README.md for OpenAI settings.
 
 Required before installation
   GTA V Story Mode, ScriptHookV, RAGE Plugin Hook, LSPDFR, Policing Redefined,
