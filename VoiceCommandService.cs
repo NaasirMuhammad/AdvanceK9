@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Net;
 using System.Threading.Tasks;
 using System.Linq;
 using System.Collections.Concurrent;
@@ -21,6 +22,7 @@ namespace AdvancedK9
         private bool _continuous, _speechDetected, _segmenting;
         private DateTime _lastVoice;
         private readonly ConcurrentQueue<VoiceResult> _results = new ConcurrentQueue<VoiceResult>();
+        private readonly object _captureSync = new object();
         private volatile bool _restartRequested;
 
         public bool IsAvailable { get; }
@@ -30,6 +32,9 @@ namespace AdvancedK9
 
         public VoiceCommandService(string provider, string model, string language, string directKey, string keyVariable, string dogName)
         {
+            // RPH hosts .NET Framework in a process where the system default can still be
+            // TLS 1.0. Groq and OpenAI require TLS 1.2 or newer.
+            ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12;
             bool groq = provider.Equals("Groq", StringComparison.OrdinalIgnoreCase);
             _endpoint = groq ? "https://api.groq.com/openai/v1/audio/transcriptions" : "https://api.openai.com/v1/audio/transcriptions";
             _model = model;
@@ -47,12 +52,16 @@ namespace AdvancedK9
             if (!IsAvailable || IsRecording) return;
             try
             {
-                _audio = new MemoryStream();
-                _input = new WaveInEvent { WaveFormat = new WaveFormat(16000, 1), BufferMilliseconds = 100 };
-                _writer = new WaveFileWriter(new NonClosingStream(_audio), _input.WaveFormat);
-                _input.DataAvailable += OnData;
-                _started = DateTime.UtcNow;
-                _input.StartRecording();
+                lock (_captureSync)
+                {
+                    if (_input != null) return;
+                    _audio = new MemoryStream();
+                    _input = new WaveInEvent { WaveFormat = new WaveFormat(16000, 1), BufferMilliseconds = 100 };
+                    _writer = new WaveFileWriter(new NonClosingStream(_audio), _input.WaveFormat);
+                    _input.DataAvailable += OnData;
+                    _started = DateTime.UtcNow;
+                    _input.StartRecording();
+                }
                 StatusChanged?.Invoke("Listening");
                 Game.DisplaySubtitle("~b~AI K9 voice: listening…~s~ Release push-to-talk to send.");
             }
@@ -69,12 +78,18 @@ namespace AdvancedK9
 
         public void StopAndTranscribe()
         {
-            if (!IsRecording) return;
-            var elapsed = DateTime.UtcNow - _started;
-            try { _input.StopRecording(); } catch { }
-            _writer.Dispose(); // Finalizes the WAV header; wrapper keeps MemoryStream open.
-            byte[] bytes = _audio.ToArray();
-            Cleanup();
+            byte[] bytes;
+            TimeSpan elapsed;
+            lock (_captureSync)
+            {
+                if (_input == null || _writer == null || _audio == null) return;
+                elapsed = DateTime.UtcNow - _started;
+                try { _input.DataAvailable -= OnData; _input.StopRecording(); } catch { }
+                _writer.Dispose(); // Finalizes the WAV header; wrapper keeps MemoryStream open.
+                bytes = _audio.ToArray();
+                _input.Dispose(); _audio.Dispose();
+                _input = null; _writer = null; _audio = null;
+            }
             if (elapsed.TotalMilliseconds < 350 || bytes.Length < 1000) return;
             _results.Enqueue(VoiceResult.Status("Recognizing", "~b~AI K9 voice: transcribing…"));
             System.Threading.Tasks.Task.Run(() => TranscribeAsync(bytes));
@@ -82,7 +97,7 @@ namespace AdvancedK9
 
         private void OnData(object sender, WaveInEventArgs e)
         {
-            try { _writer?.Write(e.Buffer, 0, e.BytesRecorded); _writer?.Flush(); if(_continuous&&!_segmenting){int peak=0;for(int i=0;i+1<e.BytesRecorded;i+=2){int sample=Math.Abs((short)(e.Buffer[i]|(e.Buffer[i+1]<<8)));if(sample>peak)peak=sample;}if(peak>1100){_speechDetected=true;_lastVoice=DateTime.UtcNow;_results.Enqueue(VoiceResult.Status("Voice detected", null));}else if(_speechDetected&&(DateTime.UtcNow-_lastVoice).TotalMilliseconds>750&&(DateTime.UtcNow-_started).TotalMilliseconds>500){_segmenting=true;System.Threading.Tasks.Task.Run(()=>StopAndTranscribe());}} }
+            try { lock(_captureSync){if(_writer==null)return;_writer.Write(e.Buffer, 0, e.BytesRecorded);_writer.Flush(); if(_continuous&&!_segmenting){int peak=0;for(int i=0;i+1<e.BytesRecorded;i+=2){int sample=Math.Abs((short)(e.Buffer[i]|(e.Buffer[i+1]<<8)));if(sample>peak)peak=sample;}if(peak>1100){_speechDetected=true;_lastVoice=DateTime.UtcNow;_results.Enqueue(VoiceResult.Status("Voice detected", null));}else if(_speechDetected&&(DateTime.UtcNow-_lastVoice).TotalMilliseconds>750&&(DateTime.UtcNow-_started).TotalMilliseconds>500){_segmenting=true;System.Threading.Tasks.Task.Run(()=>StopAndTranscribe());}}} }
             catch (Exception ex) { _results.Enqueue(VoiceResult.Log("AdvancedK9 capture error: " + ex.Message)); }
         }
 
@@ -153,9 +168,12 @@ namespace AdvancedK9
 
         private void Cleanup()
         {
-            if (_input != null) _input.DataAvailable -= OnData;
-            _input?.Dispose(); _writer?.Dispose(); _audio?.Dispose();
-            _input = null; _writer = null; _audio = null;
+            lock (_captureSync)
+            {
+                if (_input != null) _input.DataAvailable -= OnData;
+                _input?.Dispose(); _writer?.Dispose(); _audio?.Dispose();
+                _input = null; _writer = null; _audio = null;
+            }
         }
 
         public void Dispose() { StopListening(); _client.Dispose(); }
