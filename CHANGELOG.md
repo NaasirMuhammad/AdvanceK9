@@ -2,6 +2,14 @@
 
 All published AdvancedK9 versions are beta builds.
 
+## 1.7.9-beta
+
+- Raises and moves the sitting K9 rearward from the rear-seat bone so it rests on the cushion instead of the floor or front seat.
+- Adds configurable rear-seat X/Y/Z offsets for unusual custom vehicle interiors.
+- Makes vehicle detection use eight ordered checkpoints around the entire exterior before determining the result.
+- Expands the academy to five interactive levels: obedience, place/stay, distance recall, cone agility and a randomized blind scent lineup.
+- Requires the handler to aim a taser or firearm directly at a non-officer target before apprehension can deploy.
+
 ## 1.7.8-beta
 
 - Makes voice strictly push-to-talk; the microphone opens only while V is held and ignores ambient room/game audio.
