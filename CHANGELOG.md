@@ -2,6 +2,17 @@
 
 All published AdvancedK9 versions are beta builds.
 
+## 0.20-beta
+
+- Locks the aimed suspect when push-to-talk begins and removes trust hesitation from a valid apprehension, preventing repeated voice commands while transcription completes.
+- Records the handler's recent route so a distant following K9 works back along the handler's scent trail instead of becoming stranded.
+- Teleports the handler and K9 to a dedicated off-street academy ground for training, then returns both to the original patrol location.
+- Adds five persistent gated training levels. Each level contains five exercises worth 20%, must reach 100% before the next unlocks, and awards its own OB, AGI, DET, TRK or APP certification.
+- Makes vehicle-search sniffing face the vehicle at every exterior checkpoint.
+- Adds multiple natural verbal alternatives for every K9 command and expands the AI transcription vocabulary.
+- Replaces the drawn leash line with GTA's physical rope system and continuously walks the leashed K9 beside the handler.
+- Automatically detaches the leash and continues when search, tracking, fetch or apprehension is commanded.
+
 ## 1.7.9-beta
 
 - Raises and moves the sitting K9 rearward from the rear-seat bone so it rests on the cushion instead of the floor or front seat.
