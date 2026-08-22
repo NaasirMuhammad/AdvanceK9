@@ -58,6 +58,11 @@ namespace AdvancedK9
         public void NextSkin(Ped dog){int count=dog!=null&&dog.Exists()?Rage.Native.NativeFunction.Natives.GET_NUMBER_OF_PED_TEXTURE_VARIATIONS<int>(dog,0,0):8;CoatVariation=(CoatVariation+1)%Math.Max(1,count);Save();Apply(dog);}
         public void NextEquipment(Ped dog){int component=dog!=null&&dog.Exists()?(VestComponent>=0?VestComponent:FindVestComponent(dog)):VestComponent;int count=dog!=null&&dog.Exists()?Rage.Native.NativeFunction.Natives.GET_NUMBER_OF_PED_DRAWABLE_VARIATIONS<int>(dog,component):Vests.Length;VestIndex=(VestIndex+1)%Math.Max(1,count);Save();Apply(dog);}
         public void NextEquipmentTexture(Ped dog){int component=dog!=null&&dog.Exists()?(VestComponent>=0?VestComponent:FindVestComponent(dog)):VestComponent;int count=dog!=null&&dog.Exists()?Rage.Native.NativeFunction.Natives.GET_NUMBER_OF_PED_TEXTURE_VARIATIONS<int>(dog,component,VestIndex):16;VestTexture=(VestTexture+1)%Math.Max(1,count);Save();Apply(dog);}
+        public void AdjustBreed(int delta){BreedIndex=Wrap(BreedIndex+delta,Breeds.Length);Save();}
+        public void AdjustSkin(Ped dog,int delta){int count=dog!=null&&dog.Exists()?Rage.Native.NativeFunction.Natives.GET_NUMBER_OF_PED_TEXTURE_VARIATIONS<int>(dog,0,0):8;CoatVariation=Wrap(CoatVariation+delta,Math.Max(1,count));Save();Apply(dog);}
+        public void AdjustEquipment(Ped dog,int delta){int component=dog!=null&&dog.Exists()?(VestComponent>=0?VestComponent:FindVestComponent(dog)):VestComponent;int count=dog!=null&&dog.Exists()?Rage.Native.NativeFunction.Natives.GET_NUMBER_OF_PED_DRAWABLE_VARIATIONS<int>(dog,component):Vests.Length;VestIndex=Wrap(VestIndex+delta,Math.Max(1,count));Save();Apply(dog);}
+        public void AdjustEquipmentTexture(Ped dog,int delta){int component=dog!=null&&dog.Exists()?(VestComponent>=0?VestComponent:FindVestComponent(dog)):VestComponent;int count=dog!=null&&dog.Exists()?Rage.Native.NativeFunction.Natives.GET_NUMBER_OF_PED_TEXTURE_VARIATIONS<int>(dog,component,VestIndex):16;VestTexture=Wrap(VestTexture+delta,Math.Max(1,count));Save();Apply(dog);}
+        public void PrepareDeployment(){if(Health<=25){Health=100;Stamina=100;Injury="None";Save();}}
         public void SetName(string value) { if (!string.IsNullOrWhiteSpace(value)) { Name=value.Trim(); Save(); } }
         public void AddXp(int value) { TrainingXp=Math.Max(0,TrainingXp+value); if(TrainingXp>=25)ObedienceCertified=true; if(TrainingXp>=60)DetectionCertified=true; if(TrainingXp>=100)TrackingCertified=true; if(TrainingXp>=150)ApprehensionCertified=true; Save(); }
         public void ChangeTrust(int value){Trust=Clamp(Trust+value,0,100);Save();}
@@ -141,5 +146,6 @@ namespace AdvancedK9
         }
 
         private static int Clamp(int value, int min, int max) => Math.Max(min, Math.Min(max, value));
+        private static int Wrap(int value,int count) => count<=0?0:(value%count+count)%count;
     }
 }
