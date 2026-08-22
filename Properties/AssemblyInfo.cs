@@ -7,5 +7,5 @@ using Rage.Attributes;
 [assembly: AssemblyProduct("Advanced K9 Beta")]
 [assembly: AssemblyVersion("0.20.0.0")]
 [assembly: AssemblyFileVersion("0.20.0.0")]
-[assembly: AssemblyInformationalVersion("0.20-beta+care-needs-petting-specialties")]
+[assembly: AssemblyInformationalVersion("0.20-beta+operational-realism-12")]
 [assembly: Plugin("Advanced K9 Beta", Description = "Advanced police K9 partner beta", Author = "AdvancedK9 Community Project")]
