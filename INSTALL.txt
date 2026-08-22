@@ -1,4 +1,4 @@
-ADVANCED K9 v1.7.2-beta — DRAG-AND-DROP INSTALL
+ADVANCED K9 v1.7.3-beta — DRAG-AND-DROP INSTALL
 
 1. Close GTA V and RAGE Plugin Hook.
 2. Open the compiled release ZIP.
@@ -6,6 +6,9 @@ ADVANCED K9 v1.7.2-beta — DRAG-AND-DROP INSTALL
 4. Allow Windows to merge the Plugins folders. This does not replace LSPDFR.
 5. Start RAGE Plugin Hook and ensure "Load all plugins on startup" is enabled.
 6. Enter Story Mode, start LSPDFR, and go on duty.
+
+AdvancedK9 remains inactive while off duty. Its HUD, menus, microphone and K9
+become available after LSPDFR places the player on duty.
 
 Correct file locations
   LemonUI.RagePluginHook.dll
