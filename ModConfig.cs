@@ -19,6 +19,7 @@ namespace AdvancedK9
         public string VoiceProvider = "Groq";
         public string VoiceModel = "whisper-large-v3-turbo";
         public string VoiceLanguage = "en";
+        public string VoiceApiKey = "";
         public string VoiceApiKeyEnvironmentVariable = "GROQ_API_KEY";
         public string DogName = "Rex";
         public string DogBreed = "German Shepherd";
@@ -51,6 +52,7 @@ namespace AdvancedK9
             result.VoiceProvider = ini.ReadString("Voice", "Provider", result.VoiceProvider);
             result.VoiceModel = ini.ReadString("Voice", "Model", result.VoiceModel);
             result.VoiceLanguage = ini.ReadString("Voice", "Language", result.VoiceLanguage);
+            result.VoiceApiKey = ini.ReadString("Voice", "ApiKey", result.VoiceApiKey);
             result.VoiceApiKeyEnvironmentVariable = ini.ReadString("Voice", "ApiKeyEnvironmentVariable", result.VoiceApiKeyEnvironmentVariable);
             result.DogName = ini.ReadString("Dog", "Name", result.DogName);
             result.DogBreed = ini.ReadString("Dog", "Breed", result.DogBreed);
