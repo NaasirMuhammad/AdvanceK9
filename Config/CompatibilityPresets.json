@@ -1,0 +1,44 @@
+{
+  "presets": [
+    {
+      "name": "martinct German Shepherd / Belgian Malinois K9 Dog 1.0.1",
+      "breed": "Belgian Malinois",
+      "model": "a_c_shepherd",
+      "installMode": "replacesShepherd",
+      "publishedCoats": ["German Shepherd", "Belgian Malinois", "Dutch Shepherd", "Black Shepherd"],
+      "publishedVests": ["Police", "Sheriff", "texture-pack dependent"],
+      "url": "https://www.lcpdfr.com/downloads/gta5mods/character/19996-german-shepherd-malinois-k9-dog/",
+      "notes": "The mod replaces the stock shepherd. AdvancedK9 dynamically clamps coat, drawable and texture indices exposed by the installed files."
+    },
+    {
+      "name": "Bug's Mods Dalmatian Ped / Fire K9 1.0.0",
+      "breed": "Dalmatian",
+      "model": "a_c_dalmatian",
+      "fallbackModel": "a_c_husky",
+      "installModes": ["add-on", "replacesHusky"],
+      "publishedVests": ["BCSO", "Police", "Trooper", "Fire", "Off-duty", "Service", "Medic"],
+      "url": "https://www.lcpdfr.com/downloads/gta5mods/character/48014-dalmatian-ped-add-on-replace-fire-k9/",
+      "notes": "AdvancedK9 tries the add-on spawn name first and automatically falls back to a_c_husky for the single-player replacement install."
+    },
+    {
+      "name": "PopcornRP Pets free Dobermann add-on",
+      "breed": "Doberman",
+      "model": "doberman",
+      "fallbackModel": "a_c_retriever",
+      "installModes": ["add-on", "retriever replacement"],
+      "publishedCoats": ["head texture A", "head texture B", "head texture C"],
+      "publishedVests": [],
+      "url": "https://github.com/alberttheprince/popcornrp-pets/tree/main/stream/doberman",
+      "notes": "The open add-on files publish model name doberman and three head textures. AdvancedK9 falls back to the known retriever-replacement model if the add-on is absent."
+    },
+    {
+      "name": "UGURBABA Cane Corso 4K replacement",
+      "breed": "Cane Corso",
+      "model": "a_c_chop",
+      "installMode": "replacesChop",
+      "publishedVests": [],
+      "url": "https://gta5mod.net/gta-5-mods/player/cane-corso-4k-replace-v1-0/",
+      "notes": "The free model replaces Chop and does not publish a separate K9 vest component. AdvancedK9 applies only variations exposed by the installed ped."
+    }
+  ]
+}
