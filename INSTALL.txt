@@ -27,6 +27,11 @@ Controls
   Left Ctrl + L   Leash
   Hold V          AI push-to-talk
 
+K9 care
+  FOOD and H2O are shown on the HUD and persist in profile.dat. Use Feed and
+  Give Water from the command menu or say commands such as "K9, feed" and
+  "K9, give water." Active deployments consume water and food more quickly.
+
 Apprehension safety
   Aim a taser or firearm directly at the intended suspect, then issue the
   Apprehend command. The K9 will not select the nearest person automatically.
