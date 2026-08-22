@@ -1,8 +1,8 @@
-# Advanced K9 v1.7.4-beta for LSPDFR
+# Advanced K9 v1.7.5-beta for LSPDFR
 
-AdvancedK9 v1.7.4-beta is a persistent LSPDFR/RAGE Plugin Hook police-dog partner with live voice control, per-dog progression, health and a compact EUP-style LemonUI command/profile interface. All published builds are beta builds while gameplay and model compatibility continue to be tested.
+AdvancedK9 v1.7.5-beta is a persistent LSPDFR/RAGE Plugin Hook police-dog partner with live voice control, per-dog progression, health and a compact EUP-style LemonUI command/profile interface. All published builds are beta builds while gameplay and model compatibility continue to be tested.
 
-AdvancedK9 runs as an RPH plugin and starts its controller directly. It avoids a reflection-based LSPDFR duty gate because RPH plugins run in isolated AppDomains. Instead, it detects duty through GTA's native player cop flag with the `COP` relationship group as a fallback. While off duty, its HUD, menus, shortcuts, voice capture and K9 spawning remain disabled. Going off duty closes the UI, stops voice capture and dismisses the active dog.
+AdvancedK9 runs as an RPH plugin and starts its controller directly. It avoids a reflection-based LSPDFR duty gate because RPH plugins run in isolated AppDomains. Instead, it follows LSPDFR's own duty-state messages from the active RAGEPluginHook log and uses GTA cop state only as a fallback. While off duty, its HUD, menus, shortcuts, voice capture and K9 spawning remain disabled. Going off duty closes the UI, stops voice capture and dismisses the active dog.
 
 ## Drag-and-drop installation
 
