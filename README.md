@@ -21,6 +21,8 @@ The compiled release includes AdvancedK9, its configuration, and the MIT-license
 - Fetch minigame
 - Dedicated off-street K9 training ground with five persistent gated levels; every level must reach 100% before the next unlocks
 - Certification-specific OB, AGI, DET, TRK and APP courses with five scored exercises per level
+- Independent optional narcotics (NAR), explosives/bomb (BOMB), and weapons/firearm (WPN) detection specialties, each with its own 0–100 progress and five-station academy setup
+- Separate field and voice commands for narcotics, explosives and weapons searches; a dog may hold any combination or all specialty certifications
 - Weapon-aim target identification before apprehension, with officer rejection and automatic non-lethal recall
 - Push-to-talk voice recognition using OpenAI or Groq transcription; the microphone opens only while `V` is held
 - Persistent command and profile menus that remain open until explicitly closed
@@ -56,6 +58,7 @@ The build copies the RAGE Plugin Hook entry-point assembly `AdvancedK9.dll` to `
 
 Voice phrases begin with the configured dog name or “K nine”: “Rex, sit”, “Rex, search”, “K nine, recall”, and so on. Commands without the wake name are ignored.
 Wake-word variants `K9`, `K-9`, `K nine`, `kay nine` and `canine` are accepted. Natural phrases such as “K9 sit down,” “K9 fetch the ball,” and “K9 search the vehicle” are normalized before matching.
+Specialty examples include “K9 search for narcotics,” “K9 bomb search,” “K9 weapons search,” “K9 narcotics training,” “K9 explosives training,” and “K9 weapons training.”
 
 ## Dog profile and appearance
 
