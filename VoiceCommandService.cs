@@ -25,18 +25,18 @@ namespace AdvancedK9
         public event Action<K9Command> CommandRecognized;
         public event Action<string> StatusChanged;
 
-        public VoiceCommandService(string provider, string model, string language, string keyVariable, string dogName)
+        public VoiceCommandService(string provider, string model, string language, string directKey, string keyVariable, string dogName)
         {
             bool groq = provider.Equals("Groq", StringComparison.OrdinalIgnoreCase);
             _endpoint = groq ? "https://api.groq.com/openai/v1/audio/transcriptions" : "https://api.openai.com/v1/audio/transcriptions";
             _model = model;
             _language = language;
             _dogName = dogName;
-            _apiKey = Environment.GetEnvironmentVariable(keyVariable);
+            _apiKey = string.IsNullOrWhiteSpace(directKey) ? Environment.GetEnvironmentVariable(keyVariable) : directKey.Trim();
             IsAvailable = !string.IsNullOrWhiteSpace(_apiKey);
             Game.LogTrivial(IsAvailable
                 ? "AdvancedK9: AI voice ready using " + provider + "/" + model + "."
-                : "AdvancedK9: AI voice disabled; " + keyVariable + " is not set. Keyboard commands remain active.");
+                : "AdvancedK9: AI voice disabled; no API key is configured. Keyboard commands remain active.");
         }
 
         public void StartRecording()

@@ -1,6 +1,6 @@
-# Advanced K9 v1.7.1 for LSPDFR
+# Advanced K9 v1.7.2-beta for LSPDFR
 
-AdvancedK9 v1.7.1 is a persistent LSPDFR/RAGE Plugin Hook police-dog partner with live voice control, per-dog progression, health and a compact EUP-style LemonUI command/profile interface.
+AdvancedK9 v1.7.2-beta is a persistent LSPDFR/RAGE Plugin Hook police-dog partner with live voice control, per-dog progression, health and a compact EUP-style LemonUI command/profile interface. All published builds are beta builds while gameplay and model compatibility continue to be tested.
 
 AdvancedK9 runs as an RPH plugin and starts its controller directly. It does not use a reflection-based LSPDFR duty gate because RPH plugins run in isolated AppDomains; commands therefore remain available throughout the Story Mode session, including after LSPDFR goes on duty.
 
@@ -77,17 +77,31 @@ Third-party model and texture files are not redistributed. Install the chosen mo
 
 ## AI voice setup
 
-The default provider is Groq with `whisper-large-v3-turbo`. Create a Windows user environment variable named `GROQ_API_KEY`, restart RAGE Plugin Hook, then hold `V` while speaking and release it to send. The key is never written to the INI or log.
+The default provider is Groq with `whisper-large-v3-turbo`. Put the key directly in `Plugins\LSPDFR\AdvancedK9\AdvancedK9.ini`:
+
+```ini
+[Voice]
+Enabled=true
+ContinuousListening=true
+Provider=Groq
+Model=whisper-large-v3-turbo
+Language=en
+ApiKey=gsk_your_key_here
+ApiKeyEnvironmentVariable=GROQ_API_KEY
+```
+
+Do not add quotes around the key. Save the INI and restart RAGE Plugin Hook because voice configuration is loaded when the plugin starts. The key is never displayed or logged. If `ApiKey` is blank, the configured environment variable is used as an optional fallback.
 
 For OpenAI, change the voice section to:
 
 ```ini
 Provider=OpenAI
 Model=gpt-4o-mini-transcribe
+ApiKey=sk_your_key_here
 ApiKeyEnvironmentVariable=OPENAI_API_KEY
 ```
 
-Set that Windows environment variable before launching the game. AI voice requires internet access and may incur provider charges. Audio is sent only while push-to-talk is held. Set `Enabled=false` for keyboard-only play; all commands remain accessible through `Left Ctrl + J`.
+AI voice requires internet access and may incur provider charges. Audio is sent while push-to-talk is held, or while continuous listening is enabled. Set `Enabled=false` for keyboard-only play; all commands remain accessible through `Left Ctrl + J`.
 
 ## Trust and handler safety
 
