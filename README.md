@@ -14,6 +14,8 @@ The compiled release includes AdvancedK9, its configuration, and the MIT-license
 
 - Deploy/dismiss and follow/heel
 - Sit, lie down, pet, feed, physical rope leash with handler-follow movement, and dog-mounted camera
+- Persistent food and water care HUD, low-need warnings, separate feed/drink interactions and working-dog consumption
+- Kneeling handler petting interaction with a synchronized K9 response
 - Automatic operational leash release when search, tracking, fetch or apprehension is deployed
 - Pedestrian and full-perimeter vehicle odor searches; silent sit means clear, sit plus repeated bark means positive
 - Track a nearby suspect or missing person for up to two minutes
