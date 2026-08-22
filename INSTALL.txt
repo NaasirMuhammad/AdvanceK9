@@ -31,6 +31,11 @@ Apprehension safety
   Aim a taser or firearm directly at the intended suspect, then issue the
   Apprehend command. The K9 will not select the nearest person automatically.
 
+Detection specialties
+  Complete core academy Level 3 to unlock independent narcotics, explosives
+  and weapons programs. Each specialty must reach 100% before its field search
+  command becomes available. The K9 may earn one, several or all specialties.
+
 AI voice is optional. Keyboard controls need no key or internet connection.
 Voice can be activated or disabled from either AdvancedK9 menu. Put the key
 directly in Plugins\LSPDFR\AdvancedK9\AdvancedK9.ini, without quotes:
