@@ -36,6 +36,9 @@ namespace AdvancedK9
         public float FetchBallOffsetX = 0.12f;
         public float FetchBallOffsetY = 0.01f;
         public float FetchBallOffsetZ = -0.025f;
+        public float VehicleSeatOffsetX = 0f;
+        public float VehicleSeatOffsetY = -0.38f;
+        public float VehicleSeatOffsetZ = 0.42f;
 
         public static ModConfig Load()
         {
@@ -74,6 +77,9 @@ namespace AdvancedK9
             result.FetchBallOffsetX = ini.ReadSingle("Fetch", "BallOffsetX", result.FetchBallOffsetX);
             result.FetchBallOffsetY = ini.ReadSingle("Fetch", "BallOffsetY", result.FetchBallOffsetY);
             result.FetchBallOffsetZ = ini.ReadSingle("Fetch", "BallOffsetZ", result.FetchBallOffsetZ);
+            result.VehicleSeatOffsetX = ini.ReadSingle("Vehicle", "SeatOffsetX", result.VehicleSeatOffsetX);
+            result.VehicleSeatOffsetY = ini.ReadSingle("Vehicle", "SeatOffsetY", result.VehicleSeatOffsetY);
+            result.VehicleSeatOffsetZ = ini.ReadSingle("Vehicle", "SeatOffsetZ", result.VehicleSeatOffsetZ);
             return result;
         }
 
