@@ -11,26 +11,14 @@ namespace AdvancedK9
         public static void Main()
         {
             _running = true;
-            Game.LogTrivial("AdvancedK9: initialized; waiting for LSPDFR duty state.");
-            while (_running)
+            Game.LogTrivial("AdvancedK9: initialized in RPH mode; starting controller.");
+            try
             {
-                try
-                {
-                    bool onDuty = LspdfrBridge.IsPlayerOnDuty();
-                    if (onDuty && _controller == null)
-                    {
-                        _controller = new K9Controller(ModConfig.Load());
-                        GameFiber.StartNew(_controller.Run, "AdvancedK9.Main");
-                    }
-                    else if (!onDuty && _controller != null)
-                    {
-                        _controller.Dispose();
-                        _controller = null;
-                    }
-                }
-                catch (Exception ex) { Game.LogTrivial("AdvancedK9 duty monitor: " + ex); }
-                GameFiber.Wait(1000);
+                _controller = new K9Controller(ModConfig.Load());
+                _controller.Run();
             }
+            catch (Exception ex) { Game.LogTrivial("AdvancedK9 controller failure: " + ex); }
+            finally { _running = false; }
         }
 
         public static void Finally()
