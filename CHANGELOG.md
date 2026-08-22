@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.7.0
+
+- Replaced the custom menu renderer with LemonUI 2.2.0 for RAGE Plugin Hook.
+- Added a visible voice microphone status and activation control to both menus.
+- Corrected fetch-ball ground placement and attached the carried ball to the K9 head/mouth bone.
+- Anchored the leash display to the handler's right hand and the K9 collar/neck bone.
+- Reworked tracking into sustained scent-trail segments with low-head sniff indications and meaningful range.
+
 ## 1.6.0
 - Rebuilt from source; no binary patching.
 - Added persistent command/profile UI, editable immediate voice wake word, runtime command registry and live VAD recognition.

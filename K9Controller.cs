@@ -26,6 +26,7 @@ namespace AdvancedK9
         private readonly K9Menu _menu = new K9Menu();
         private string _menuMode;
         private string _voiceStatus = "Off";
+        private bool _voiceActive;
         private uint _nextVitalsUpdate;
 
         public K9Controller(ModConfig config)
@@ -33,13 +34,7 @@ namespace AdvancedK9
             _config = config;
             _trust = new TrustProfile(config.StartingTrust);
             _profile = new K9Profile(config);
-            if (_config.VoiceEnabled)
-            {
-                _voice = new VoiceCommandService(_config.VoiceProvider, _config.VoiceModel, _config.VoiceLanguage, _config.VoiceApiKeyEnvironmentVariable, _profile.Name);
-                _voice.CommandRecognized += c => _voiceQueue.Enqueue(c);
-                _voice.StatusChanged += s => _voiceStatus=s;
-                if(_config.ContinuousListening)_voice.StartContinuous();
-            }
+            InitializeVoice();
             _menu.Selected += OnMenuSelected;
             _menu.Adjusted += OnMenuAdjusted;
         }
@@ -68,7 +63,7 @@ namespace AdvancedK9
 
         private void HandlePushToTalk()
         {
-            if (_voice == null || !_voice.IsAvailable) return;
+            if (!_voiceActive || _voice == null || !_voice.IsAvailable) return;
             bool down = DogExists() && Game.IsKeyDownRightNow(_config.PushToTalkKey);
             if (down && !_pushToTalkHeld) _voice.StartRecording();
             else if (!down && _pushToTalkHeld) _voice.StopAndTranscribe();
@@ -86,7 +81,7 @@ namespace AdvancedK9
 
         private void ShowCommandMenu()
         {
-            _menuMode="commands"; _menu.Open("ADVANCED K9 — COMMANDS",CommandRegistry.All.Select(x=>x.Label));
+            _menuMode="commands"; _menu.Open("ADVANCED K9 — COMMANDS",CommandRegistry.All.Select(x=>x.Label).Concat(new[]{VoiceMenuLabel()}));
         }
 
         private void ShowKennelMenu()
@@ -94,8 +89,12 @@ namespace AdvancedK9
             _menuMode="profile"; RefreshProfileMenu();
         }
 
-        private void RefreshProfileMenu(){int m=_profile.HudMode;_menu.Update("K9 PROFILE — "+_profile.Name,new[]{"Edit name: "+_profile.Name,"Breed/model: "+_profile.Breed,"Skin/coat: "+(_profile.CoatVariation+1),"Equipment: "+_profile.Vest,"Equipment texture: "+(_profile.VestTexture+1),"Training / certifications","HUD: "+(m==0?"Hidden":m==1?"Compact":"Expanded"),"Move HUD left","Move HUD right","Move HUD up","Move HUD down","HUD scale: "+_profile.HudScale.ToString("0.0"),"Inspect profile"});}
-        private void OnMenuSelected(int index){if(_menuMode=="commands"){if(index>=0&&index<CommandRegistry.All.Count)Execute(CommandRegistry.All[index].Command);return;}if(_menuMode!="profile")return;switch(index){case 0:string n=PromptForDogName(24);if(!string.IsNullOrWhiteSpace(n)){_profile.SetName(n);_voice?.UpdateWakeWord(_profile.Name);Game.DisplayNotification("~b~Voice wake word changed immediately to:~s~ "+_profile.Name); }break;case 1:bool deployed=DogExists();if(deployed)Dismiss();_profile.NextBreed();if(deployed)Deploy();break;case 2:_profile.NextSkin(_dog);break;case 3:_profile.NextEquipment(_dog);break;case 4:_profile.NextEquipmentTexture(_dog);break;case 5:Execute(K9Command.Training);break;case 6:_profile.CycleHudMode();break;case 7:_profile.MoveHud(-.02f,0);break;case 8:_profile.MoveHud(.02f,0);break;case 9:_profile.MoveHud(0,-.02f);break;case 10:_profile.MoveHud(0,.02f);break;case 11:_profile.ScaleHud();break;case 12:Inspect();break;}RefreshProfileMenu();}
+        private void RefreshProfileMenu(){int m=_profile.HudMode;_menu.Update("K9 PROFILE — "+_profile.Name,new[]{"Edit name: "+_profile.Name,"Breed/model: "+_profile.Breed,"Skin/coat: "+(_profile.CoatVariation+1),"Equipment: "+_profile.Vest,"Equipment texture: "+(_profile.VestTexture+1),"Training / certifications","HUD: "+(m==0?"Hidden":m==1?"Compact":"Expanded"),"Move HUD left","Move HUD right","Move HUD up","Move HUD down","HUD scale: "+_profile.HudScale.ToString("0.0"),"Inspect profile",VoiceMenuLabel()});}
+        private void OnMenuSelected(int index){if(_menuMode=="commands"){if(index>=0&&index<CommandRegistry.All.Count)Execute(CommandRegistry.All[index].Command);else if(index==CommandRegistry.All.Count)ToggleVoice();return;}if(_menuMode!="profile")return;switch(index){case 0:string n=PromptForDogName(24);if(!string.IsNullOrWhiteSpace(n)){_profile.SetName(n);_voice?.UpdateWakeWord(_profile.Name);Game.DisplayNotification("~b~Voice wake word changed immediately to:~s~ "+_profile.Name); }break;case 1:bool deployed=DogExists();if(deployed)Dismiss();_profile.NextBreed();if(deployed)Deploy();break;case 2:_profile.NextSkin(_dog);break;case 3:_profile.NextEquipment(_dog);break;case 4:_profile.NextEquipmentTexture(_dog);break;case 5:Execute(K9Command.Training);break;case 6:_profile.CycleHudMode();break;case 7:_profile.MoveHud(-.02f,0);break;case 8:_profile.MoveHud(.02f,0);break;case 9:_profile.MoveHud(0,-.02f);break;case 10:_profile.MoveHud(0,.02f);break;case 11:_profile.ScaleHud();break;case 12:Inspect();break;case 13:ToggleVoice();break;}RefreshProfileMenu();}
+
+        private void InitializeVoice(){_voice=new VoiceCommandService(_config.VoiceProvider,_config.VoiceModel,_config.VoiceLanguage,_config.VoiceApiKeyEnvironmentVariable,_profile.Name);_voice.CommandRecognized+=c=>_voiceQueue.Enqueue(c);_voice.StatusChanged+=s=>_voiceStatus=s;_voiceActive=_config.VoiceEnabled&&_voice.IsAvailable;if(_voiceActive&&_config.ContinuousListening)_voice.StartContinuous();else _voiceStatus=_voice.IsAvailable?"Ready (PTT)":"Key missing";}
+        private string VoiceMenuLabel()=>"Voice microphone: "+(_voice==null||!_voice.IsAvailable?"UNAVAILABLE — "+_config.VoiceApiKeyEnvironmentVariable+" missing":_voiceActive?(_config.ContinuousListening?"ON — continuous":"ON — hold "+_config.PushToTalkKey):"OFF — select to activate");
+        private void ToggleVoice(){if(_voice==null)InitializeVoice();if(!_voice.IsAvailable){Game.DisplayNotification("~r~Voice cannot activate.~s~~n~Set Windows user environment variable ~y~"+_config.VoiceApiKeyEnvironmentVariable+"~s~, then restart RPH.");return;}_voiceActive=!_voiceActive;if(_voiceActive){if(_config.ContinuousListening)_voice.StartContinuous();_voiceStatus=_config.ContinuousListening?"Listening":"Ready (PTT)";Game.DisplayNotification("~g~K9 voice microphone activated.");}else{_voice.StopListening();_voiceStatus="Off";Game.DisplayNotification("~y~K9 voice microphone disabled.");}}
 
         private void OnMenuAdjusted(int index,int delta){if(_menuMode!="profile")return;switch(index){case 1:bool deployed=DogExists();if(deployed)Dismiss();_profile.AdjustBreed(delta);if(deployed)Deploy();break;case 2:_profile.AdjustSkin(_dog,delta);break;case 3:_profile.AdjustEquipment(_dog,delta);break;case 4:_profile.AdjustEquipmentTexture(_dog,delta);break;case 6:_profile.CycleHudMode();break;case 7:case 8:_profile.MoveHud(delta*.01f,0);break;case 9:case 10:_profile.MoveHud(0,delta*.01f);break;case 11:_profile.ScaleHud();break;default:return;}RefreshProfileMenu();}
 
@@ -287,12 +286,10 @@ namespace AdvancedK9
                 return;
             }
             _state = K9State.Tracking;
-            Game.DisplayNotification("~b~K9 tracking started.~s~ Keep pace with " + _profile.Name + ".");
+            Game.DisplayNotification("~b~K9 scent track started.~s~ Follow " + _profile.Name + " and allow room to work.");
             var end = Game.GameTime + 120000;
             while (_running && DogExists() && target.Exists() && !target.IsDead && Game.GameTime < end && _state == K9State.Tracking)
             {
-                _dog.Tasks.FollowNavigationMeshToPosition(target.Position, target.Heading, 2.8f);
-                NativeFunction.Natives.DRAW_LINE(_dog.Position.X, _dog.Position.Y, _dog.Position.Z + .25f, target.Position.X, target.Position.Y, target.Position.Z + .25f, 30, 120, 255, 90);
                 if (_dog.DistanceTo(target) < 3f)
                 {
                     Bark(2);
@@ -301,7 +298,20 @@ namespace AdvancedK9
                     _trust.Change(2, "successful track");
                     return;
                 }
-                GameFiber.Wait(750);
+                var destination = target.Position;
+                float dx = destination.X - _dog.Position.X, dy = destination.Y - _dog.Position.Y;
+                float distance = (float)Math.Sqrt(dx * dx + dy * dy);
+                float step = Math.Min(13f, Math.Max(5f, distance - 2f));
+                float inv = distance > .01f ? 1f / distance : 0f;
+                float scentJitter = (float)(_random.NextDouble() * 3.0 - 1.5);
+                var waypoint = new Vector3(_dog.Position.X + dx * inv * step - dy * inv * scentJitter,
+                                           _dog.Position.Y + dy * inv * step + dx * inv * scentJitter,
+                                           destination.Z);
+                _dog.Tasks.Clear();
+                PlayDogAnimation("creatures@rottweiler@indication@", "indicate_low", 650, 0);
+                _dog.Tasks.FollowNavigationMeshToPosition(waypoint, target.Heading, 3.25f).WaitForCompletion(10000);
+                _profile.UseStamina(1);
+                GameFiber.Wait(150);
             }
             Follow();
         }
@@ -339,16 +349,19 @@ namespace AdvancedK9
             var ballModel = new Model("w_am_baseball");
             if (!ballModel.IsValid) { Follow(); return; }
             ballModel.LoadAndWait();
-            var landing = officer.GetOffsetPosition(new Vector3(0f, 9f, .5f));
+            var landing = officer.GetOffsetPosition(new Vector3(0f, 7f, 0f));
             var ball = new Rage.Object(ballModel, landing);
             ballModel.Dismiss();
             ball.IsPersistent = true;
             _dog.Tasks.FollowNavigationMeshToPosition(landing, officer.Heading, 3f).WaitForCompletion(9000);
             if (DogExists() && ball.Exists())
             {
-                NativeFunction.Natives.ATTACH_ENTITY_TO_ENTITY(ball, _dog, 0, 0f, .38f, .28f, 0f, 0f, 0f, false, false, false, false, 2, true);
+                int mouthBone = NativeFunction.Natives.GET_PED_BONE_INDEX<int>(_dog, 31086);
+                NativeFunction.Natives.SET_ENTITY_COLLISION(ball, false, false);
+                NativeFunction.Natives.ATTACH_ENTITY_TO_ENTITY(ball, _dog, mouthBone, 0f, .16f, .015f, 0f, 0f, 0f, false, false, false, false, 2, true);
                 _dog.Tasks.FollowNavigationMeshToPosition(officer.GetOffsetPosition(new Vector3(0f, 1.2f, 0f)), officer.Heading, 2.5f).WaitForCompletion(9000);
                 NativeFunction.Natives.DETACH_ENTITY(ball, true, true);
+                NativeFunction.Natives.SET_ENTITY_COLLISION(ball, true, true);
                 ball.Position = officer.GetOffsetPosition(new Vector3(.5f, .7f, 0f));
                 GameFiber.Wait(1200);
                 ball.Delete();
@@ -397,7 +410,9 @@ namespace AdvancedK9
             if (_state == K9State.Leashed)
             {
                 var officer = Game.LocalPlayer.Character;
-                NativeFunction.Natives.DRAW_LINE(officer.Position.X, officer.Position.Y, officer.Position.Z + .65f, _dog.Position.X, _dog.Position.Y, _dog.Position.Z + .45f, 65, 45, 25, 220);
+                var hand = NativeFunction.Natives.GET_PED_BONE_COORDS<Vector3>(officer, 57005, 0f, 0f, 0f);
+                var collar = NativeFunction.Natives.GET_PED_BONE_COORDS<Vector3>(_dog, 39317, 0f, .03f, 0f);
+                NativeFunction.Natives.DRAW_LINE(hand.X, hand.Y, hand.Z, collar.X, collar.Y, collar.Z, 45, 30, 18, 255);
                 if (_dog.DistanceTo(officer) > 1.9f)
                     _dog.Tasks.FollowNavigationMeshToPosition(officer.GetOffsetPosition(new Vector3(-.5f, -.9f, 0f)), officer.Heading, 1.5f);
             }

@@ -61,6 +61,7 @@ namespace AdvancedK9
         }
 
         public void StartContinuous(){if(!IsAvailable||IsRecording)return;_continuous=true;_speechDetected=false;_segmenting=false;StartRecording();}
+        public void StopListening(){_continuous=false;try{_input?.StopRecording();}catch{}Cleanup();StatusChanged?.Invoke("Off");}
         public void UpdateWakeWord(string value){if(!string.IsNullOrWhiteSpace(value))_dogName=value.Trim();}
 
         public void StopAndTranscribe()
@@ -136,7 +137,7 @@ namespace AdvancedK9
             _input = null; _writer = null; _audio = null;
         }
 
-        public void Dispose() { _continuous=false; Cleanup(); _client.Dispose(); }
+        public void Dispose() { StopListening(); _client.Dispose(); }
 
         private sealed class NonClosingStream : Stream
         {
