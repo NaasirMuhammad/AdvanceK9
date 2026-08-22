@@ -91,7 +91,9 @@ namespace AdvancedK9
                 if (Game.GameTime >= _nextDutyDiagnostic)
                     Game.LogTrivial("AdvancedK9 duty native probe unavailable; continuing with LSPDFR log signal: " + ex.Message);
             }
-            bool detected = _lspdfrDutyFromLog ?? (nativeCop || (police != 0 && current == police));
+            // Native cop state is not a valid duty signal: LSPDFR can mark the player as a
+            // cop while its duty controller is still off duty. Only LSPDFR's own state wins.
+            bool detected = _lspdfrDutyFromLog == true;
             if (Game.GameTime >= _nextDutyDiagnostic)
             {
                 _nextDutyDiagnostic = Game.GameTime + 15000;
@@ -120,7 +122,11 @@ namespace AdvancedK9
                         _dutyLogPosition = stream.Length;
                     }
                     int on = added.LastIndexOf("Player went on duty", StringComparison.OrdinalIgnoreCase);
-                    int off = Math.Max(added.LastIndexOf("Player went off duty", StringComparison.OrdinalIgnoreCase), added.LastIndexOf("Player is going off duty", StringComparison.OrdinalIgnoreCase));
+                    int off = added.LastIndexOf("Player went off duty", StringComparison.OrdinalIgnoreCase);
+                    off = Math.Max(off, added.LastIndexOf("Player is going off duty", StringComparison.OrdinalIgnoreCase));
+                    off = Math.Max(off, added.LastIndexOf("Player is off duty", StringComparison.OrdinalIgnoreCase));
+                    off = Math.Max(off, added.LastIndexOf("Going off duty", StringComparison.OrdinalIgnoreCase));
+                    off = Math.Max(off, added.LastIndexOf("LSPDFR has shut down", StringComparison.OrdinalIgnoreCase));
                     if (on >= 0 || off >= 0) _lspdfrDutyFromLog = on > off;
                 }
             }
