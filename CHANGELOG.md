@@ -42,6 +42,14 @@
 
 - Initial source release with deployment, obedience, detection, tracking, non-lethal apprehension, fetch, care, leash, camera, academy and voice commands.
 - Added optional Policing Redefined/Common Data Framework runtime integration.
+## 1.6.2
+
+- Revives and restores critically injured persisted dogs when deploying.
+- Keeps the command menu accessible even if the current K9 entity is incapacitated.
+- Rebuilt the interface as a smaller ten-row menu with a compact footer.
+- Added Up/Down navigation and instant Left/Right live preview for breed, coat, equipment, equipment texture and HUD options.
+- Preserves the selected menu row after each live preview change.
+
 ## 1.6.1
 
 - Removed the nonfunctional cross-AppDomain reflection duty gate.
