@@ -41,6 +41,7 @@ namespace AdvancedK9
                 if(_config.ContinuousListening)_voice.StartContinuous();
             }
             _menu.Selected += OnMenuSelected;
+            _menu.Adjusted += OnMenuAdjusted;
         }
 
         public void Run()
@@ -53,9 +54,9 @@ namespace AdvancedK9
                 DrawHud();
                 if (ChordPressed(_config.ModifierKey, _config.SpawnKey)) Execute(K9Command.SpawnDismiss);
                 if (ChordPressed(_config.ModifierKey, _config.KennelKey)) ShowKennelMenu();
+                if (Game.IsKeyDownRightNow(_config.ModifierKey) && Game.IsKeyDown(_config.CommandKey)) ShowCommandMenu();
                 if(!_config.ContinuousListening) HandlePushToTalk();
                 if (!DogExists()) { DrainVoice(false); continue; }
-                if (Game.IsKeyDownRightNow(_config.ModifierKey) && Game.IsKeyDown(_config.CommandKey)) ShowCommandMenu();
                 if (Game.IsKeyDownRightNow(_config.ModifierKey) && Game.IsKeyDown(_config.CameraKey)) Execute(K9Command.ToggleCamera);
                 if (Game.IsKeyDownRightNow(_config.ModifierKey) && Game.IsKeyDown(_config.LeashKey)) Execute(K9Command.ToggleLeash);
                 DrainVoice(true);
@@ -93,8 +94,10 @@ namespace AdvancedK9
             _menuMode="profile"; RefreshProfileMenu();
         }
 
-        private void RefreshProfileMenu(){int m=_profile.HudMode;_menu.Open("K9 PROFILE — "+_profile.Name,new[]{"Edit name: "+_profile.Name,"Breed/model: "+_profile.Breed,"Skin/coat: "+(_profile.CoatVariation+1),"Equipment: "+_profile.Vest,"Equipment texture: "+(_profile.VestTexture+1),"Training / certifications","HUD: "+(m==0?"Hidden":m==1?"Compact":"Expanded"),"Move HUD left","Move HUD right","Move HUD up","Move HUD down","HUD scale: "+_profile.HudScale.ToString("0.0"),"Inspect profile"});}
+        private void RefreshProfileMenu(){int m=_profile.HudMode;_menu.Update("K9 PROFILE — "+_profile.Name,new[]{"Edit name: "+_profile.Name,"Breed/model: "+_profile.Breed,"Skin/coat: "+(_profile.CoatVariation+1),"Equipment: "+_profile.Vest,"Equipment texture: "+(_profile.VestTexture+1),"Training / certifications","HUD: "+(m==0?"Hidden":m==1?"Compact":"Expanded"),"Move HUD left","Move HUD right","Move HUD up","Move HUD down","HUD scale: "+_profile.HudScale.ToString("0.0"),"Inspect profile"});}
         private void OnMenuSelected(int index){if(_menuMode=="commands"){if(index>=0&&index<CommandRegistry.All.Count)Execute(CommandRegistry.All[index].Command);return;}if(_menuMode!="profile")return;switch(index){case 0:string n=PromptForDogName(24);if(!string.IsNullOrWhiteSpace(n)){_profile.SetName(n);_voice?.UpdateWakeWord(_profile.Name);Game.DisplayNotification("~b~Voice wake word changed immediately to:~s~ "+_profile.Name); }break;case 1:bool deployed=DogExists();if(deployed)Dismiss();_profile.NextBreed();if(deployed)Deploy();break;case 2:_profile.NextSkin(_dog);break;case 3:_profile.NextEquipment(_dog);break;case 4:_profile.NextEquipmentTexture(_dog);break;case 5:Execute(K9Command.Training);break;case 6:_profile.CycleHudMode();break;case 7:_profile.MoveHud(-.02f,0);break;case 8:_profile.MoveHud(.02f,0);break;case 9:_profile.MoveHud(0,-.02f);break;case 10:_profile.MoveHud(0,.02f);break;case 11:_profile.ScaleHud();break;case 12:Inspect();break;}RefreshProfileMenu();}
+
+        private void OnMenuAdjusted(int index,int delta){if(_menuMode!="profile")return;switch(index){case 1:bool deployed=DogExists();if(deployed)Dismiss();_profile.AdjustBreed(delta);if(deployed)Deploy();break;case 2:_profile.AdjustSkin(_dog,delta);break;case 3:_profile.AdjustEquipment(_dog,delta);break;case 4:_profile.AdjustEquipmentTexture(_dog,delta);break;case 6:_profile.CycleHudMode();break;case 7:case 8:_profile.MoveHud(delta*.01f,0);break;case 9:case 10:_profile.MoveHud(0,delta*.01f);break;case 11:_profile.ScaleHud();break;default:return;}RefreshProfileMenu();}
 
         private static string PromptForDogName(int maxLength)
         {
@@ -183,6 +186,10 @@ namespace AdvancedK9
             var officer = Game.LocalPlayer.Character;
             _dog = new Ped(model, officer.GetOffsetPosition(new Vector3(-1.2f, -1.8f, 0f)), officer.Heading);
             model.Dismiss();
+            NativeFunction.Natives.RESURRECT_PED(_dog);
+            NativeFunction.Natives.CLEAR_PED_TASKS_IMMEDIATELY(_dog);
+            _profile.PrepareDeployment();
+            _dog.Health = Math.Max(100, (int)(_dog.MaxHealth * _profile.Health / 100f));
             _dog.IsPersistent = true;
             _dog.BlockPermanentEvents = true;
             _dog.RelationshipGroup = officer.RelationshipGroup;
