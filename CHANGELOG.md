@@ -2,6 +2,14 @@
 
 All published AdvancedK9 versions are beta builds.
 
+## 1.7.6-beta
+
+- Forces TLS 1.2 for Groq/OpenAI transcription requests under the RPH .NET Framework host.
+- Fixes the `Could not create SSL/TLS secure channel` failure confirmed in the runtime log.
+- Synchronizes microphone writer, buffer and device cleanup to prevent the continuous-listening null-reference race.
+- Removes GTA native cop state as an activation fallback because LSPDFR sets it before the player actually goes on duty.
+- Makes LSPDFR's current-session duty message the sole activation authority and recognizes shutdown/off-duty variants.
+
 ## 1.7.5-beta
 
 - Fixes the controller-ending `address cannot be zero` error caused by named native resolution in RPH.
