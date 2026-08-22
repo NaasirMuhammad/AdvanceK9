@@ -116,7 +116,7 @@ namespace AdvancedK9
                     form.Add(new StringContent(_language), "language");
                     form.Add(new StringContent("text"), "response_format");
                     form.Add(new StringContent("0"), "temperature");
-                    form.Add(new StringContent("Police K9 command audio. The dog is named " + _dogName + ". Transcribe K9, K-9, K nine, canine, or " + _dogName + " accurately. Expected commands include: sit down; lie down; stay; follow; heel; recall; search the area; search the vehicle; track; apprehend; release; fetch the ball; leash; camera; bark; enter vehicle; exit vehicle; academy."), "prompt");
+                    form.Add(new StringContent("Police K9 handler command audio. The dog is named " + _dogName + ". Preserve the wake word and command exactly. K9 may be spoken as K-9, K nine, kay nine, canine, or " + _dogName + ". Likely commands include deploy, dismiss, sit, down, stay, follow, heel, recall, vehicle search, area search, track, apprehend, attack, engage, release, disengage, guard, bark, fetch, enter vehicle, exit vehicle, leash, camera, inspect, first aid, treat, training, academy, and certification."), "prompt");
                     request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey);
                     request.Content = form;
                     using (var response = await _client.SendAsync(request).ConfigureAwait(false))
