@@ -1,6 +1,6 @@
-# Advanced K9 for LSPDFR
+# Advanced K9 v1.6.2 for LSPDFR
 
-AdvancedK9 v1.6 is a persistent LSPDFR/RAGE Plugin Hook police-dog partner with live voice control, per-dog progression, health and a full in-game command/profile interface.
+AdvancedK9 v1.6.2 is a persistent LSPDFR/RAGE Plugin Hook police-dog partner with live voice control, per-dog progression, health and a full in-game command/profile interface.
 
 AdvancedK9 runs as an RPH plugin and starts its controller directly. It does not use a reflection-based LSPDFR duty gate because RPH plugins run in isolated AppDomains; commands therefore remain available throughout the Story Mode session, including after LSPDFR goes on duty.
 
