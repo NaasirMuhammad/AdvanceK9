@@ -2,6 +2,12 @@
 
 All published AdvancedK9 versions are beta builds.
 
+## 1.7.4-beta
+
+- Detects LSPDFR duty using GTA's native player cop flag, supporting EUP/freemode officers whose relationship group remains unchanged.
+- Retains the `COP` relationship group as a fallback duty signal.
+- Logs a throttled duty probe every fifteen seconds for direct troubleshooting without exposing sensitive configuration.
+
 ## 1.7.3-beta
 
 - Prevents microphone and HTTP callback threads from invoking RAGE UI, natives or K9 commands directly; results are now marshalled onto the controller game fiber.
