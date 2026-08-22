@@ -27,6 +27,7 @@ namespace AdvancedK9
         private string _menuMode;
         private string _voiceStatus = "Off";
         private bool _voiceActive;
+        private bool _onDuty;
         private uint _nextVitalsUpdate;
 
         public K9Controller(ModConfig config)
@@ -34,17 +35,23 @@ namespace AdvancedK9
             _config = config;
             _trust = new TrustProfile(config.StartingTrust);
             _profile = new K9Profile(config);
-            InitializeVoice();
             _menu.Selected += OnMenuSelected;
             _menu.Adjusted += OnMenuAdjusted;
         }
 
         public void Run()
         {
-            Game.DisplayNotification("~b~Advanced K9 loaded~s~. Hold ~y~" + _config.ModifierKey + "~s~ + ~y~" + _config.SpawnKey + "~s~ to deploy " + _profile.Name + ".");
             while (_running)
             {
                 GameFiber.Yield();
+                bool dutyNow = IsPlayerOnDuty();
+                if (dutyNow != _onDuty)
+                {
+                    _onDuty = dutyNow;
+                    if (_onDuty) ActivateForDuty(); else DeactivateForDuty();
+                }
+                if (!_onDuty) continue;
+                _voice?.Tick();
                 _menu.Tick();
                 DrawHud();
                 if (ChordPressed(_config.ModifierKey, _config.SpawnKey)) Execute(K9Command.SpawnDismiss);
@@ -57,6 +64,31 @@ namespace AdvancedK9
                 DrainVoice(true);
                 MaintainState();
             }
+        }
+
+        private bool IsPlayerOnDuty()
+        {
+            var player = Game.LocalPlayer.Character;
+            if (player == null || !player.Exists()) return false;
+            uint current = NativeFunction.Natives.GET_PED_RELATIONSHIP_GROUP_HASH<uint>(player);
+            uint police = NativeFunction.Natives.GET_HASH_KEY<uint>("COP");
+            return current == police;
+        }
+
+        private void ActivateForDuty()
+        {
+            if (_voice == null) InitializeVoice();
+            Game.DisplayNotification("~b~Advanced K9 Beta active~s~. Hold ~y~" + _config.ModifierKey + "~s~ + ~y~" + _config.SpawnKey + "~s~ to deploy " + _profile.Name + ".");
+        }
+
+        private void DeactivateForDuty()
+        {
+            _menu.Close();
+            _voice?.StopListening();
+            _voiceActive = false;
+            _voiceStatus = "Off duty";
+            if (DogExists()) Dismiss(false);
+            Game.LogTrivial("AdvancedK9: player is off duty; K9, UI and voice are inactive.");
         }
 
         private bool ChordPressed(Keys modifier, Keys key) => Game.IsKeyDownRightNow(modifier) && Game.IsKeyDown(key);
@@ -492,14 +524,14 @@ namespace AdvancedK9
         private string TargetLabel(Entity e) => e is Vehicle ? "vehicle" : "person";
         private bool DogExists() => _dog != null && _dog.Exists() && !_dog.IsDead;
 
-        private void Dismiss()
+        private void Dismiss(bool notify = true)
         {
             _camera.Disable();
             if (_blip != null && _blip.Exists()) _blip.Delete();
             if (_dog != null && _dog.Exists()) _dog.Dismiss();
             _dog = null;
             _state = K9State.Dismissed;
-            Game.DisplayNotification("~b~Advanced K9 dismissed.");
+            if (notify) Game.DisplayNotification("~b~Advanced K9 dismissed.");
         }
 
         public void Dispose()
