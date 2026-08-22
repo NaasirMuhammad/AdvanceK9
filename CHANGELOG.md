@@ -2,6 +2,14 @@
 
 All published AdvancedK9 versions are beta builds.
 
+## 1.7.3-beta
+
+- Prevents microphone and HTTP callback threads from invoking RAGE UI, natives or K9 commands directly; results are now marshalled onto the controller game fiber.
+- Starts voice capture only after LSPDFR changes the player to the on-duty `COP` relationship group.
+- Adds a ten-second retry delay after voice network/API failures instead of immediately reopening the microphone.
+- Keeps the K9, HUD, LemonUI menus, voice capture and shortcuts disabled while off duty.
+- Automatically closes the UI, stops listening and dismisses the K9 when the player goes off duty.
+
 ## 1.7.2-beta
 
 - Reads the Groq or OpenAI voice key directly from `[Voice] ApiKey` in `AdvancedK9.ini`.
