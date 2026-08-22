@@ -37,7 +37,7 @@ From a Developer PowerShell:
 msbuild AdvancedK9.csproj /p:Configuration=Release /p:GtaVDir="D:\Games\Grand Theft Auto V"
 ```
 
-The build copies `AdvancedK9.dll` to `Plugins\LSPDFR` and its configuration files to `Plugins\LSPDFR\AdvancedK9`. If `GtaVDir` is omitted, copy those files manually.
+The build copies the RAGE Plugin Hook entry-point assembly `AdvancedK9.dll` to `Plugins` and its configuration files to `Plugins\LSPDFR\AdvancedK9`. If `GtaVDir` is omitted, copy those files manually. Do not place the DLL in `Plugins\LSPDFR`; that folder is reserved for assemblies implementing the LSPDFR plugin API.
 
 ## Controls
 
