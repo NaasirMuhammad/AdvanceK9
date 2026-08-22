@@ -1,11 +1,11 @@
-name: Build AdvancedK9 v1.7.4-beta
+name: Build AdvancedK9 v1.7.5-beta
 # Produces the verified Windows drag-and-drop artifact.
 on:
   workflow_dispatch:
   pull_request:
     branches: [ main ]
   push:
-    branches: [ main, codex/advancedk9-v1.7.4-duty-detection ]
+    branches: [ main, codex/advancedk9-v1.7.5-duty-signal ]
 jobs:
   build:
     runs-on: windows-latest
@@ -21,20 +21,20 @@ jobs:
         run: |
           dotnet restore AdvancedK9.csproj
           dotnet build AdvancedK9.csproj -c Release --no-restore /p:ContinuousIntegrationBuild=true
-      - name: Verify v1.7.4-beta assembly and compiled systems
+      - name: Verify v1.7.5-beta assembly and compiled systems
         shell: pwsh
         run: |
           $dll = Resolve-Path 'bin/Release/net48/AdvancedK9.dll'
           $version = [System.Reflection.AssemblyName]::GetAssemblyName($dll).Version
-          if ($version -ne [Version]'1.7.4.0') { throw "Expected v1.7.4-beta assembly, got $version" }
+          if ($version -ne [Version]'1.7.5.0') { throw "Expected v1.7.5-beta assembly, got $version" }
           $stale = '0b4a652673cc9a7237b5473c4c0854a702007da5c32e25042d810f263d8a190c'
           $hash = (Get-FileHash $dll -Algorithm SHA256).Hash.ToLowerInvariant()
           if ($hash -eq $stale) { throw 'Build produced the stale uploaded v1.5 DLL.' }
           dotnet tool install --global ilspycmd
           ilspycmd $dll -o verified-source
           $compiled = Get-ChildItem verified-source -Recurse -File | Get-Content -Raw
-          foreach ($marker in @('PreviewBreed','VestTextureName','GetVestTextureCount','MenuMouseBehavior','ColorSet','MaxItems','ToggleVoice','GET_PED_BONE_COORDS','VoiceApiKey','directKey','KeepNameCasing','BannerText','VoiceResult','GET_PED_RELATIONSHIP_GROUP_HASH','IS_PED_A_COP','DeactivateForDuty','duty probe')) {
-            if ($compiled -notmatch [regex]::Escape($marker)) { throw "Missing compiled v1.7.4-beta marker: $marker" }
+          foreach ($marker in @('PreviewBreed','VestTextureName','GetVestTextureCount','MenuMouseBehavior','ColorSet','MaxItems','ToggleVoice','GET_PED_BONE_COORDS','VoiceApiKey','directKey','KeepNameCasing','BannerText','VoiceResult','GET_PED_RELATIONSHIP_GROUP_HASH','UpdateLspdfrDutyLogState','Player went on duty','DeactivateForDuty','duty probe')) {
+            if ($compiled -notmatch [regex]::Escape($marker)) { throw "Missing compiled v1.7.5-beta marker: $marker" }
           }
           "AssemblyVersion=$version`nSHA256=$hash`nBuiltUtc=$([DateTime]::UtcNow.ToString('o'))" | Set-Content build-verification.txt
       - name: Create drag-and-drop package
@@ -52,9 +52,9 @@ jobs:
           if (-not (Test-Path 'package/Plugins/AdvancedK9.dll')) { throw 'RPH plugin DLL is not in Plugins root.' }
           if (Test-Path 'package/Plugins/LSPDFR/AdvancedK9.dll') { throw 'DLL must not be packaged as an LSPDFR API plugin.' }
           if (-not (Test-Path 'package/LemonUI.RagePluginHook.dll')) { throw 'LemonUI RPH runtime is missing from GTA V root.' }
-          Compress-Archive -Path 'package/*' -DestinationPath 'AdvancedK9-v1.7.4-beta-DragAndDrop.zip' -Force
+          Compress-Archive -Path 'package/*' -DestinationPath 'AdvancedK9-v1.7.5-beta-DragAndDrop.zip' -Force
       - uses: actions/upload-artifact@v4
         with:
-          name: AdvancedK9-v1.7.4-beta-DragAndDrop
-          path: AdvancedK9-v1.7.4-beta-DragAndDrop.zip
+          name: AdvancedK9-v1.7.5-beta-DragAndDrop
+          path: AdvancedK9-v1.7.5-beta-DragAndDrop.zip
           if-no-files-found: error

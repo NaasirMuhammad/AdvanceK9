@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Drawing;
 using System.Linq;
+using System.IO;
 using System.Windows.Forms;
 using Rage;
 using Rage.Native;
@@ -29,6 +30,9 @@ namespace AdvancedK9
         private bool _voiceActive;
         private bool _onDuty;
         private uint _nextDutyDiagnostic;
+        private uint _nextDutyLogRead;
+        private long _dutyLogPosition;
+        private bool? _lspdfrDutyFromLog;
         private uint _nextVitalsUpdate;
 
         public K9Controller(ModConfig config)
@@ -69,18 +73,59 @@ namespace AdvancedK9
 
         private bool IsPlayerOnDuty()
         {
-            var player = Game.LocalPlayer.Character;
-            if (player == null || !player.Exists()) return false;
-            uint current = NativeFunction.Natives.GET_PED_RELATIONSHIP_GROUP_HASH<uint>(player);
-            uint police = NativeFunction.Natives.GET_HASH_KEY<uint>("COP");
-            bool nativeCop = NativeFunction.Natives.IS_PED_A_COP<bool>(player);
-            bool detected = nativeCop || current == police;
+            UpdateLspdfrDutyLogState();
+            bool nativeCop = false;
+            uint current = 0, police = 0;
+            try
+            {
+                var player = Game.LocalPlayer.Character;
+                if (player != null && player.Exists())
+                {
+                    current = NativeFunction.Natives.GET_PED_RELATIONSHIP_GROUP_HASH<uint>(player);
+                    police = NativeFunction.Natives.GET_HASH_KEY<uint>("COP");
+                    nativeCop = NativeFunction.CallByHash<bool>(0x12534C348C6CB68B, player);
+                }
+            }
+            catch (Exception ex)
+            {
+                if (Game.GameTime >= _nextDutyDiagnostic)
+                    Game.LogTrivial("AdvancedK9 duty native probe unavailable; continuing with LSPDFR log signal: " + ex.Message);
+            }
+            bool detected = _lspdfrDutyFromLog ?? (nativeCop || (police != 0 && current == police));
             if (Game.GameTime >= _nextDutyDiagnostic)
             {
                 _nextDutyDiagnostic = Game.GameTime + 15000;
-                Game.LogTrivial("AdvancedK9 duty probe: nativeCop=" + nativeCop + ", relationship=0x" + current.ToString("X8") + ", copHash=0x" + police.ToString("X8") + ", active=" + detected + ".");
+                Game.LogTrivial("AdvancedK9 duty probe: lspdfrLog=" + (_lspdfrDutyFromLog.HasValue ? _lspdfrDutyFromLog.Value.ToString() : "unknown") + ", nativeCop=" + nativeCop + ", relationship=0x" + current.ToString("X8") + ", active=" + detected + ".");
             }
             return detected;
+        }
+
+        private void UpdateLspdfrDutyLogState()
+        {
+            if (Game.GameTime < _nextDutyLogRead) return;
+            _nextDutyLogRead = Game.GameTime + 500;
+            try
+            {
+                const string path = "RagePluginHook.log";
+                if (!File.Exists(path)) return;
+                using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+                {
+                    if (_dutyLogPosition == 0) _dutyLogPosition = Math.Max(0, stream.Length - 262144);
+                    if (_dutyLogPosition > stream.Length) _dutyLogPosition = 0;
+                    stream.Seek(_dutyLogPosition, SeekOrigin.Begin);
+                    string added;
+                    using (var reader = new StreamReader(stream))
+                    {
+                        added = reader.ReadToEnd();
+                        _dutyLogPosition = stream.Length;
+                    }
+                    int on = added.LastIndexOf("Player went on duty", StringComparison.OrdinalIgnoreCase);
+                    int off = Math.Max(added.LastIndexOf("Player went off duty", StringComparison.OrdinalIgnoreCase), added.LastIndexOf("Player is going off duty", StringComparison.OrdinalIgnoreCase));
+                    if (on >= 0 || off >= 0) _lspdfrDutyFromLog = on > off;
+                }
+            }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
         }
 
         private void ActivateForDuty()
