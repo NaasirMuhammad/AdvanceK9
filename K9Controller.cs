@@ -210,8 +210,8 @@ namespace AdvancedK9
         {
             try
             {
-                if(_state==K9State.Leashed&&(command==K9Command.SearchArea||command==K9Command.SearchVehicle||command==K9Command.Track||command==K9Command.Apprehend||command==K9Command.Fetch)){DeleteLeashRope();_state=K9State.Following;Game.DisplayNotification("~b~Leash automatically released for K9 deployment.");}
-                if(_state==K9State.Leashed&&command==K9Command.Training){Game.DisplayNotification("~y~Remove the leash before traveling to the academy.");return;}
+                if(_state==K9State.Leashed&&(command==K9Command.SearchArea||command==K9Command.SearchVehicle||command==K9Command.SearchNarcotics||command==K9Command.SearchExplosives||command==K9Command.SearchWeapons||command==K9Command.Track||command==K9Command.Apprehend||command==K9Command.Fetch)){DeleteLeashRope();_state=K9State.Following;Game.DisplayNotification("~b~Leash automatically released for K9 deployment.");}
+                if(_state==K9State.Leashed&&(command==K9Command.Training||command==K9Command.TrainNarcotics||command==K9Command.TrainExplosives||command==K9Command.TrainWeapons)){Game.DisplayNotification("~y~Remove the leash before traveling to the academy.");return;}
                 if(_profile.Health<=25 && command!=K9Command.Inspect && command!=K9Command.FirstAid && command!=K9Command.SpawnDismiss){Game.DisplayNotification("~r~K9 REMOVED FROM SERVICE~s~~n~Serious injury requires veterinary treatment. Earned certifications remain saved.");return;}
                 if (RequiresTrustCheck(command) && !TrustAllowsCommand(command)) return;
                 switch (command)
@@ -225,6 +225,9 @@ namespace AdvancedK9
                     case K9Command.Recall: Follow(); break;
                     case K9Command.SearchArea: Search(false); break;
                     case K9Command.SearchVehicle: Search(true); break;
+                    case K9Command.SearchNarcotics: Search(false,DetectionSpecialty.Narcotics); break;
+                    case K9Command.SearchExplosives: Search(false,DetectionSpecialty.Explosives); break;
+                    case K9Command.SearchWeapons: Search(false,DetectionSpecialty.Weapons); break;
                     case K9Command.Track: Track(); break;
                     case K9Command.Apprehend: Apprehend(); break;
                     case K9Command.Release: Follow(); break;
@@ -240,6 +243,9 @@ namespace AdvancedK9
                     case K9Command.ToggleLeash: ToggleLeash(); break;
                     case K9Command.ToggleCamera: _camera.Toggle(_dog); break;
                     case K9Command.Training: RunAcademy(); break;
+                    case K9Command.TrainNarcotics: RunAcademySpecialty(DetectionSpecialty.Narcotics); break;
+                    case K9Command.TrainExplosives: RunAcademySpecialty(DetectionSpecialty.Explosives); break;
+                    case K9Command.TrainWeapons: RunAcademySpecialty(DetectionSpecialty.Weapons); break;
                 }
             }
             catch (Exception ex)
@@ -251,7 +257,7 @@ namespace AdvancedK9
 
         private bool RequiresTrustCheck(K9Command command)
         {
-            return command == K9Command.Sit || command == K9Command.LieDown || command == K9Command.SearchArea || command == K9Command.SearchVehicle ||
+            return command == K9Command.Sit || command == K9Command.LieDown || command == K9Command.SearchArea || command == K9Command.SearchVehicle || command==K9Command.SearchNarcotics || command==K9Command.SearchExplosives || command==K9Command.SearchWeapons ||
                    command == K9Command.Track || command == K9Command.Fetch;
         }
 
@@ -345,12 +351,13 @@ namespace AdvancedK9
 
         private void ReleaseVehicleSeat(){if(_dog!=null&&_dog.Exists()){if(_dogSeatAttached)NativeFunction.Natives.DETACH_ENTITY(_dog,true,true);NativeFunction.Natives.SET_ENTITY_COLLISION(_dog,true,true);NativeFunction.Natives.SET_ENTITY_INVINCIBLE(_dog,false);}_dogSeatAttached=false;_dogVehicle=null;}
 
-        private void Inspect(){Game.DisplayNotification("~b~K9 "+_profile.Name+" — FIELD INSPECTION~s~~n~Health: "+_profile.Health+"%  Stamina: "+_profile.Stamina+"%~n~Training: Level "+_profile.TrainingLevel+"/5 "+_profile.TrainingLevelProgress+"%~n~Course: "+_profile.CurrentTrainingName+"~n~Certifications: "+Certifications());}
-        private string Certifications(){string s="";if(_profile.ObedienceCertified)s+="OB ";if(_profile.AgilityCertified)s+="AGI ";if(_profile.DetectionCertified)s+="DET ";if(_profile.TrackingCertified)s+="TRK ";if(_profile.ApprehensionCertified)s+="APP ";return s.Length==0?"In training":s.Trim();}
+        private void Inspect(){Game.DisplayNotification("~b~K9 "+_profile.Name+" — FIELD INSPECTION~s~~n~Health: "+_profile.Health+"%  Stamina: "+_profile.Stamina+"%~n~Training: Level "+_profile.TrainingLevel+"/5 "+_profile.TrainingLevelProgress+"%~n~Course: "+_profile.CurrentTrainingName+"~n~Certifications: "+Certifications());Game.DisplayNotification("~b~DETECTION SPECIALTIES~s~~n~Narcotics: "+_profile.NarcoticsProgress+"%~n~Explosives/Bomb: "+_profile.ExplosivesProgress+"%~n~Weapons/Firearms: "+_profile.WeaponsProgress+"%");}
+        private string Certifications(){string s="";if(_profile.ObedienceCertified)s+="OB ";if(_profile.AgilityCertified)s+="AGI ";if(_profile.DetectionCertified)s+="DET ";if(_profile.NarcoticsCertified)s+="NAR ";if(_profile.ExplosivesCertified)s+="BOMB ";if(_profile.WeaponsCertified)s+="WPN ";if(_profile.TrackingCertified)s+="TRK ";if(_profile.ApprehensionCertified)s+="APP ";return s.Length==0?"In training":s.Trim();}
         private void FirstAid(){if(!DogExists())return;if(_profile.Health>=95){Game.DisplayNotification("~g~No field treatment required.");return;}Sit();GameFiber.Wait(1800);_profile.FirstAid();_dog.Health=Math.Max(_dog.Health,(int)(_dog.MaxHealth*_profile.Health/100f));_profile.ChangeTrust(2);Game.DisplayNotification("~g~Field first aid applied.~s~~n~Serious injuries still require veterinary care.");}
 
-        private void Search(bool vehicleOnly=false)
+        private void Search(bool vehicleOnly=false,DetectionSpecialty specialty=DetectionSpecialty.General)
         {
+            if(specialty!=DetectionSpecialty.General&&!_profile.HasSpecialty(specialty)){Game.DisplayNotification("~y~K9 is not certified for "+SpecialtyLabel(specialty)+" detection.~s~~n~Complete that specialty course at the academy.");return;}
             var officer = Game.LocalPlayer.Character;
             Entity target = vehicleOnly ? (Entity)World.GetAllVehicles().Where(v=>v.Exists()&&v.DistanceTo(officer)<=_config.SearchRadius).OrderBy(v=>v.DistanceTo(officer)).FirstOrDefault() : FindSearchTarget(officer.Position, _config.SearchRadius);
             if (target == null)
@@ -387,16 +394,18 @@ namespace AdvancedK9
             {
                 Sit();
                 Bark(3);
-                Game.DisplayNotification("~r~POSITIVE K9 INDICATION~s~ — " + TargetLabel(target) + ".");
+                Game.DisplayNotification("~r~POSITIVE "+SpecialtyLabel(specialty).ToUpperInvariant()+" K9 INDICATION~s~ — " + TargetLabel(target) + ".");
                 _trust.Change(1, "successful detection");
                 _profile.RecordSearch();
             }
             else
             {
-                Game.DisplayNotification("~g~No K9 indication~s~ on " + TargetLabel(target) + ".");
+                Game.DisplayNotification("~g~No "+SpecialtyLabel(specialty)+" K9 indication~s~ on " + TargetLabel(target) + ".");
                 Sit();
             }
         }
+
+        private static string SpecialtyLabel(DetectionSpecialty specialty)=>specialty==DetectionSpecialty.Narcotics?"narcotics":specialty==DetectionSpecialty.Explosives?"explosives":specialty==DetectionSpecialty.Weapons?"weapons":"general odor";
 
         private bool SearchVehiclePerimeter(Vehicle vehicle)
         {
@@ -634,6 +643,26 @@ namespace AdvancedK9
             {
                 NativeFunction.Natives.DO_SCREEN_FADE_OUT(500);GameFiber.Wait(650);handler.Position=returnPosition;handler.Heading=returnHeading;_dog.Position=handler.GetOffsetPosition(new Vector3(-1f,-2f,0f));NativeFunction.Natives.DO_SCREEN_FADE_IN(700);Follow();
             }
+        }
+
+        private void RunAcademySpecialty(DetectionSpecialty specialty)
+        {
+            if(!_profile.DetectionCertified){Game.DisplayNotification("~y~Detection foundation is locked.~s~~n~Complete core academy Level 3 to unlock specialty training.");return;}
+            if(_profile.HasSpecialty(specialty)){Game.DisplayNotification("~g~"+SpecialtyLabel(specialty)+" certification already completed.~s~~n~This K9 may still repeat the course for maintenance training.");}
+            var handler=Game.LocalPlayer.Character;if(handler.CurrentVehicle!=null){Game.DisplayNotification("~y~Exit your vehicle before traveling to the K9 academy.");return;}
+            Vector3 returnPosition=handler.Position;float returnHeading=handler.Heading;
+            try
+            {
+                _state=K9State.Academy;NativeFunction.Natives.DO_SCREEN_FADE_OUT(500);GameFiber.Wait(650);
+                handler.Position=new Vector3(-1018.4f,-3003.1f,13.95f);handler.Heading=60f;_dog.Position=handler.GetOffsetPosition(new Vector3(-1.5f,-2f,0f));_dog.Heading=handler.Heading;
+                NativeFunction.Natives.DO_SCREEN_FADE_IN(700);GameFiber.Wait(800);
+                Game.DisplayNotification("~b~Specialty academy:~s~ "+SpecialtyLabel(specialty)+" detection ("+_profile.SpecialtyProgress(specialty)+"%).");
+                var academy=new AcademySession(_dog,_profile.Name);int points=academy.RunSpecialty(specialty,Sit,Follow);
+                bool completed=_profile.ApplySpecialtyProgress(specialty,points);_trust.Change(Math.Max(1,points/20),"specialty detection training");
+                if(completed)Game.DisplayNotification("~g~"+SpecialtyLabel(specialty).ToUpperInvariant()+" DETECTION CERTIFIED — 100%~s~~n~Other detection specialties remain independently trainable.");
+                else Game.DisplayNotification("~b~Specialty saved:~s~ "+SpecialtyLabel(specialty)+" "+_profile.SpecialtyProgress(specialty)+"%.");
+            }
+            finally{NativeFunction.Natives.DO_SCREEN_FADE_OUT(500);GameFiber.Wait(650);handler.Position=returnPosition;handler.Heading=returnHeading;_dog.Position=handler.GetOffsetPosition(new Vector3(-1f,-2f,0f));NativeFunction.Natives.DO_SCREEN_FADE_IN(700);Follow();}
         }
 
         private Entity FindSearchTarget(Vector3 center, float radius)
