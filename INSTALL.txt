@@ -1,4 +1,4 @@
-ADVANCED K9 v1.7.7-beta — DRAG-AND-DROP INSTALL
+ADVANCED K9 v1.7.8-beta — DRAG-AND-DROP INSTALL
 
 1. Close GTA V and RAGE Plugin Hook.
 2. Open the compiled release ZIP.
@@ -30,6 +30,9 @@ Controls
 AI voice is optional. Keyboard controls need no key or internet connection.
 Voice can be activated or disabled from either AdvancedK9 menu. Put the key
 directly in Plugins\LSPDFR\AdvancedK9\AdvancedK9.ini, without quotes:
+
+The microphone is closed unless V is held. Continuous ambient listening is
+disabled even if an older INI still contains ContinuousListening=true.
 
   [Voice]
   Provider=Groq
