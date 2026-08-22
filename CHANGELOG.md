@@ -42,3 +42,8 @@
 
 - Initial source release with deployment, obedience, detection, tracking, non-lethal apprehension, fetch, care, leash, camera, academy and voice commands.
 - Added optional Policing Redefined/Common Data Framework runtime integration.
+## 1.6.1
+
+- Removed the nonfunctional cross-AppDomain reflection duty gate.
+- Starts the K9 controller directly from the RPH plugin entry point.
+- Corrected the kennel/profile shortcut documentation to Left Ctrl + U.
