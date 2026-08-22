@@ -28,6 +28,7 @@ namespace AdvancedK9
         private string _voiceStatus = "Off";
         private bool _voiceActive;
         private bool _onDuty;
+        private uint _nextDutyDiagnostic;
         private uint _nextVitalsUpdate;
 
         public K9Controller(ModConfig config)
@@ -72,7 +73,14 @@ namespace AdvancedK9
             if (player == null || !player.Exists()) return false;
             uint current = NativeFunction.Natives.GET_PED_RELATIONSHIP_GROUP_HASH<uint>(player);
             uint police = NativeFunction.Natives.GET_HASH_KEY<uint>("COP");
-            return current == police;
+            bool nativeCop = NativeFunction.Natives.IS_PED_A_COP<bool>(player);
+            bool detected = nativeCop || current == police;
+            if (Game.GameTime >= _nextDutyDiagnostic)
+            {
+                _nextDutyDiagnostic = Game.GameTime + 15000;
+                Game.LogTrivial("AdvancedK9 duty probe: nativeCop=" + nativeCop + ", relationship=0x" + current.ToString("X8") + ", copHash=0x" + police.ToString("X8") + ", active=" + detected + ".");
+            }
+            return detected;
         }
 
         private void ActivateForDuty()
