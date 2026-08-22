@@ -1,4 +1,4 @@
-ADVANCED K9 v1.7.6-beta — DRAG-AND-DROP INSTALL
+ADVANCED K9 v1.7.7-beta — DRAG-AND-DROP INSTALL
 
 1. Close GTA V and RAGE Plugin Hook.
 2. Open the compiled release ZIP.

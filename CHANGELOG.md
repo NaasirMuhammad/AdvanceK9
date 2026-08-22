@@ -2,6 +2,15 @@
 
 All published AdvancedK9 versions are beta builds.
 
+## 1.7.7-beta
+
+- Normalizes punctuation and wake-word variants including K9, K-9, K nine, kay nine and canine.
+- Adds natural command phrases and a transcription grammar prompt with zero temperature.
+- Gives “sit down” explicit priority as the sit command instead of matching the generic lie-down phrase.
+- Replaces the repeated high/jumping search animation with low-head sniff passes.
+- Makes a negative search indication silent and returns the dog to the handler without barking.
+- Moves the fetch ball from the side of the head to a configurable mouth offset for stock and custom dog models.
+
 ## 1.7.6-beta
 
 - Forces TLS 1.2 for Groq/OpenAI transcription requests under the RPH .NET Framework host.

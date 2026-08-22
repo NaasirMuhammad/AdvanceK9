@@ -351,8 +351,10 @@ namespace AdvancedK9
             if (!DogExists() || !target.Exists()) { Follow(); return; }
             for (var i = 0; i < 3; i++)
             {
-                PlayDogAnimation("creatures@rottweiler@indication@", "indicate_high", 1300, 0);
-                GameFiber.Wait(1350);
+                var sniffPoint=target.GetOffsetPosition(new Vector3(i==0?-.8f:i==1?.8f:0f,-.45f,.0f));
+                _dog.Tasks.FollowNavigationMeshToPosition(sniffPoint,target.Heading,1.2f).WaitForCompletion(2500);
+                PlayDogAnimation("creatures@rottweiler@indication@", "indicate_low", 650, 0);
+                GameFiber.Wait(700);
             }
             var positive = _pr.HasK9Odor(target) ?? (_random.NextDouble() < _config.PositiveChance);
             if (positive && _random.NextDouble() > _trust.DetectionReliability)
@@ -371,9 +373,10 @@ namespace AdvancedK9
             }
             else
             {
-                Bark(1);
                 Game.DisplayNotification("~g~No K9 indication~s~ on " + TargetLabel(target) + ".");
-                Follow();
+                _dog.Tasks.Clear();
+                _dog.Tasks.FollowNavigationMeshToPosition(officer.GetOffsetPosition(new Vector3(-.7f,-1.15f,0f)),officer.Heading,1.8f);
+                _state=K9State.Following;
             }
         }
 
@@ -458,7 +461,7 @@ namespace AdvancedK9
             {
                 int mouthBone = NativeFunction.Natives.GET_PED_BONE_INDEX<int>(_dog, 31086);
                 NativeFunction.Natives.SET_ENTITY_COLLISION(ball, false, false);
-                NativeFunction.Natives.ATTACH_ENTITY_TO_ENTITY(ball, _dog, mouthBone, 0f, .16f, .015f, 0f, 0f, 0f, false, false, false, false, 2, true);
+                NativeFunction.Natives.ATTACH_ENTITY_TO_ENTITY(ball, _dog, mouthBone, _config.FetchBallOffsetX, _config.FetchBallOffsetY, _config.FetchBallOffsetZ, 0f, 0f, 0f, false, false, false, false, 2, true);
                 _dog.Tasks.FollowNavigationMeshToPosition(officer.GetOffsetPosition(new Vector3(0f, 1.2f, 0f)), officer.Heading, 2.5f).WaitForCompletion(9000);
                 NativeFunction.Natives.DETACH_ENTITY(ball, true, true);
                 NativeFunction.Natives.SET_ENTITY_COLLISION(ball, true, true);
