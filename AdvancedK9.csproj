@@ -19,7 +19,7 @@
   </ItemGroup>
   <Target Name="CopyModFiles" AfterTargets="Build" Condition="'$(GtaVDir)' != ''">
     <MakeDir Directories="$(GtaVDir)\Plugins\LSPDFR\AdvancedK9" />
-    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(GtaVDir)\Plugins\LSPDFR" />
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(GtaVDir)\Plugins" />
     <Copy SourceFiles="@(ReferenceCopyLocalPaths)" DestinationFolder="$(GtaVDir)\Plugins\LSPDFR" SkipUnchangedFiles="true" />
     <Copy SourceFiles="Config\AdvancedK9.ini;Config\AcademyCourses.json;Config\CompatibilityPresets.json" DestinationFolder="$(GtaVDir)\Plugins\LSPDFR\AdvancedK9" />
   </Target>

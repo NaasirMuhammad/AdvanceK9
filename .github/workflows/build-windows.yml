@@ -40,13 +40,16 @@ jobs:
       - name: Create drag-and-drop package
         shell: pwsh
         run: |
-          $root = 'package/Plugins/LSPDFR'
-          New-Item -ItemType Directory -Force "$root/AdvancedK9" | Out-Null
-          Copy-Item 'bin/Release/net48/AdvancedK9.dll' $root
-          Copy-Item 'Config/AdvancedK9.ini','Config/AcademyCourses.json','Config/CompatibilityPresets.json' "$root/AdvancedK9"
+          $plugins = 'package/Plugins'
+          $config = "$plugins/LSPDFR/AdvancedK9"
+          New-Item -ItemType Directory -Force $config | Out-Null
+          Copy-Item 'bin/Release/net48/AdvancedK9.dll' $plugins
+          Copy-Item 'Config/AdvancedK9.ini','Config/AcademyCourses.json','Config/CompatibilityPresets.json' $config
           Copy-Item 'INSTALL.txt','CHANGELOG.md','build-verification.txt' package
           $forbidden = Get-ChildItem package -Recurse -File | Where-Object { $_.Name -match '^(NAudio|Microsoft\.Win32\.Registry|System\.Security).*\.dll$' }
           if ($forbidden) { throw "Forbidden dependency DLL bundled: $($forbidden.Name -join ', ')" }
+          if (-not (Test-Path 'package/Plugins/AdvancedK9.dll')) { throw 'RPH plugin DLL is not in Plugins root.' }
+          if (Test-Path 'package/Plugins/LSPDFR/AdvancedK9.dll') { throw 'DLL must not be packaged as an LSPDFR API plugin.' }
           Compress-Archive -Path 'package/*' -DestinationPath 'AdvancedK9-v1.6.0-DragAndDrop.zip' -Force
       - uses: actions/upload-artifact@v4
         with:

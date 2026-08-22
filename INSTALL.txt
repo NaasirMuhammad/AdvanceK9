@@ -1,4 +1,4 @@
-ADVANCED K9 v1.5.0 — DRAG-AND-DROP INSTALL
+ADVANCED K9 v1.6.0 — DRAG-AND-DROP INSTALL
 
 1. Close GTA V and RAGE Plugin Hook.
 2. Open the compiled release ZIP.
@@ -6,6 +6,14 @@ ADVANCED K9 v1.5.0 — DRAG-AND-DROP INSTALL
 4. Allow Windows to merge the Plugins folders. This does not replace LSPDFR.
 5. Start RAGE Plugin Hook and ensure "Load all plugins on startup" is enabled.
 6. Enter Story Mode, start LSPDFR, and go on duty.
+
+Correct file locations
+  Plugins\AdvancedK9.dll
+  Plugins\LSPDFR\AdvancedK9\AdvancedK9.ini
+
+Remove any older copy at Plugins\LSPDFR\AdvancedK9.dll. AdvancedK9 is a
+RAGE Plugin Hook plugin that monitors LSPDFR duty state; it is not loaded by
+the LSPDFR sub-plugin loader.
 
 Controls
   Left Ctrl + K   Deploy/dismiss K9
