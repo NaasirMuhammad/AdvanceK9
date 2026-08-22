@@ -94,7 +94,15 @@ namespace AdvancedK9
         }
 
         private void RefreshProfileMenu(){int m=_profile.HudMode;_menu.Open("K9 PROFILE — "+_profile.Name,new[]{"Edit name: "+_profile.Name,"Breed/model: "+_profile.Breed,"Skin/coat: "+(_profile.CoatVariation+1),"Equipment: "+_profile.Vest,"Equipment texture: "+(_profile.VestTexture+1),"Training / certifications","HUD: "+(m==0?"Hidden":m==1?"Compact":"Expanded"),"Move HUD left","Move HUD right","Move HUD up","Move HUD down","HUD scale: "+_profile.HudScale.ToString("0.0"),"Inspect profile"});}
-        private void OnMenuSelected(int index){if(_menuMode=="commands"){if(index>=0&&index<CommandRegistry.All.Count)Execute(CommandRegistry.All[index].Command);return;}if(_menuMode!="profile")return;switch(index){case 0:string n=Game.GetUserInput(24);if(!string.IsNullOrWhiteSpace(n)){_profile.SetName(n);_voice?.UpdateWakeWord(_profile.Name);Game.DisplayNotification("~b~Voice wake word changed immediately to:~s~ "+_profile.Name); }break;case 1:bool deployed=DogExists();if(deployed)Dismiss();_profile.NextBreed();if(deployed)Deploy();break;case 2:_profile.NextSkin(_dog);break;case 3:_profile.NextEquipment(_dog);break;case 4:_profile.NextEquipmentTexture(_dog);break;case 5:Execute(K9Command.Training);break;case 6:_profile.CycleHudMode();break;case 7:_profile.MoveHud(-.02f,0);break;case 8:_profile.MoveHud(.02f,0);break;case 9:_profile.MoveHud(0,-.02f);break;case 10:_profile.MoveHud(0,.02f);break;case 11:_profile.ScaleHud();break;case 12:Inspect();break;}RefreshProfileMenu();}
+        private void OnMenuSelected(int index){if(_menuMode=="commands"){if(index>=0&&index<CommandRegistry.All.Count)Execute(CommandRegistry.All[index].Command);return;}if(_menuMode!="profile")return;switch(index){case 0:string n=PromptForDogName(24);if(!string.IsNullOrWhiteSpace(n)){_profile.SetName(n);_voice?.UpdateWakeWord(_profile.Name);Game.DisplayNotification("~b~Voice wake word changed immediately to:~s~ "+_profile.Name); }break;case 1:bool deployed=DogExists();if(deployed)Dismiss();_profile.NextBreed();if(deployed)Deploy();break;case 2:_profile.NextSkin(_dog);break;case 3:_profile.NextEquipment(_dog);break;case 4:_profile.NextEquipmentTexture(_dog);break;case 5:Execute(K9Command.Training);break;case 6:_profile.CycleHudMode();break;case 7:_profile.MoveHud(-.02f,0);break;case 8:_profile.MoveHud(.02f,0);break;case 9:_profile.MoveHud(0,-.02f);break;case 10:_profile.MoveHud(0,.02f);break;case 11:_profile.ScaleHud();break;case 12:Inspect();break;}RefreshProfileMenu();}
+
+        private static string PromptForDogName(int maxLength)
+        {
+            NativeFunction.Natives.DISPLAY_ONSCREEN_KEYBOARD(1, "FMMC_KEY_TIP8", "", "", "", "", "", maxLength + 1);
+            int status;
+            while ((status = NativeFunction.Natives.UPDATE_ONSCREEN_KEYBOARD<int>()) == 0) GameFiber.Yield();
+            return status == 1 ? NativeFunction.Natives.GET_ONSCREEN_KEYBOARD_RESULT<string>() : null;
+        }
 
         private void Execute(K9Command command)
         {
