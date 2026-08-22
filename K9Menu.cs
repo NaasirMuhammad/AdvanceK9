@@ -4,6 +4,7 @@ using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
 using LemonUI;
+using LemonUI.Elements;
 using LemonUI.Menus;
 using Rage;
 
@@ -12,7 +13,8 @@ namespace AdvancedK9
     internal sealed class K9Menu
     {
         private readonly ObjectPool _pool = new ObjectPool();
-        private readonly NativeMenu _menu = new NativeMenu("ADVANCED K9", "SELECT AN OPTION");
+        private readonly NativeMenu _menu = new NativeMenu("ADVANCED K9", "K9 MANAGEMENT", string.Empty,
+            new ScaledRectangle(PointF.Empty, SizeF.Empty) { Color = Color.FromArgb(255, 9, 42, 68) });
         private readonly List<string> _items = new List<string>();
         private uint _nextInput;
         public bool Visible { get { return _menu.Visible; } private set { _menu.Visible = value; } }
@@ -23,8 +25,9 @@ namespace AdvancedK9
         public K9Menu()
         {
             _pool.Add(_menu);
-            _menu.Width = 0.235f;
-            _menu.Offset = new PointF(16f, 22f);
+            _menu.Width = 330f;
+            _menu.MaxItems = 6;
+            _menu.Offset = new PointF(18f, 28f);
             _menu.MouseBehavior = MenuMouseBehavior.Disabled;
         }
 
@@ -52,7 +55,20 @@ namespace AdvancedK9
             for (int index = 0; index < _items.Count; index++)
             {
                 int captured = index;
-                var item = new NativeItem(_items[index], "Enter activates this option. Left and right preview adjustable options.");
+                var item = new NativeItem(_items[index], string.Empty);
+                item.UseCustomBackground = true;
+                item.Colors = new ColorSet
+                {
+                    BackgroundNormal = Color.FromArgb(242, 10, 16, 22),
+                    BackgroundHovered = Color.FromArgb(255, 28, 112, 174),
+                    BackgroundDisabled = Color.FromArgb(242, 10, 16, 22),
+                    TitleNormal = Color.WhiteSmoke,
+                    TitleHovered = Color.White,
+                    TitleDisabled = Color.Gray,
+                    AltTitleNormal = Color.Gainsboro,
+                    AltTitleHovered = Color.White,
+                    AltTitleDisabled = Color.Gray
+                };
                 item.Activated += (sender, args) => Selected?.Invoke(captured);
                 _menu.Add(item);
             }
