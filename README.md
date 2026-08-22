@@ -1,6 +1,6 @@
-# Advanced K9 v1.7.8-beta for LSPDFR
+# Advanced K9 v1.7.9-beta for LSPDFR
 
-AdvancedK9 v1.7.8-beta is a persistent LSPDFR/RAGE Plugin Hook police-dog partner with push-to-talk voice control, per-dog progression, health and a compact EUP-style LemonUI command/profile interface. All published builds are beta builds while gameplay and model compatibility continue to be tested.
+AdvancedK9 v1.7.9-beta is a persistent LSPDFR/RAGE Plugin Hook police-dog partner with push-to-talk voice control, per-dog progression, health and a compact EUP-style LemonUI command/profile interface. All published builds are beta builds while gameplay and model compatibility continue to be tested.
 
 AdvancedK9 runs as an RPH plugin and starts its controller directly. It avoids a reflection-based LSPDFR duty gate because RPH plugins run in isolated AppDomains. Instead, it follows LSPDFR's own duty-state messages from the active RAGEPluginHook log. GTA's native cop flag is diagnostic only because LSPDFR may set it while the player is still off duty. While off duty, the K9, HUD, menus, shortcuts and voice capture remain disabled. Going off duty closes the UI, stops voice capture and dismisses the active dog.
 
@@ -14,11 +14,12 @@ The compiled release includes AdvancedK9, its configuration, and the MIT-license
 
 - Deploy/dismiss and follow/heel
 - Sit, lie down, pet, feed, leash and dog-mounted camera
-- Pedestrian and vehicle odor searches; sit plus repeated bark means positive, one bark means clear
+- Pedestrian and full-perimeter vehicle odor searches; silent sit means clear, sit plus repeated bark means positive
 - Track a nearby suspect or missing person for up to two minutes
 - Non-lethal apprehension with automatic recall, a configurable health floor and hands-up surrender
 - Fetch minigame
-- Four-stage in-game K9 academy (obedience, recall and detection)
+- Five-level interactive K9 academy with obedience, place/stay, recall, agility and blind scent-lineup work
+- Weapon-aim target identification before apprehension, with officer rejection and automatic non-lethal recall
 - Push-to-talk voice recognition using OpenAI or Groq transcription; the microphone opens only while `V` is held
 - Persistent command and profile menus that remain open until explicitly closed
 - Runtime command registry shared by menu and voice recognition
@@ -115,6 +116,8 @@ The dog uses the handler's friendly relationship group and has friendly attacks 
 ## Search semantics
 
 The closest ped or vehicle in range is searched. If an installed Policing Redefined release exposes a compatible public K9/contraband query, its result is used. Otherwise the fallback probability in `AdvancedK9.ini` is used. This prevents a hard dependency on prerelease API signatures while keeping the mod loadable by itself.
+
+Vehicle searches visit eight exterior checkpoints around both sides, front and rear before the result is determined. For apprehension, aim a taser or firearm directly at the intended suspect and keep that person in your sights while issuing the command; proximity alone never chooses the target.
 
 ## Safety and limitations
 
