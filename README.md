@@ -2,6 +2,8 @@
 
 AdvancedK9 v1.6 is a persistent LSPDFR/RAGE Plugin Hook police-dog partner with live voice control, per-dog progression, health and a full in-game command/profile interface.
 
+AdvancedK9 runs as an RPH plugin and starts its controller directly. It does not use a reflection-based LSPDFR duty gate because RPH plugins run in isolated AppDomains; commands therefore remain available throughout the Story Mode session, including after LSPDFR goes on duty.
+
 ## Drag-and-drop installation
 
 Use the compiled release ZIP, not the source ZIP. Close GTA V, then drag its `Plugins` folder into the folder containing `GTA5.exe` and allow the folders to merge. In RAGE Plugin Hook settings, enable **Load all plugins on startup**. Start Story Mode, load LSPDFR, and go on duty.
