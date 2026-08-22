@@ -9,6 +9,7 @@ namespace AdvancedK9
         private static readonly string[] Breeds = { "German Shepherd", "Belgian Malinois", "Dalmatian", "Rottweiler", "Husky", "Retriever", "Poodle", "Pug", "Westie", "Doberman", "Cane Corso" };
         private static readonly string[] Models = { "a_c_shepherd", "a_c_shepherd", "a_c_dalmatian", "a_c_rottweiler", "a_c_husky", "a_c_retriever", "a_c_poodle", "a_c_pug", "a_c_westy", "doberman", "a_c_chop" };
         private static readonly string[] Vests = { "None", "Police", "BCSO/Sheriff", "Trooper", "Fire", "Off-duty", "Service", "Medic", "Black", "Blue", "High Visibility", "Custom" };
+        private static readonly string[] VestTextures = { "Multicam", "Tan", "Black", "Green", "Grey", "Blue", "Yellow", "Red", "Orange" };
         private readonly string _path = Path.Combine("Plugins", "LSPDFR", "AdvancedK9", "profile.dat");
 
         public string Name { get; private set; }
@@ -38,6 +39,7 @@ namespace AdvancedK9
         public string ModelName => !string.IsNullOrWhiteSpace(CustomModel) && VestIndex == 11 ? CustomModel : Models[BreedIndex];
         public string FallbackModelName => Breed == "Dalmatian" ? "a_c_husky" : Breed == "Doberman" ? "a_c_retriever" : null;
         public string Vest => Vests[VestIndex];
+        public string VestTextureName(Ped dog){int count=GetVestTextureCount(dog);if(count<=0)return "Unavailable";return VestTexture<VestTextures.Length?VestTextures[VestTexture]:"Texture "+(VestTexture+1);}
 
         public K9Profile(ModConfig config)
         {
@@ -56,12 +58,12 @@ namespace AdvancedK9
         public void NextVest() { VestIndex = (VestIndex + 1) % Vests.Length; Save(); }
         public void NextVestColor() { VestTexture = (VestTexture + 1) % 16; Save(); }
         public void NextSkin(Ped dog){int count=dog!=null&&dog.Exists()?Rage.Native.NativeFunction.Natives.GET_NUMBER_OF_PED_TEXTURE_VARIATIONS<int>(dog,0,0):8;CoatVariation=(CoatVariation+1)%Math.Max(1,count);Save();Apply(dog);}
-        public void NextEquipment(Ped dog){int component=dog!=null&&dog.Exists()?(VestComponent>=0?VestComponent:FindVestComponent(dog)):VestComponent;int count=dog!=null&&dog.Exists()?Rage.Native.NativeFunction.Natives.GET_NUMBER_OF_PED_DRAWABLE_VARIATIONS<int>(dog,component):Vests.Length;VestIndex=(VestIndex+1)%Math.Max(1,count);Save();Apply(dog);}
-        public void NextEquipmentTexture(Ped dog){int component=dog!=null&&dog.Exists()?(VestComponent>=0?VestComponent:FindVestComponent(dog)):VestComponent;int count=dog!=null&&dog.Exists()?Rage.Native.NativeFunction.Natives.GET_NUMBER_OF_PED_TEXTURE_VARIATIONS<int>(dog,component,VestIndex):16;VestTexture=(VestTexture+1)%Math.Max(1,count);Save();Apply(dog);}
+        public void NextEquipment(Ped dog){int component=dog!=null&&dog.Exists()?(VestComponent>=0?VestComponent:FindVestComponent(dog)):VestComponent;int count=dog!=null&&dog.Exists()?Rage.Native.NativeFunction.Natives.GET_NUMBER_OF_PED_DRAWABLE_VARIATIONS<int>(dog,component):Vests.Length;VestIndex=(VestIndex+1)%Math.Max(1,Math.Min(count,Vests.Length));Save();Apply(dog);}
+        public void NextEquipmentTexture(Ped dog){int count=GetVestTextureCount(dog);VestTexture=(VestTexture+1)%Math.Max(1,count);Save();Apply(dog);}
         public void AdjustBreed(int delta){BreedIndex=Wrap(BreedIndex+delta,Breeds.Length);Save();}
         public void AdjustSkin(Ped dog,int delta){int count=dog!=null&&dog.Exists()?Rage.Native.NativeFunction.Natives.GET_NUMBER_OF_PED_TEXTURE_VARIATIONS<int>(dog,0,0):8;CoatVariation=Wrap(CoatVariation+delta,Math.Max(1,count));Save();Apply(dog);}
-        public void AdjustEquipment(Ped dog,int delta){int component=dog!=null&&dog.Exists()?(VestComponent>=0?VestComponent:FindVestComponent(dog)):VestComponent;int count=dog!=null&&dog.Exists()?Rage.Native.NativeFunction.Natives.GET_NUMBER_OF_PED_DRAWABLE_VARIATIONS<int>(dog,component):Vests.Length;VestIndex=Wrap(VestIndex+delta,Math.Max(1,count));Save();Apply(dog);}
-        public void AdjustEquipmentTexture(Ped dog,int delta){int component=dog!=null&&dog.Exists()?(VestComponent>=0?VestComponent:FindVestComponent(dog)):VestComponent;int count=dog!=null&&dog.Exists()?Rage.Native.NativeFunction.Natives.GET_NUMBER_OF_PED_TEXTURE_VARIATIONS<int>(dog,component,VestIndex):16;VestTexture=Wrap(VestTexture+delta,Math.Max(1,count));Save();Apply(dog);}
+        public void AdjustEquipment(Ped dog,int delta){int component=dog!=null&&dog.Exists()?(VestComponent>=0?VestComponent:FindVestComponent(dog)):VestComponent;int count=dog!=null&&dog.Exists()?Rage.Native.NativeFunction.Natives.GET_NUMBER_OF_PED_DRAWABLE_VARIATIONS<int>(dog,component):Vests.Length;VestIndex=Wrap(VestIndex+delta,Math.Max(1,Math.Min(count,Vests.Length)));Save();Apply(dog);}
+        public void AdjustEquipmentTexture(Ped dog,int delta){int count=GetVestTextureCount(dog);VestTexture=Wrap(VestTexture+delta,Math.Max(1,count));Save();Apply(dog);}
         public void PrepareDeployment(){if(Health<=25){Health=100;Stamina=100;Injury="None";Save();}}
         public void SetName(string value) { if (!string.IsNullOrWhiteSpace(value)) { Name=value.Trim(); Save(); } }
         public void AddXp(int value) { TrainingXp=Math.Max(0,TrainingXp+value); if(TrainingXp>=25)ObedienceCertified=true; if(TrainingXp>=60)DetectionCertified=true; if(TrainingXp>=100)TrackingCertified=true; if(TrainingXp>=150)ApprehensionCertified=true; Save(); }
@@ -136,14 +138,19 @@ namespace AdvancedK9
 
         private static int FindVestComponent(Ped dog)
         {
-            int bestComponent = 8, bestCount = 0;
+            int bestComponent = 8, bestScore = 0;
             for (int component = 1; component <= 11; component++)
             {
-                int count = Rage.Native.NativeFunction.Natives.GET_NUMBER_OF_PED_DRAWABLE_VARIATIONS<int>(dog, component);
-                if (count > bestCount) { bestCount = count; bestComponent = component; }
+                int drawables = Rage.Native.NativeFunction.Natives.GET_NUMBER_OF_PED_DRAWABLE_VARIATIONS<int>(dog, component);
+                int textures = 0;
+                for(int drawable=0;drawable<Math.Max(1,drawables);drawable++) textures=Math.Max(textures,Rage.Native.NativeFunction.Natives.GET_NUMBER_OF_PED_TEXTURE_VARIATIONS<int>(dog,component,drawable));
+                int score = drawables * 10 + textures;
+                if (score > bestScore) { bestScore = score; bestComponent = component; }
             }
             return bestComponent;
         }
+
+        private int GetVestTextureCount(Ped dog){if(dog==null||!dog.Exists())return 16;int component=VestComponent>=0?VestComponent:FindVestComponent(dog);int drawables=Rage.Native.NativeFunction.Natives.GET_NUMBER_OF_PED_DRAWABLE_VARIATIONS<int>(dog,component);int drawable=VestIndex==0||drawables<=1?0:Math.Min(VestIndex,drawables-1);return Rage.Native.NativeFunction.Natives.GET_NUMBER_OF_PED_TEXTURE_VARIATIONS<int>(dog,component,drawable);}
 
         private static int Clamp(int value, int min, int max) => Math.Max(min, Math.Min(max, value));
         private static int Wrap(int value,int count) => count<=0?0:(value%count+count)%count;
