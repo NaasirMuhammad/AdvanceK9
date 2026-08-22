@@ -28,6 +28,51 @@ namespace AdvancedK9
             return points;
         }
 
+        public int RunSpecialty(DetectionSpecialty specialty, Action sit, Action follow)
+        {
+            string name=specialty==DetectionSpecialty.Narcotics?"NARCOTICS DETECTION":specialty==DetectionSpecialty.Explosives?"EXPLOSIVES DETECTION":"WEAPONS DETECTION";
+            Game.DisplayNotification("~b~ADVANCED K9 SPECIALTY~s~~n~"+name+"~n~Five odor-recognition stations; 20% each.");
+            int points=SpecialtyDetectionCourse(specialty,sit);
+            follow();
+            Game.DisplayNotification("~b~SPECIALTY SESSION COMPLETE~s~~n~"+name+" progress earned: "+points+"%");
+            return points;
+        }
+
+        private int SpecialtyDetectionCourse(DetectionSpecialty specialty,Action sit)
+        {
+            string title=specialty==DetectionSpecialty.Narcotics?"NARCOTICS ODOR LINEUP":specialty==DetectionSpecialty.Explosives?"BOMB-SAFE STANDOFF LINEUP":"FIREARM ODOR LINEUP";
+            if(!WaitForHandler(title,"Press ~y~Y~s~ to present the specialty scent article"))return 0;
+            var stations=new List<Rage.Object>();Rage.Object source=null;var score=0;
+            try
+            {
+                var handler=Game.LocalPlayer.Character;
+                string stationModel=specialty==DetectionSpecialty.Explosives?"prop_box_wood02a_pu":"prop_cs_heist_bag_02";
+                string sourceModel=specialty==DetectionSpecialty.Narcotics?"prop_drug_package_02":specialty==DetectionSpecialty.Explosives?"prop_c4_final":"w_pi_pistol";
+                var container=new Model(stationModel);container.LoadAndWait();if(!container.IsLoaded)return 0;
+                var odor=new Model(sourceModel);odor.LoadAndWait();if(!odor.IsLoaded){container.Dismiss();return 0;}
+                int positive=_random.Next(0,5);float spacing=specialty==DetectionSpecialty.Explosives?5f:4f;
+                for(int i=0;i<5;i++)stations.Add(new Rage.Object(container,handler.GetOffsetPosition(new Vector3((-2f+i)*spacing,15f,0f))));
+                source=new Rage.Object(odor,stations[positive].Position);NativeFunction.Natives.SET_ENTITY_VISIBLE(source,false,false);NativeFunction.Natives.SET_ENTITY_COLLISION(source,false,false);
+                container.Dismiss();odor.Dismiss();
+                for(int i=0;i<stations.Count;i++)
+                {
+                    Game.DisplaySubtitle("~b~"+title+"~s~ — station "+(i+1)+"/5",1800);
+                    if(!Navigate(stations[i].GetOffsetPosition(new Vector3(0f,-1.2f,0f)),handler.Heading,true,7000))continue;
+                    NativeFunction.Natives.TASK_TURN_PED_TO_FACE_ENTITY(_dog,stations[i],800);GameFiber.Wait(800);PlaySniff();score+=20;
+                }
+                if(DogReady())
+                {
+                    Navigate(stations[positive].GetOffsetPosition(new Vector3(0f,-1.2f,0f)),handler.Heading,true,5500);
+                    NativeFunction.Natives.TASK_TURN_PED_TO_FACE_ENTITY(_dog,stations[positive],800);GameFiber.Wait(800);sit();
+                    NativeFunction.Natives.PLAY_PED_AMBIENT_SPEECH_NATIVE(_dog,"BARK","SPEECH_PARAMS_FORCE");
+                    Game.DisplaySubtitle("~r~POSITIVE "+title+" ALERT~s~ — station "+(positive+1),2600);GameFiber.Wait(2600);
+                }
+                return score;
+            }
+            catch{return score;}
+            finally{if(source!=null&&source.Exists())source.Delete();DeleteAll(stations);}
+        }
+
         private int ObedienceCourse(Action sit, Action down, Action follow)
         {
             var score = 0;
