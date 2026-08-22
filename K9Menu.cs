@@ -29,6 +29,11 @@ namespace AdvancedK9
             _menu.MaxItems = 6;
             _menu.Offset = new PointF(18f, 28f);
             _menu.MouseBehavior = MenuMouseBehavior.Disabled;
+            _menu.BannerText.Text = "ADVANCED K9";
+            _menu.BannerText.Scale = 0.56f;
+            _menu.BannerText.Font = LemonUI.Font.ChaletLondon;
+            _menu.BannerText.Color = Color.White;
+            _menu.KeepNameCasing = true;
         }
 
         public void Open(string title, IEnumerable<string> items) { Rebuild(title, items, 0); }
@@ -51,7 +56,8 @@ namespace AdvancedK9
             _items.Clear();
             _items.AddRange(items ?? Enumerable.Empty<string>());
             _menu.Clear();
-            _menu.BannerText.Text = title;
+            _menu.BannerText.Text = "ADVANCED K9";
+            _menu.Name = title.Replace("ADVANCED K9 — ", string.Empty).Replace("K9 PROFILE — ", "PROFILE — ");
             for (int index = 0; index < _items.Count; index++)
             {
                 int captured = index;
