@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
@@ -25,7 +24,7 @@ namespace AdvancedK9
             _pool.Add(_menu);
             _menu.Width = 0.235f;
             _menu.Offset = new PointF(16f, 22f);
-            _menu.UseMouse = false;
+            _menu.MouseBehavior = MenuMouseBehavior.Disabled;
         }
 
         public void Open(string title, IEnumerable<string> items) { Rebuild(title, items, 0); }
