@@ -18,6 +18,9 @@ namespace AdvancedK9
             D(K9Command.Fetch,"Fetch / Play",true,"fetch the ball","retrieve the ball","get the ball","bring the ball","go fetch","play fetch","play ball","retrieve","fetch"),
             D(K9Command.SearchArea,"Search Area",true,"search the area","clear the area","sweep the area","check the area","area search","search around","find the odor","search"),
             D(K9Command.SearchVehicle,"Search Vehicle",true,"search the vehicle","search this vehicle","search the car","check the vehicle","check the car","sniff the vehicle","sweep the vehicle","vehicle search","search vehicle"),
+            D(K9Command.SearchNarcotics,"Narcotics Search",true,"search for narcotics","narcotics search","search for drugs","drug search","find the drugs","check for narcotics","narcotics sweep","find dope"),
+            D(K9Command.SearchExplosives,"Explosives Search",true,"search for explosives","explosives search","bomb search","search for a bomb","find the bomb","check for explosives","explosive sweep","bomb sweep"),
+            D(K9Command.SearchWeapons,"Weapons Search",true,"search for weapons","weapons search","gun search","search for a gun","find the weapon","check for firearms","firearm sweep","weapons sweep"),
             D(K9Command.Track,"Track",true,"start tracking","pick up the scent","follow the scent","find the trail","track the suspect","locate them","find him","find her","find them","track"),
             D(K9Command.Apprehend,"Apprehend",true,"apprehend the suspect","engage the suspect","take the suspect","send the dog","attack","bite","get him","get her","take him","take her","apprehend","engage"),
             D(K9Command.Release,"Release / Stop",true,"release the suspect","stop the dog","stop apprehension","disengage","break contact","leave it","let go","release","out"),
@@ -31,7 +34,10 @@ namespace AdvancedK9
             D(K9Command.FirstAid,"Field First Aid",true,"give first aid","apply first aid","provide treatment","field treatment","treat the injury","treat injury","first aid"),
             D(K9Command.ToggleLeash,"Toggle Leash",true,"attach the leash","put on the leash","take off the leash","remove the leash","leash on","leash off","attach leash","remove leash","leash"),
             D(K9Command.ToggleCamera,"K9 Camera",true,"activate dog camera","turn on k9 camera","disable dog camera","turn off k9 camera","dog camera","k9 camera","body camera","camera"),
-            D(K9Command.Training,"Training",true,"go to training","start training","training ground","begin academy","academy training","certification course","training","academy","certification")};
+            D(K9Command.Training,"Core Training",true,"go to training","start core training","training ground","begin academy","academy training","core certification course","core training","academy","certification"),
+            D(K9Command.TrainNarcotics,"Narcotics Training",true,"start narcotics training","narcotics certification","drug detection training","train for drugs","narcotics academy"),
+            D(K9Command.TrainExplosives,"Explosives Training",true,"start explosives training","bomb certification","bomb detection training","train for explosives","explosives academy"),
+            D(K9Command.TrainWeapons,"Weapons Training",true,"start weapons training","weapons certification","gun detection training","firearm training","weapons academy")};
         static CommandDefinition D(K9Command c,string l,bool r,params string[] p)=>new CommandDefinition(c,l,r,p);
         public static bool TryMatch(string text,string dogName,out K9Command command)
         {
