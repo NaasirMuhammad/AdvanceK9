@@ -1,0 +1,11 @@
+bin/
+obj/
+.vs/
+package/
+verified-source/
+*.user
+*.user
+*.suo
+*.dll
+*.pdb
+*.cache
