@@ -33,6 +33,9 @@ namespace AdvancedK9
         public float TrackRadius = 80f;
         public int NonLethalHealthFloor = 35;
         public int StartingTrust = 40;
+        public float FetchBallOffsetX = 0.12f;
+        public float FetchBallOffsetY = 0.01f;
+        public float FetchBallOffsetZ = -0.025f;
 
         public static ModConfig Load()
         {
@@ -66,6 +69,9 @@ namespace AdvancedK9
             result.TrackRadius = Math.Max(20f, ini.ReadSingle("Tracking", "AcquisitionRadius", result.TrackRadius));
             result.NonLethalHealthFloor = Math.Max(10, ini.ReadInt32("Apprehension", "HealthFloor", result.NonLethalHealthFloor));
             result.StartingTrust = Math.Max(0, Math.Min(100, ini.ReadInt32("Trust", "StartingLevel", result.StartingTrust)));
+            result.FetchBallOffsetX = ini.ReadSingle("Fetch", "BallOffsetX", result.FetchBallOffsetX);
+            result.FetchBallOffsetY = ini.ReadSingle("Fetch", "BallOffsetY", result.FetchBallOffsetY);
+            result.FetchBallOffsetZ = ini.ReadSingle("Fetch", "BallOffsetZ", result.FetchBallOffsetZ);
             return result;
         }
 
