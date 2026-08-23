@@ -17,7 +17,9 @@ The compiled release includes AdvancedK9, its configuration, and the MIT-license
 - Persistent food and water care HUD, low-need warnings, separate feed/drink interactions and working-dog consumption
 - Kneeling handler petting interaction with a synchronized K9 response
 - Automatic operational leash release when search, tracking, fetch or apprehension is deployed
-- Pedestrian and full-perimeter vehicle odor searches; silent sit means clear, sit plus repeated bark means positive
+- Pedestrian and four-corner vehicle odor searches; silent sit means clear, sit plus repeated bark after the completed sweep means positive
+- General searches identify narcotics, explosives or weapons whenever the deployed dog holds the corresponding specialty certification
+- Bladder and bowel needs, automatic relief, manual bathroom-break commands, urine effects and temporary dog-waste props
 - Track a nearby suspect or missing person for up to two minutes
 - Non-lethal apprehension with automatic recall, a configurable health floor and hands-up surrender
 - Fetch minigame
@@ -104,6 +106,7 @@ Hold `V`, begin with the configured dog name or `K9`, and then say one of the ph
 | Pet | pet the dog; praise the dog; reward him; reward her; show affection; good dog; pet |
 | Feed / treat | give the dog a treat; give a treat; reward with a treat; give food; feed the dog; treat; feed |
 | Give water | give the dog water; give water; water the dog; get a drink; drink water; water break; hydrate; drink |
+| Bathroom break | bathroom break; go potty; go pee; go poop; relieve yourself; do your business; potty; pee; poop |
 | Rest | rest the dog; take a rest; sleep; rest |
 | Inspect | inspect the dog; check the dog; check status; check injury; check health; medical check; inspect |
 | First aid | give first aid; apply first aid; provide treatment; field treatment; treat the injury; treat injury; first aid |
