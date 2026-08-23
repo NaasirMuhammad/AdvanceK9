@@ -562,9 +562,10 @@ namespace AdvancedK9
             {
                 if (_dog.DistanceTo(target) < 3f)
                 {
+                    _dog.Tasks.Clear();
                     Bark(2);
                     Sit();
-                    Game.DisplayNotification("~g~Track complete.~s~ Person located.");K9IncidentLog.Write(_profile.Name,"Track","Subject located",target.Position);
+                    Game.DisplayNotification("~g~Track complete — person located.~s~~n~K9 is sitting and holding. Aim at the suspect and command APPREHEND only if deployment is required.");K9IncidentLog.Write(_profile.Name,"Track","Subject located; alert bark and hold only",target.Position);
                     _trust.Change(2, "successful track");
                     return;
                 }
