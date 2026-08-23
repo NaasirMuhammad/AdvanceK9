@@ -4,6 +4,7 @@ All published AdvancedK9 versions are beta builds.
 
 ## 0.21-beta
 
+- Matches Stop The Ped's K9 vehicle behavior by preferring GTA/RPH seat index 2 (right rear), with corrected passenger-side seat bone and rear-door mappings.
 - Adds dedicated Bug's Mods Dalmatian/a_c_husky replacement handling so all seven `hand_diff_000_a_uni` through `hand_diff_000_h_uni` vest textures can be selected in game.
 - Groups the command menu into Partner Control, Search & Detection, Tracking & Scent, Tactical Deployment, Vehicle & Equipment, Care & Medical, and Training & Certifications submenus.
 - Removes all training access from the profile/kennel menu so academy commands exist only under the command menu.
