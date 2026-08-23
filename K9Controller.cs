@@ -45,9 +45,6 @@ namespace AdvancedK9
         private uint _nextEnvironmentUpdate;
         private uint _nextHeatWarning;
         private int _dogVehicleDoor=3;
-        private readonly Queue<Vector3> _handlerTrail = new Queue<Vector3>();
-        private uint _nextTrailSample;
-        private uint _nextTrailRecovery;
         private int _leashRope = -1;
         private uint _nextLeashFollow;
         private uint _nextNeedsUpdate;
@@ -519,15 +516,15 @@ namespace AdvancedK9
         {
             var handler=Game.LocalPlayer.Character;
             var target=GetValidAimedSuspect(false);
-            if(target==null&&_voiceAimedTarget!=null&&_voiceAimedTarget.Exists()&&!_voiceAimedTarget.IsDead&&_voiceAimedTarget.DistanceTo(handler)<=80f&&!LspdfrBridge.IsPedCop(_voiceAimedTarget))target=_voiceAimedTarget;
+            if(target==null&&_voiceAimedTarget!=null&&_voiceAimedTarget.Exists()&&!_voiceAimedTarget.IsDead&&_voiceAimedTarget.DistanceTo(handler)<=250f&&!LspdfrBridge.IsPedCop(_voiceAimedTarget))target=_voiceAimedTarget;
             _voiceAimedTarget=null;
-            if(target==null){Game.DisplayNotification("~y~No valid suspect identified.~s~~n~Aim your taser or firearm directly at the intended person, then issue APPREHEND.");return;}
+            if(target==null){Game.DisplayNotification("~y~No valid target identified.~s~~n~Aim your taser or firearm directly at a non-officer, then issue APPREHEND. No ped stop is required.");return;}
             if(_state==K9State.InVehicle)DoorPop(false);
             _state = K9State.Apprehending;
             _dog.Tasks.Clear();
             string reaction=ApplySuspectReaction(target,handler);K9IncidentLog.Write(_profile.Name,"Apprehension","Suspect reaction: "+reaction,target.Position);
             NativeFunction.Natives.TASK_COMBAT_PED(_dog, target, 0, 16);
-            Game.DisplayNotification("~o~K9 deployed on positively identified aimed suspect.~s~~n~Recall automatically engages at the safety threshold.");
+            Game.DisplayNotification("~o~K9 deploying immediately on aimed target.~s~~n~No traffic stop or close-range contact is required.");
             var end = Game.GameTime + 25000;
             while (DogExists() && target.Exists() && !target.IsDead && Game.GameTime < end && _state == K9State.Apprehending)
             {
@@ -555,7 +552,7 @@ namespace AdvancedK9
             var handler=Game.LocalPlayer.Character;
             uint weapon=NativeFunction.Natives.GET_SELECTED_PED_WEAPON<uint>(handler),unarmed=NativeFunction.Natives.GET_HASH_KEY<uint>("WEAPON_UNARMED");
             var target=weapon==unarmed?null:Game.LocalPlayer.GetFreeAimingTarget() as Ped;
-            if(target==null||!target.Exists()||target==handler||target==_dog||target.IsDead||target.DistanceTo(handler)>80f)return null;
+            if(target==null||!target.Exists()||target==handler||target==_dog||target.IsDead||target.DistanceTo(handler)>250f)return null;
             if(LspdfrBridge.IsPedCop(target)){if(notify)Game.DisplayNotification("~r~K9 safety interlock: officer target rejected.");return null;}
             return target;
         }
@@ -643,7 +640,6 @@ namespace AdvancedK9
         {
             if (!DogExists()) { _state = K9State.Dismissed; _camera.Disable(); return; }
             EnforceHandlerSafety();
-            RecordHandlerTrail();
             UpdateNeeds();
             UpdateEnvironment();
             if(Game.GameTime>=_nextVitalsUpdate){_nextVitalsUpdate=Game.GameTime+5000;int liveHealth=(int)(100f*_dog.Health/Math.Max(1,_dog.MaxHealth));if(liveHealth<_profile.Health){string injury=liveHealth<=25?"Serious — veterinary treatment required":liveHealth<=55?"Moderate":"Minor";_profile.SetInjury(injury,liveHealth);K9IncidentLog.Write(_profile.Name,"Injury",injury,_dog.Position);}NativeFunction.Natives.SET_PED_MOVE_RATE_OVERRIDE(_dog,_profile.Health<=55?.65f:1f);if(_state==K9State.Searching||_state==K9State.Tracking||_state==K9State.Apprehending)_profile.UseStamina(2);else _profile.Recover(1);}
@@ -653,15 +649,9 @@ namespace AdvancedK9
                 if(Game.GameTime>=_nextLeashFollow){_nextLeashFollow=Game.GameTime+900;if(_dog.DistanceTo(officer)>1.05f)NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(_dog,officer,-.55f,-.85f,0f,1.9f,-1,1.15f,true);}
                 if(_dog.DistanceTo(officer)>3.2f)_dog.Tasks.FollowNavigationMeshToPosition(officer.GetOffsetPosition(new Vector3(-.55f,-.85f,0f)),officer.Heading,2.4f);
             }
-            RecoverHandlerTrail();
             if (_dog.DistanceTo(Game.LocalPlayer.Character) > 150f && _state == K9State.Following)
                 _dog.Position = Game.LocalPlayer.Character.GetOffsetPosition(new Vector3(-1f, -2f, 0f));
         }
-
-        private void RecordHandlerTrail(){if(Game.GameTime<_nextTrailSample)return;_nextTrailSample=Game.GameTime+1200;var p=Game.LocalPlayer.Character.Position;if(_handlerTrail.Count==0||Distance2D(_handlerTrail.Last(),p)>2.5f){_handlerTrail.Enqueue(p);while(_handlerTrail.Count>35)_handlerTrail.Dequeue();}}
-        private void RecoverHandlerTrail(){if(_state!=K9State.Following||_dog.DistanceTo(Game.LocalPlayer.Character)<12f)return;if(Game.GameTime<_nextTrailRecovery)return;_nextTrailRecovery=Game.GameTime+2200;Vector3 waypoint=_handlerTrail.Count>0?_handlerTrail.Dequeue():Game.LocalPlayer.Character.Position;PlayDogAnimation("creatures@rottweiler@indication@","indicate_low",500,0);_dog.Tasks.FollowNavigationMeshToPosition(waypoint,Game.LocalPlayer.Character.Heading,3.5f);Game.DisplaySubtitle("~b~"+_profile.Name+"~s~ is following the handler's scent trail.",1200);}
-        private static float Distance2D(Vector3 a,Vector3 b){float x=a.X-b.X,y=a.Y-b.Y;return(float)Math.Sqrt(x*x+y*y);}
-
         private void UpdateNeeds(){if(Game.GameTime<_nextNeedsUpdate)return;_nextNeedsUpdate=Game.GameTime+180000;bool working=_state==K9State.Searching||_state==K9State.Tracking||_state==K9State.Apprehending||_state==K9State.Fetching;_profile.UseNeeds(working?1:0,working?2:1);if((_profile.Food<=25||_profile.Water<=25)&&Game.GameTime>=_nextNeedsWarning){_nextNeedsWarning=Game.GameTime+180000;Game.DisplayNotification("~o~K9 care needed:~s~~n~Food "+_profile.Food+"%  Water "+_profile.Water+"%~n~Use Feed or Give Water from the command menu.");}}
 
         private void UpdateEnvironment(){if(Game.GameTime<_nextEnvironmentUpdate)return;_nextEnvironmentUpdate=Game.GameTime+60000;float rain=NativeFunction.Natives.GET_RAIN_LEVEL<float>();int hour=World.DateTime.Hour;bool hot=rain<.1f&&hour>=11&&hour<=18;if(hot)_profile.UseNeeds(0,2);if(hot&&_state==K9State.InVehicle&&_dogVehicle!=null&&_dogVehicle.Exists()&&!NativeFunction.Natives.GET_IS_VEHICLE_ENGINE_RUNNING<bool>(_dogVehicle)){_profile.UseNeeds(0,5);if(Game.GameTime>=_nextHeatWarning){_nextHeatWarning=Game.GameTime+90000;Game.DisplayNotification("~r~K9 VEHICLE HEAT WARNING~s~~n~Engine is off during peak heat. Remove the K9 or provide water.");K9IncidentLog.Write(_profile.Name,"Safety","Vehicle heat warning",_dogVehicle.Position);}}}
