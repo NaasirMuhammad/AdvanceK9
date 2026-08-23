@@ -1,6 +1,6 @@
-# Advanced K9 v0.20-beta for LSPDFR
+# Advanced K9 v0.21-beta for LSPDFR
 
-AdvancedK9 v0.20-beta is a persistent LSPDFR/RAGE Plugin Hook police-dog partner with push-to-talk voice control, per-dog progression, health and a compact EUP-style LemonUI command/profile interface. All published builds are beta builds while gameplay and model compatibility continue to be tested.
+AdvancedK9 v0.21-beta is a persistent LSPDFR/RAGE Plugin Hook police-dog partner with push-to-talk voice control, per-dog progression, health and a compact EUP-style LemonUI command/profile interface. All published builds are beta builds while gameplay and model compatibility continue to be tested.
 
 AdvancedK9 runs as an RPH plugin and starts its controller directly. It avoids a reflection-based LSPDFR duty gate because RPH plugins run in isolated AppDomains. Instead, it follows LSPDFR's own duty-state messages from the active RAGEPluginHook log. GTA's native cop flag is diagnostic only because LSPDFR may set it while the player is still off duty. While off duty, the K9, HUD, menus, shortcuts and voice capture remain disabled. Going off duty closes the UI, stops voice capture and dismisses the active dog.
 
@@ -41,6 +41,8 @@ The compiled release includes AdvancedK9, its configuration, and the MIT-license
 - Surrender, freeze, flee or fight suspect reactions plus whistle and silent hand-signal recall
 - Persistent duty equipment, patrol-vehicle restocking and CSV incident records in `Plugins/LSPDFR/AdvancedK9/K9IncidentLog.csv`
 - GPS K9-camera overlay with heading, handler distance, state and live condition telemetry
+- Grouped, scrollable command categories; academy and specialty training appear only inside Training & Certifications.
+- Live per-vehicle rear-seat calibration with saved model profiles and an audit log.
 
 ## Build
 
@@ -67,6 +69,57 @@ The build copies the RAGE Plugin Hook entry-point assembly `AdvancedK9.dll` to `
 Voice phrases begin with the configured dog name or “K nine”: “Rex, sit”, “Rex, search”, “K nine, recall”, and so on. Commands without the wake name are ignored.
 Wake-word variants `K9`, `K-9`, `K nine`, `kay nine` and `canine` are accepted. Natural phrases such as “K9 sit down,” “K9 fetch the ball,” and “K9 search the vehicle” are normalized before matching.
 Specialty examples include “K9 search for narcotics,” “K9 bomb search,” “K9 weapons search,” “K9 narcotics training,” “K9 explosives training,” and “K9 weapons training.”
+
+## Complete verbal command reference
+
+Hold `V`, begin with the configured dog name or `K9`, and then say one of the phrases below. Example: `K9, search the vehicle`. Punctuation and capitalization do not matter.
+
+| Action | Accepted spoken phrases after the wake word |
+| --- | --- |
+| Deploy / dismiss | deploy K9; deploy the dog; bring out the dog; partner up; send out the dog; dismiss K9; kennel up; end shift; dismiss |
+| Follow | follow me; stay with me; move with me; on me; with me; follow |
+| Heel | come to heel; heel up; get to heel; by my side; at heel; heel; heal |
+| Sit | sit down; take a seat; park it; sit |
+| Lie down | lie down; lay down; get low; down on the ground; go down; down |
+| Stay | stay there; hold position; do not move; remain; stand fast; stay; hold |
+| Recall | return to me; back to me; come here; come back; return; recall; disengage and return; come |
+| Whistle recall | whistle recall; recall whistle; come on whistle |
+| Hand signal | hand signal; signal recall; silent recall |
+| Fetch | fetch the ball; retrieve the ball; get the ball; bring the ball; go fetch; play fetch; play ball; retrieve; fetch |
+| Search area | search the area; clear the area; sweep the area; check the area; area search; search around; find the odor; search |
+| Search vehicle | search the vehicle; search this vehicle; search the car; check the vehicle; check the car; sniff the vehicle; sweep the vehicle; vehicle search; search vehicle |
+| Narcotics search | search for narcotics; narcotics search; search for drugs; drug search; find the drugs; check for narcotics; narcotics sweep; find dope |
+| Explosives search | search for explosives; explosives search; bomb search; search for a bomb; find the bomb; check for explosives; explosive sweep; bomb sweep |
+| Weapons search | search for weapons; weapons search; gun search; search for a gun; find the weapon; check for firearms; firearm sweep; weapons sweep |
+| Collect scent article | collect scent article; bag the scent; take scent sample; collect scent |
+| Track | start tracking; pick up the scent; follow the scent; find the trail; track the suspect; locate them; find him; find her; find them; track |
+| Apprehend | apprehend the suspect; engage the suspect; take the suspect; send the dog; attack; bite; get him; get her; take him; take her; apprehend; engage |
+| Door pop | door pop; deploy from vehicle; release from car; pop the door |
+| Release | release the suspect; stop the dog; stop apprehension; disengage; break contact; leave it; let go; release; out |
+| Guard | guard the suspect; watch the suspect; cover him; cover her; hold the suspect; watch him; watch her; stand guard; guard; watch |
+| Bark | give an alert; sound off; make noise; bark; alert; speak |
+| Enter vehicle | enter the vehicle; enter vehicle; load into the car; load up; mount up; get in the vehicle; get in the car; get inside; get in |
+| Exit vehicle | exit the vehicle; exit vehicle; unload from the car; dismount; come out; get out of the vehicle; get out of the car; unload; get out |
+| Pet | pet the dog; praise the dog; reward him; reward her; show affection; good dog; pet |
+| Feed / treat | give the dog a treat; give a treat; reward with a treat; give food; feed the dog; treat; feed |
+| Give water | give the dog water; give water; water the dog; get a drink; drink water; water break; hydrate; drink |
+| Rest | rest the dog; take a rest; sleep; rest |
+| Inspect | inspect the dog; check the dog; check status; check injury; check health; medical check; inspect |
+| First aid | give first aid; apply first aid; provide treatment; field treatment; treat the injury; treat injury; first aid |
+| Veterinary care | go to the vet; veterinary care; vet treatment; visit veterinarian; vet |
+| Restock equipment | restock equipment; reload K9 gear; replenish supplies; restock |
+| Toggle leash | attach the leash; put on the leash; take off the leash; remove the leash; leash on; leash off; attach leash; remove leash; leash |
+| K9 camera | activate dog camera; turn on K9 camera; disable dog camera; turn off K9 camera; dog camera; K9 camera; body camera; camera |
+| Core training | go to training; start core training; training ground; begin academy; academy training; core certification course; core training; academy; certification |
+| Narcotics training | start narcotics training; narcotics certification; drug detection training; train for drugs; narcotics academy |
+| Explosives training | start explosives training; bomb certification; bomb detection training; train for explosives; explosives academy |
+| Weapons training | start weapons training; weapons certification; gun detection training; firearm training; weapons academy |
+
+Accepted wake words are the configured dog name, `K9`, `K-9`, `K nine`, `K 9`, `kay nine`, and `canine`.
+
+## Vehicle seat calibration
+
+Load the K9 into a stopped vehicle, open the profile menu with `Left Ctrl + U`, and choose **Vehicle Seat Configuration**. Use left/right on the X, Y and Z rows to position the dog live, then select **Save for this vehicle model**. Each GTA vehicle model keeps its own position in `Plugins/LSPDFR/AdvancedK9/VehicleSeatConfigurations.ini`. Every save is recorded in `VehicleSeatConfigurationLog.csv` and `RagePluginHook.log`.
 
 ## Dog profile and appearance
 
