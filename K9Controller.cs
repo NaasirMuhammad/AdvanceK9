@@ -414,7 +414,54 @@ namespace AdvancedK9
         private void Restock(){var handler=Game.LocalPlayer.Character;var vehicle=World.GetAllVehicles().Where(v=>v.Exists()&&v.DistanceTo(handler)<5f).FirstOrDefault();if(vehicle==null){Game.DisplayNotification("~y~Stand beside a patrol vehicle to restock.");return;}_profile.Restock();K9IncidentLog.Write(_profile.Name,"Equipment","Restocked",handler.Position);Game.DisplayNotification("~g~K9 duty equipment restocked.");}
         private void WhistleRecall(){NativeFunction.Natives.PLAY_SOUND_FRONTEND(-1,"NAV_UP_DOWN","HUD_FRONTEND_DEFAULT_SOUNDSET",true);Game.DisplaySubtitle("~b~Handler whistle recall",1200);Follow();}
         private void HandSignal(){var handler=Game.LocalPlayer.Character;NativeFunction.Natives.REQUEST_ANIM_DICT("gestures@m@standing@casual");GameFiber.Wait(150);handler.Tasks.PlayAnimation("gestures@m@standing@casual","gesture_come_here_soft",4f,AnimationFlags.None);GameFiber.Wait(700);Follow();}
-        private void CollectScent(){var handler=Game.LocalPlayer.Character;Ped target=GetValidAimedSuspect(false)??FindNearestPed(_config.TrackRadius,true);if(target==null){Game.DisplayNotification("~y~Aim at or stand near the track subject first.");return;}if(!_profile.UseScentBag()){Game.DisplayNotification("~r~No clean scent bags. Restock equipment.");return;}_scentTarget=target;_scentCollectedAt=Game.GameTime;_scentRainAtCollection=NativeFunction.Natives.GET_RAIN_LEVEL<float>();K9IncidentLog.Write(_profile.Name,"Scent article","Collected",target.Position);Game.DisplayNotification("~g~Scent article bagged.~s~~n~Subject trail is now assigned to "+_profile.Name+".");}
+        private void CollectScent()
+        {
+            var handler=Game.LocalPlayer.Character;
+            Ped target=GetValidAimedSuspect(false);
+            Vehicle sourceVehicle=null;
+            if(target==null)
+            {
+                sourceVehicle=Game.LocalPlayer.GetFreeAimingTarget() as Vehicle;
+                if(sourceVehicle==null||!sourceVehicle.Exists()||sourceVehicle.DistanceTo(handler)>25f)
+                    sourceVehicle=World.GetAllVehicles().Where(v=>v.Exists()&&v.DistanceTo(handler)<=6f).OrderBy(v=>v.DistanceTo(handler)).FirstOrDefault();
+                if(sourceVehicle!=null)target=FindVehicleScentSubject(sourceVehicle);
+            }
+            if(target==null)
+            {
+                Game.DisplayNotification("~y~No unique track subject identified.~s~~n~Aim at the suspect, or aim at/stand beside the vehicle they fled from, then collect scent.");
+                return;
+            }
+            if(!_profile.UseScentBag()){Game.DisplayNotification("~r~No clean scent bags. Restock equipment.");return;}
+            _scentTarget=target;_scentCollectedAt=Game.GameTime;_scentRainAtCollection=NativeFunction.Natives.GET_RAIN_LEVEL<float>();
+            string source=sourceVehicle==null?"person":"vehicle "+sourceVehicle.Model.Name;
+            K9IncidentLog.Write(_profile.Name,"Scent article","Collected from "+source,target.Position);
+            Game.DisplayNotification("~g~Scent article bagged from "+source+".~s~~n~Track subject locked for "+_profile.Name+".");
+        }
+
+        private Ped FindVehicleScentSubject(Vehicle vehicle)
+        {
+            if(vehicle==null||!vehicle.Exists())return null;
+            var handler=Game.LocalPlayer.Character;
+            var candidates=new List<Ped>();
+            foreach(var ped in World.GetAllPeds())
+            {
+                if(ped==null||!ped.Exists()||ped==handler||ped==_dog||ped.IsDead||LspdfrBridge.IsPedCop(ped))continue;
+                try
+                {
+                    var lastVehicle=NativeFunction.Natives.GET_VEHICLE_PED_IS_IN<Vehicle>(ped,true);
+                    if(lastVehicle!=null&&lastVehicle.Exists()&&lastVehicle.Handle==vehicle.Handle)candidates.Add(ped);
+                }
+                catch{}
+            }
+            if(candidates.Count==1)return candidates[0];
+            if(candidates.Count>1)
+            {
+                Game.DisplayNotification("~y~Multiple recent occupants detected.~s~~n~Aim directly at the person to identify the correct track subject.");
+                return null;
+            }
+            Game.DisplayNotification("~y~No recent non-officer occupant is available for that vehicle.~s~~n~Collect vehicle scent before the fleeing ped despawns.");
+            return null;
+        }
 
         private void Search(bool vehicleOnly=false,DetectionSpecialty specialty=DetectionSpecialty.General)
         {
@@ -492,17 +539,25 @@ namespace AdvancedK9
 
         private void Track()
         {
-            var target = _scentTarget!=null&&_scentTarget.Exists()&&!_scentTarget.IsDead?_scentTarget:FindNearestPed(_config.TrackRadius, true);
+            var aimed=GetValidAimedSuspect(false);
+            if(aimed==null&&_voiceAimedTarget!=null&&_voiceAimedTarget.Exists()&&!_voiceAimedTarget.IsDead&&!LspdfrBridge.IsPedCop(_voiceAimedTarget))aimed=_voiceAimedTarget;
+            var target=aimed??(_scentTarget!=null&&_scentTarget.Exists()&&!_scentTarget.IsDead?_scentTarget:null);
+            _voiceAimedTarget=null;
             if (target == null)
             {
-                Game.DisplayNotification("~y~No trackable person nearby. Face the wanted/missing person and retry.");
+                Game.DisplayNotification("~y~No track subject assigned.~s~~n~Aim at the suspect when issuing TRACK, or collect their scent from a person/vehicle first.");
                 return;
             }
+            if(aimed!=null){_scentTarget=aimed;_scentCollectedAt=Game.GameTime;_scentRainAtCollection=NativeFunction.Natives.GET_RAIN_LEVEL<float>();Game.DisplayNotification("~b~Track subject identified by handler aim.~s~~n~"+_profile.Name+" is acquiring that person's trail.");}
             _state = K9State.Tracking;
             float rain=NativeFunction.Natives.GET_RAIN_LEVEL<float>();float ageMinutes=_scentCollectedAt==0?0:(Game.GameTime-_scentCollectedAt)/60000f;float initialDistance=target.DistanceTo(Game.LocalPlayer.Character);bool inVehicle=target.CurrentVehicle!=null;int scentQuality=Math.Max(5,100-(int)(ageMinutes*8)-(int)(rain*35)-(int)(initialDistance/12)-(inVehicle?22:0));
             if(scentQuality<18){Game.DisplayNotification("~r~Scent trail is too degraded.~s~~n~Collect a fresh scent article; rain, age, distance, and vehicles weaken odor.");return;}
             Game.DisplayNotification("~b~K9 scent track started.~s~ Quality "+scentQuality+"%~n~Rain, trail age, distance, and vehicle travel affect the track.");K9IncidentLog.Write(_profile.Name,"Track","Started quality "+scentQuality+"%",target.Position);
+            _dog.Tasks.Clear();
+            PlayDogAnimation("creatures@rottweiler@indication@","indicate_low",700,0);
+            GameFiber.Wait(250);
             var end = Game.GameTime + 120000;
+            uint nextScentCheck=Game.GameTime+(uint)_random.Next(18000,28001);
             while (_running && DogExists() && target.Exists() && !target.IsDead && Game.GameTime < end && _state == K9State.Tracking)
             {
                 if (_dog.DistanceTo(target) < 3f)
@@ -516,17 +571,22 @@ namespace AdvancedK9
                 var destination = target.Position;
                 float dx = destination.X - _dog.Position.X, dy = destination.Y - _dog.Position.Y;
                 float distance = (float)Math.Sqrt(dx * dx + dy * dy);
-                float step = Math.Min(13f, Math.Max(5f, distance - 2f));
+                float step = Math.Min(28f, Math.Max(12f, distance - 2f));
                 float inv = distance > .01f ? 1f / distance : 0f;
-                float scentJitter = (float)(_random.NextDouble() * 3.0 - 1.5);
+                float scentJitter = (float)(_random.NextDouble() * 1.4 - .7);
                 var waypoint = new Vector3(_dog.Position.X + dx * inv * step - dy * inv * scentJitter,
                                            _dog.Position.Y + dy * inv * step + dx * inv * scentJitter,
                                            destination.Z);
                 _dog.Tasks.Clear();
-                PlayDogAnimation("creatures@rottweiler@indication@", "indicate_low", 650, 0);
-                _dog.Tasks.FollowNavigationMeshToPosition(waypoint, target.Heading, rain>.35f?2.25f:3.25f).WaitForCompletion(10000);
+                if(Game.GameTime>=nextScentCheck)
+                {
+                    PlayDogAnimation("creatures@rottweiler@indication@","indicate_low",550,0);
+                    GameFiber.Wait(150);
+                    nextScentCheck=Game.GameTime+(uint)_random.Next(18000,28001);
+                }
+                _dog.Tasks.FollowNavigationMeshToPosition(waypoint,target.Heading,rain>.35f?2.8f:4.2f).WaitForCompletion(8500);
                 _profile.UseStamina(1);
-                GameFiber.Wait(150);
+                GameFiber.Yield();
             }
             Follow();
         }
