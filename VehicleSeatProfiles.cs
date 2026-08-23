@@ -19,7 +19,7 @@ namespace AdvancedK9
         private readonly Dictionary<string,VehicleSeatProfile> _profiles=new Dictionary<string,VehicleSeatProfile>(StringComparer.OrdinalIgnoreCase);
         private readonly float _defaultX,_defaultY,_defaultZ;
         public VehicleSeatProfiles(float x,float y,float z){_defaultX=x;_defaultY=y;_defaultZ=z;Load();}
-        public VehicleSeatProfile Get(Vehicle vehicle){string key=Key(vehicle);VehicleSeatProfile value;return _profiles.TryGetValue(key,out value)?new VehicleSeatProfile(value.X,value.Y,value.Z):new VehicleSeatProfile(_defaultX,_defaultY,_defaultZ);}
+        public VehicleSeatProfile Get(Vehicle vehicle){Load();string key=Key(vehicle);VehicleSeatProfile value;if(_profiles.TryGetValue(key,out value)){Game.LogTrivial("AdvancedK9 seat profile loaded: "+VehicleName(vehicle)+" ["+key+"] X="+F(value.X)+" Y="+F(value.Y)+" Z="+F(value.Z));return new VehicleSeatProfile(value.X,value.Y,value.Z);}Game.LogTrivial("AdvancedK9 seat profile default used: "+VehicleName(vehicle)+" ["+key+"]");return new VehicleSeatProfile(_defaultX,_defaultY,_defaultZ);}
         public string VehicleName(Vehicle vehicle){if(vehicle==null||!vehicle.Exists())return "UNKNOWN";try{return Rage.Native.NativeFunction.Natives.GET_DISPLAY_NAME_FROM_VEHICLE_MODEL<string>(vehicle.Model.Hash)??Key(vehicle);}catch{return Key(vehicle);}}
         public void Save(Vehicle vehicle,VehicleSeatProfile value)
         {
@@ -30,7 +30,7 @@ namespace AdvancedK9
             File.AppendAllText(_log,string.Join(",",DateTime.Now.ToString("s"),Quote(VehicleName(vehicle)),key,F(value.X),F(value.Y),F(value.Z))+Environment.NewLine);
             Game.LogTrivial("AdvancedK9 seat configuration saved: "+VehicleName(vehicle)+" ["+key+"] X="+F(value.X)+" Y="+F(value.Y)+" Z="+F(value.Z));
         }
-        private void Load(){try{if(!File.Exists(_path))return;foreach(string raw in File.ReadAllLines(_path)){string line=raw.Trim();if(line.Length==0||line.StartsWith(";")||line.StartsWith("#"))continue;int split=line.IndexOf('=');if(split<1)continue;string[] p=line.Substring(split+1).Split(',');float x,y,z;if(p.Length==3&&float.TryParse(p[0],NumberStyles.Float,CultureInfo.InvariantCulture,out x)&&float.TryParse(p[1],NumberStyles.Float,CultureInfo.InvariantCulture,out y)&&float.TryParse(p[2],NumberStyles.Float,CultureInfo.InvariantCulture,out z))_profiles[line.Substring(0,split)]=new VehicleSeatProfile(x,y,z);}}catch(Exception ex){Game.LogTrivial("AdvancedK9 seat profile load: "+ex.Message);}}
+        private void Load(){try{_profiles.Clear();if(!File.Exists(_path))return;foreach(string raw in File.ReadAllLines(_path)){string line=raw.Trim();if(line.Length==0||line.StartsWith(";")||line.StartsWith("#"))continue;int split=line.IndexOf('=');if(split<1)continue;string[] p=line.Substring(split+1).Split(',');float x,y,z;if(p.Length==3&&float.TryParse(p[0],NumberStyles.Float,CultureInfo.InvariantCulture,out x)&&float.TryParse(p[1],NumberStyles.Float,CultureInfo.InvariantCulture,out y)&&float.TryParse(p[2],NumberStyles.Float,CultureInfo.InvariantCulture,out z))_profiles[line.Substring(0,split).Trim()]=new VehicleSeatProfile(x,y,z);}}catch(Exception ex){Game.LogTrivial("AdvancedK9 seat profile load: "+ex.Message);}}
         private static string Key(Vehicle vehicle){return vehicle==null||!vehicle.Exists()?"0":((uint)vehicle.Model.Hash).ToString("X8");}
         private static string F(float v){return v.ToString("0.000",CultureInfo.InvariantCulture);}private static string Quote(string v){return "\""+(v??"").Replace("\"","\"\"")+"\"";}
     }
