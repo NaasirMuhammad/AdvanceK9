@@ -2,6 +2,17 @@
 
 All published AdvancedK9 versions are beta builds.
 
+## 0.21-beta
+
+- Groups the command menu into Partner Control, Search & Detection, Tracking & Scent, Tactical Deployment, Vehicle & Equipment, Care & Medical, and Training & Certifications submenus.
+- Removes all training access from the profile/kennel menu so academy commands exist only under the command menu.
+- Rebuilds the status HUD with a colored agency header, accent rail and separate health, stamina, food and water progress bars.
+- Slows normal hunger and thirst decay from every minute to every three minutes, with lighter idle and working consumption.
+- Displays only certifications the dog has actually completed in inspection and the expanded HUD.
+- Adds live X/Y/Z rear-seat positioning controls while the K9 is seated.
+- Saves offsets independently by vehicle model in `VehicleSeatConfigurations.ini` and records every save in `VehicleSeatConfigurationLog.csv` and the RPH log.
+- Documents every supported voice action and accepted phrase in README.md.
+
 ## 0.20-beta
 
 - Adds twelve realism systems: rear kennel-door staging, weather/heat exposure, rest and fatigue recovery, veterinary treatment, scent articles, scent aging, remote door-pop, varied suspect reactions, whistle/hand signals, persistent duty equipment, CSV incident logging, and GPS K9-camera telemetry.
