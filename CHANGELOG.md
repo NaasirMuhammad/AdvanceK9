@@ -4,6 +4,9 @@ All published AdvancedK9 versions are beta builds.
 
 ## 0.21-beta
 
+- Makes tracking target selection explicit: aim at a suspect while issuing Track, or collect scent from the suspect or their recently occupied vehicle; nearest-ped guessing is removed.
+- Allows vehicle scent collection to resolve a unique recent non-officer occupant and assign that fleeing suspect as the K9 track target.
+- Reworks tracking cadence into one brief scent acquisition followed by sustained 12–28 meter running segments, with realistic scent confirmation only every 18–28 seconds.
 - Changes vehicle searches to four deliberate alert checkpoints at all four corners; negative sweeps remain silent and positive sweeps bark only after the fourth corner.
 - Adds bladder and bowel needs, automatic critical relief, a manual Bathroom Break command, pee effects and a temporary dog-waste prop.
 - Makes General Search report any narcotics, explosives or weapons specialty for which the dog is certified, without requiring the dedicated specialty command.
