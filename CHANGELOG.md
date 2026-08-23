@@ -4,6 +4,8 @@ All published AdvancedK9 versions are beta builds.
 
 ## 0.21-beta
 
+- Removes handler-scent breadcrumb recovery because it interrupted and slowed direct Follow behavior.
+- Allows immediate aimed-target apprehension out to 250 meters with a firearm or taser; the target does not need to be stopped, detained or approached first.
 - Fixes the seat-configuration preview so GTA's active seat task no longer overrides X/Y/Z changes; the K9 now visibly moves and replays its sit pose after every adjustment.
 - Matches Stop The Ped's K9 vehicle behavior by preferring GTA/RPH seat index 2 (right rear), with corrected passenger-side seat bone and rear-door mappings.
 - Adds dedicated Bug's Mods Dalmatian/a_c_husky replacement handling so all seven `hand_diff_000_a_uni` through `hand_diff_000_h_uni` vest textures can be selected in game.
