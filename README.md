@@ -33,7 +33,8 @@ The compiled release includes AdvancedK9, its configuration, and the MIT-license
 - Per-dog XP, certifications, health, injuries, stamina, trust and statistics
 - Optional runtime bridge to Policing Redefined/Common Data Framework search records
 - Persistent 0–100 handler trust with obedience, response-time, detection and deployment effects
-- Handler-safety interlock: friendly relationship group, attack prevention and automatic emergency recall
+- Handler-safety interlock: friendly relationship group, officer-target rejection and automatic emergency recall
+- Immediate aimed-target K9 deployment up to 250 meters; no traffic stop, detention or close approach is required
 - Persistent kennel profile for breed, coat variation, vest style/color and custom K9 name
 - Rear-door kennel staging and remote door-pop deployment from a stopped patrol vehicle
 - Heat, rain, fatigue, injury/limp, rest and veterinary-care simulation
