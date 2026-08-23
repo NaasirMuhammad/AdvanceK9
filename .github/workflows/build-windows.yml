@@ -46,7 +46,7 @@ jobs:
           Copy-Item 'bin/Release/net48/AdvancedK9.dll' $plugins
           Copy-Item 'bin/Release/net48/LemonUI.RagePluginHook.dll' 'package'
           Copy-Item 'Config/AdvancedK9.ini','Config/AcademyCourses.json','Config/CompatibilityPresets.json' $config
-          Copy-Item 'INSTALL.txt','CHANGELOG.md','build-verification.txt' package
+          Copy-Item 'INSTALL.txt','README.md','CHANGELOG.md','build-verification.txt' package
           $forbidden = Get-ChildItem package -Recurse -File | Where-Object { $_.Name -match '^(NAudio|Microsoft\.Win32\.Registry|System\.Security).*\.dll$' }
           if ($forbidden) { throw "Forbidden dependency DLL bundled: $($forbidden.Name -join ', ')" }
           if (-not (Test-Path 'package/Plugins/AdvancedK9.dll')) { throw 'RPH plugin DLL is not in Plugins root.' }
