@@ -94,7 +94,7 @@ Hold `V`, begin with the configured dog name or `K9`, and then say one of the ph
 | Narcotics search | search for narcotics; narcotics search; search for drugs; drug search; find the drugs; check for narcotics; narcotics sweep; find dope |
 | Explosives search | search for explosives; explosives search; bomb search; search for a bomb; find the bomb; check for explosives; explosive sweep; bomb sweep |
 | Weapons search | search for weapons; weapons search; gun search; search for a gun; find the weapon; check for firearms; firearm sweep; weapons sweep |
-| Collect scent article | collect scent article; bag the scent; take scent sample; collect scent |
+| Collect scent article | collect scent article; bag the scent; take scent sample; collect scent — aim at the person, or aim at/stand beside the vehicle they fled from |
 | Track | start tracking; pick up the scent; follow the scent; find the trail; track the suspect; locate them; find him; find her; find them; track |
 | Apprehend | apprehend the suspect; engage the suspect; take the suspect; send the dog; attack; bite; get him; get her; take him; take her; apprehend; engage |
 | Door pop | door pop; deploy from vehicle; release from car; pop the door |
