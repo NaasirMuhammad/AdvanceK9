@@ -41,6 +41,7 @@ The compiled release includes AdvancedK9, its configuration, and the MIT-license
 - Rear-door kennel staging and remote door-pop deployment from a stopped patrol vehicle
 - Heat, rain, fatigue, injury/limp, rest and veterinary-care simulation
 - Bagged scent articles with age, rain, distance and vehicle-travel degradation
+- Track completion is alert-only: the K9 barks, sits and holds without attacking until the handler separately aims and commands Apprehend
 - Surrender, freeze, flee or fight suspect reactions plus whistle and silent hand-signal recall
 - Persistent duty equipment, patrol-vehicle restocking and CSV incident records in `Plugins/LSPDFR/AdvancedK9/K9IncidentLog.csv`
 - GPS K9-camera overlay with heading, handler distance, state and live condition telemetry
