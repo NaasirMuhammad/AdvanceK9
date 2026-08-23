@@ -4,6 +4,11 @@ All published AdvancedK9 versions are beta builds.
 
 ## 0.21-beta
 
+- Changes vehicle searches to four deliberate alert checkpoints at all four corners; negative sweeps remain silent and positive sweeps bark only after the fourth corner.
+- Adds bladder and bowel needs, automatic critical relief, a manual Bathroom Break command, pee effects and a temporary dog-waste prop.
+- Makes General Search report any narcotics, explosives or weapons specialty for which the dog is certified, without requiring the dedicated specialty command.
+- Reloads `VehicleSeatConfigurations.ini` before every vehicle entry and applies the saved offsets through the same forced live-calibration path, preventing GTA's seat task from restoring defaults.
+- Keeps the active K9 rear door open throughout seat calibration and closes it when the user leaves the calibration menu, unloads the K9 or dismisses the partner.
 - Removes handler-scent breadcrumb recovery because it interrupted and slowed direct Follow behavior.
 - Allows immediate aimed-target apprehension out to 250 meters with a firearm or taser; the target does not need to be stopped, detained or approached first.
 - Fixes the seat-configuration preview so GTA's active seat task no longer overrides X/Y/Z changes; the K9 now visibly moves and replays its sit pose after every adjustment.
