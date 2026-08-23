@@ -4,6 +4,7 @@ All published AdvancedK9 versions are beta builds.
 
 ## 0.21-beta
 
+- Adds dedicated Bug's Mods Dalmatian/a_c_husky replacement handling so all seven `hand_diff_000_a_uni` through `hand_diff_000_h_uni` vest textures can be selected in game.
 - Groups the command menu into Partner Control, Search & Detection, Tracking & Scent, Tactical Deployment, Vehicle & Equipment, Care & Medical, and Training & Certifications submenus.
 - Removes all training access from the profile/kennel menu so academy commands exist only under the command menu.
 - Rebuilds the status HUD with a colored agency header, accent rail and separate health, stamina, food and water progress bars.
