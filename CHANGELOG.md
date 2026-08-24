@@ -2,6 +2,27 @@
 
 All published AdvancedK9 versions are beta builds.
 
+## 0.22-beta
+
+- Replaces the one-Boolean Policing Redefined probe with automatic `PolicingRedefined`, `StopThePed`, and `Standalone` compatibility modes.
+- Detects PR, CommonDataFramework and STP versions at runtime without adding hard DLL dependencies; logs the selected integration mode, API member used, search source and fallback reason.
+- Prioritizes the active PR/STP traffic-stop vehicle and interaction pedestrian instead of accidentally selecting a nearby unrelated entity.
+- Reads compatible PR/CDF/STP record, inventory and search results through a guarded adapter and classifies narcotics, explosives and weapons separately.
+- Applies the deployed dog's certifications to integrated odor results and retains standalone fallback searches when an external API is absent or changes.
+- Shares positive/negative K9 indications, located suspects and apprehensions back to compatible public PR/STP writer APIs when exposed.
+- Recognizes PR/STP arrested, cuffed, handcuffed, surrendering, kneeling and transported states and blocks unsafe K9 contact.
+- Keeps tracking and apprehension independent of PR/STP stops: an aimed target up to 250 meters or assigned pursuit suspect remains valid without detention or close approach.
+- Adds automatic PR/STP pursuit-suspect recognition and assigns vehicle-bailout scent plus the recorded foot trail without initiating a stop.
+- Records non-officer pedestrian trail points for up to ten minutes and follows five-minute route segments instead of continuously steering toward the suspect's live coordinates.
+- Adds realistic scent-trail loss and an interactive Reacquire Trail command with a three-point casting pattern.
+- Adds a six-sector Building Search command; located subjects receive an alert bark and hold only, while clear structures finish silently.
+- Adds a separate tactical K9 Warning command with surrender, flee, freeze and fight outcomes. Surrendered suspects are protected from later bite deployment.
+- Removes randomized surrender/freeze delays from a valid aimed Apprehend command so deployment remains immediate after the handler makes the decision.
+- Adds `K9DeploymentReports.csv` with scent source, warning status, track distance/time, bite duration, suspect outcome, K9 injury and disposition.
+- Adds compatibility settings for mode selection, active-target use, result sharing and restrained-ped protection.
+- Updates the menu and voice registry with Search Building, Reacquire Trail and K9 Warning commands and their natural verbal alternatives.
+- Adds best-effort PR/STP arrest handoff plus perimeter, prisoner transport, EMS and bomb-squad service requests, with safe fallback instructions when a compatible public action is unavailable.
+
 ## 0.21-beta
 
 - Makes tracking target selection explicit: aim at a suspect while issuing Track, or collect scent from the suspect or their recently occupied vehicle; nearest-ped guessing is removed.
