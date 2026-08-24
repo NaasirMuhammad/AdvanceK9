@@ -55,7 +55,7 @@ namespace AdvancedK9
         private int _bowel=100;
         private uint _nextReliefUpdate;
         private uint _nextReliefWarning;
-        private readonly Dictionary<int,List<ScentTrailPoint>> _recordedTrails=new Dictionary<int,List<ScentTrailPoint>>();
+        private readonly Dictionary<PoolHandle,List<ScentTrailPoint>> _recordedTrails=new Dictionary<PoolHandle,List<ScentTrailPoint>>();
         private uint _nextTrailCapture;
         private uint _nextPursuitProbe;
         private Ped _compatibilityPursuitSuspect;
