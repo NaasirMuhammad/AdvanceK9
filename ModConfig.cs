@@ -39,6 +39,10 @@ namespace AdvancedK9
         public float VehicleSeatOffsetX = 0f;
         public float VehicleSeatOffsetY = -0.38f;
         public float VehicleSeatOffsetZ = 0.42f;
+        public string CompatibilityMode = "Auto";
+        public bool CompatibilityUseActiveTargets = true;
+        public bool CompatibilityShareResults = true;
+        public bool CompatibilityProtectManagedPeds = true;
 
         public static ModConfig Load()
         {
@@ -80,6 +84,10 @@ namespace AdvancedK9
             result.VehicleSeatOffsetX = ini.ReadSingle("Vehicle", "SeatOffsetX", result.VehicleSeatOffsetX);
             result.VehicleSeatOffsetY = ini.ReadSingle("Vehicle", "SeatOffsetY", result.VehicleSeatOffsetY);
             result.VehicleSeatOffsetZ = ini.ReadSingle("Vehicle", "SeatOffsetZ", result.VehicleSeatOffsetZ);
+            result.CompatibilityMode = ini.ReadString("Compatibility", "Mode", result.CompatibilityMode);
+            result.CompatibilityUseActiveTargets = ini.ReadBoolean("Compatibility", "UseActiveTargets", result.CompatibilityUseActiveTargets);
+            result.CompatibilityShareResults = ini.ReadBoolean("Compatibility", "ShareK9Results", result.CompatibilityShareResults);
+            result.CompatibilityProtectManagedPeds = ini.ReadBoolean("Compatibility", "ProtectRestrainedPeds", result.CompatibilityProtectManagedPeds);
             return result;
         }
 

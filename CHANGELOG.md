@@ -2,6 +2,52 @@
 
 All published AdvancedK9 versions are beta builds.
 
+## 0.22-beta
+
+- Replaces the one-Boolean Policing Redefined probe with automatic `PolicingRedefined`, `StopThePed`, and `Standalone` compatibility modes.
+- Detects PR, CommonDataFramework and STP versions at runtime without adding hard DLL dependencies; logs the selected integration mode, API member used, search source and fallback reason.
+- Prioritizes the active PR/STP traffic-stop vehicle and interaction pedestrian instead of accidentally selecting a nearby unrelated entity.
+- Reads compatible PR/CDF/STP record, inventory and search results through a guarded adapter and classifies narcotics, explosives and weapons separately.
+- Applies the deployed dog's certifications to integrated odor results and retains standalone fallback searches when an external API is absent or changes.
+- Shares positive/negative K9 indications, located suspects and apprehensions back to compatible public PR/STP writer APIs when exposed.
+- Recognizes PR/STP arrested, cuffed, handcuffed, surrendering, kneeling and transported states and blocks unsafe K9 contact.
+- Keeps tracking and apprehension independent of PR/STP stops: an aimed target up to 250 meters or assigned pursuit suspect remains valid without detention or close approach.
+- Adds automatic PR/STP pursuit-suspect recognition and assigns vehicle-bailout scent plus the recorded foot trail without initiating a stop.
+- Records non-officer pedestrian trail points for up to ten minutes and follows five-minute route segments instead of continuously steering toward the suspect's live coordinates.
+- Adds realistic scent-trail loss and an interactive Reacquire Trail command with a three-point casting pattern.
+- Adds a six-sector Building Search command; located subjects receive an alert bark and hold only, while clear structures finish silently.
+- Adds a separate tactical K9 Warning command with surrender, flee, freeze and fight outcomes. Surrendered suspects are protected from later bite deployment.
+- Removes randomized surrender/freeze delays from a valid aimed Apprehend command so deployment remains immediate after the handler makes the decision.
+- Adds `K9DeploymentReports.csv` with scent source, warning status, track distance/time, bite duration, suspect outcome, K9 injury and disposition.
+- Adds compatibility settings for mode selection, active-target use, result sharing and restrained-ped protection.
+- Updates the menu and voice registry with Search Building, Reacquire Trail and K9 Warning commands and their natural verbal alternatives.
+- Adds best-effort PR/STP arrest handoff plus perimeter, prisoner transport, EMS and bomb-squad service requests, with safe fallback instructions when a compatible public action is unavailable.
+
+## 0.21-beta
+
+- Makes tracking target selection explicit: aim at a suspect while issuing Track, or collect scent from the suspect or their recently occupied vehicle; nearest-ped guessing is removed.
+- Allows vehicle scent collection to resolve a unique recent non-officer occupant and assign that fleeing suspect as the K9 track target.
+- Reworks tracking cadence into one brief scent acquisition followed by sustained 12–28 meter running segments, with realistic scent confirmation only every 18–28 seconds.
+- Makes track completion non-contact: the K9 clears its task, barks, sits and holds until the handler separately aims at the located suspect and commands Apprehend.
+- Changes vehicle searches to four deliberate alert checkpoints at all four corners; negative sweeps remain silent and positive sweeps bark only after the fourth corner.
+- Adds bladder and bowel needs, automatic critical relief, a manual Bathroom Break command, pee effects and a temporary dog-waste prop.
+- Makes General Search report any narcotics, explosives or weapons specialty for which the dog is certified, without requiring the dedicated specialty command.
+- Reloads `VehicleSeatConfigurations.ini` before every vehicle entry and applies the saved offsets through the same forced live-calibration path, preventing GTA's seat task from restoring defaults.
+- Keeps the active K9 rear door open throughout seat calibration and closes it when the user leaves the calibration menu, unloads the K9 or dismisses the partner.
+- Removes handler-scent breadcrumb recovery because it interrupted and slowed direct Follow behavior.
+- Allows immediate aimed-target apprehension out to 250 meters with a firearm or taser; the target does not need to be stopped, detained or approached first.
+- Fixes the seat-configuration preview so GTA's active seat task no longer overrides X/Y/Z changes; the K9 now visibly moves and replays its sit pose after every adjustment.
+- Matches Stop The Ped's K9 vehicle behavior by preferring GTA/RPH seat index 2 (right rear), with corrected passenger-side seat bone and rear-door mappings.
+- Adds dedicated Bug's Mods Dalmatian/a_c_husky replacement handling so all seven `hand_diff_000_a_uni` through `hand_diff_000_h_uni` vest textures can be selected in game.
+- Groups the command menu into Partner Control, Search & Detection, Tracking & Scent, Tactical Deployment, Vehicle & Equipment, Care & Medical, and Training & Certifications submenus.
+- Removes all training access from the profile/kennel menu so academy commands exist only under the command menu.
+- Rebuilds the status HUD with a colored agency header, accent rail and separate health, stamina, food and water progress bars.
+- Slows normal hunger and thirst decay from every minute to every three minutes, with lighter idle and working consumption.
+- Displays only certifications the dog has actually completed in inspection and the expanded HUD.
+- Adds live X/Y/Z rear-seat positioning controls while the K9 is seated.
+- Saves offsets independently by vehicle model in `VehicleSeatConfigurations.ini` and records every save in `VehicleSeatConfigurationLog.csv` and the RPH log.
+- Documents every supported voice action and accepted phrase in README.md.
+
 ## 0.20-beta
 
 - Adds twelve realism systems: rear kennel-door staging, weather/heat exposure, rest and fatigue recovery, veterinary treatment, scent articles, scent aging, remote door-pop, varied suspect reactions, whistle/hand signals, persistent duty equipment, CSV incident logging, and GPS K9-camera telemetry.
