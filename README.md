@@ -1,6 +1,6 @@
-# Advanced K9 v0.21-beta for LSPDFR
+# Advanced K9 v0.22-beta for LSPDFR
 
-AdvancedK9 v0.21-beta is a persistent LSPDFR/RAGE Plugin Hook police-dog partner with push-to-talk voice control, per-dog progression, health and a compact EUP-style LemonUI command/profile interface. All published builds are beta builds while gameplay and model compatibility continue to be tested.
+AdvancedK9 v0.22-beta is a persistent LSPDFR/RAGE Plugin Hook police-dog partner with push-to-talk voice control, per-dog progression, health and a compact EUP-style LemonUI command/profile interface. All published builds are beta builds while gameplay and model compatibility continue to be tested.
 
 AdvancedK9 runs as an RPH plugin and starts its controller directly. It avoids a reflection-based LSPDFR duty gate because RPH plugins run in isolated AppDomains. Instead, it follows LSPDFR's own duty-state messages from the active RAGEPluginHook log. GTA's native cop flag is diagnostic only because LSPDFR may set it while the player is still off duty. While off duty, the K9, HUD, menus, shortcuts and voice capture remain disabled. Going off duty closes the UI, stops voice capture and dismisses the active dog.
 
@@ -47,6 +47,13 @@ The compiled release includes AdvancedK9, its configuration, and the MIT-license
 - GPS K9-camera overlay with heading, handler distance, state and live condition telemetry
 - Grouped, scrollable command categories; academy and specialty training appear only inside Training & Certifications.
 - Live per-vehicle rear-seat calibration with saved model profiles and an audit log.
+- Automatic compatibility modes for Policing Redefined/CommonDataFramework, Stop The Ped, or standalone operation.
+- PR/STP active traffic-stop vehicle and interaction-ped targeting, restrained-ped safety, pursuit suspect acquisition, inventory-aware odor classification and best-effort K9 result sharing.
+- Five-minute recorded suspect scent trails with realistic trail loss and a handler-commanded reacquisition cast.
+- Six-sector building searches that end with an alert bark and hold, never an automatic bite.
+- Automatic PR/STP pursuit and vehicle-bailout scent assignment without requiring a ped or traffic stop.
+- Tactical K9 warning with surrender, freeze, flee and fight outcomes before optional separate apprehension.
+- Detailed CSV deployment reports containing warning, scent source, track distance/time, bite duration, injuries and disposition.
 
 ## Build
 
@@ -91,13 +98,21 @@ Hold `V`, begin with the configured dog name or `K9`, and then say one of the ph
 | Hand signal | hand signal; signal recall; silent recall |
 | Fetch | fetch the ball; retrieve the ball; get the ball; bring the ball; go fetch; play fetch; play ball; retrieve; fetch |
 | Search area | search the area; clear the area; sweep the area; check the area; area search; search around; find the odor; search |
+| Search building | search the building; clear the building; building search; clear the rooms; search inside; check the building |
 | Search vehicle | search the vehicle; search this vehicle; search the car; check the vehicle; check the car; sniff the vehicle; sweep the vehicle; vehicle search; search vehicle |
 | Narcotics search | search for narcotics; narcotics search; search for drugs; drug search; find the drugs; check for narcotics; narcotics sweep; find dope |
 | Explosives search | search for explosives; explosives search; bomb search; search for a bomb; find the bomb; check for explosives; explosive sweep; bomb sweep |
 | Weapons search | search for weapons; weapons search; gun search; search for a gun; find the weapon; check for firearms; firearm sweep; weapons sweep |
 | Collect scent article | collect scent article; bag the scent; take scent sample; collect scent — aim at the person, or aim at/stand beside the vehicle they fled from |
 | Track | start tracking; pick up the scent; follow the scent; find the trail; track the suspect; locate them; find him; find her; find them; track |
+| Reacquire trail | reacquire the trail; find the trail again; pick the trail back up; recover the scent; find scent; reacquire scent |
+| K9 warning | give K9 warning; give the warning; police K9 warning; announce the dog; warn the suspect; K9 warning |
 | Apprehend | apprehend the suspect; engage the suspect; take the suspect; send the dog; attack; bite; get him; get her; take him; take her; apprehend; engage |
+| PR/STP arrest handoff | handoff arrest; start arrest handoff; give suspect to policing menu; process suspect; arrest handoff |
+| Request perimeter | request perimeter; set a perimeter; call perimeter units; containment units |
+| Request transport | request prisoner transport; call transport; prisoner transport; transport suspect |
+| Request medical | request EMS; call EMS; request medical; medical assistance |
+| Request bomb squad | request bomb squad; call bomb squad; request explosive unit; bomb disposal |
 | Door pop | door pop; deploy from vehicle; release from car; pop the door |
 | Release | release the suspect; stop the dog; stop apprehension; disengage; break contact; leave it; let go; release; out |
 | Guard | guard the suspect; watch the suspect; cover him; cover her; hold the suspect; watch him; watch her; stand guard; guard; watch |
@@ -184,11 +199,15 @@ Trust persists in `Plugins\LSPDFR\AdvancedK9\trust.dat`. Petting, feeding, succe
 
 The dog uses the handler's friendly relationship group and has friendly attacks disabled. A continuous safety interlock also checks for any invalid combat state involving the handler, clears it immediately and recalls the dog. Trust never overrides this protection.
 
-## Search semantics
+## Compatibility and search semantics
 
-The closest ped or vehicle in range is searched. If an installed Policing Redefined release exposes a compatible public K9/contraband query, its result is used. Otherwise the fallback probability in `AdvancedK9.ini` is used. This prevents a hard dependency on prerelease API signatures while keeping the mod loadable by itself.
+`Compatibility.Mode=Auto` selects Policing Redefined/CommonDataFramework first, Stop The Ped second, and standalone fallback otherwise. Never run Policing Redefined and Stop The Ped together. No external compatibility assembly is a hard dependency.
 
-Vehicle searches visit eight exterior checkpoints around both sides, front and rear before the result is determined. For apprehension, aim a taser or firearm directly at the intended suspect and keep that person in your sights while issuing the command; proximity alone never chooses the target.
+When supported by the detected plugin, AdvancedK9 prioritizes its active traffic-stop vehicle or selected pedestrian, reads exposed inventory/search records, classifies narcotics, explosives and weapons, shares K9 indications, recognizes pursuit suspects and vehicle bailouts, and rejects restrained, surrendered, arrested or transported peds from apprehension. Detailed adapter/version/API diagnostics are written to `RagePluginHook.log`. Tracking and apprehension never require a PR or STP stop.
+
+When no compatible target or record API is exposed, the closest valid ped/vehicle and `AdvancedK9.ini` fallback probability are used. This prevents API changes from stopping the plugin from loading.
+
+Vehicle searches visit all four exterior corners before the result is determined. For apprehension, aim a taser or firearm directly at the intended suspect and keep that person in your sights while issuing the command; proximity alone never chooses the target.
 
 ## Safety and limitations
 
