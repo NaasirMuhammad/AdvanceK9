@@ -1,6 +1,6 @@
-# Advanced K9 v0.22-beta for LSPDFR
+# Advanced K9 v0.22.1-beta for LSPDFR
 
-AdvancedK9 v0.22-beta is a persistent LSPDFR/RAGE Plugin Hook police-dog partner with push-to-talk voice control, per-dog progression, health and a compact EUP-style LemonUI command/profile interface. All published builds are beta builds while gameplay and model compatibility continue to be tested.
+AdvancedK9 v0.22.1-beta is a persistent LSPDFR/RAGE Plugin Hook police-dog partner with push-to-talk voice control, per-dog progression, health and a compact EUP-style LemonUI command/profile interface. All published builds are beta builds while gameplay and model compatibility continue to be tested.
 
 AdvancedK9 runs as an RPH plugin and starts its controller directly. It avoids a reflection-based LSPDFR duty gate because RPH plugins run in isolated AppDomains. Instead, it follows LSPDFR's own duty-state messages from the active RAGEPluginHook log. GTA's native cop flag is diagnostic only because LSPDFR may set it while the player is still off duty. While off duty, the K9, HUD, menus, shortcuts and voice capture remain disabled. Going off duty closes the UI, stops voice capture and dismisses the active dog.
 
@@ -19,7 +19,7 @@ The compiled release includes AdvancedK9, its configuration, and the MIT-license
 - Automatic operational leash release when search, tracking, fetch or apprehension is deployed
 - Pedestrian and four-corner vehicle odor searches; silent sit means clear, sit plus repeated bark after the completed sweep means positive
 - General searches identify narcotics, explosives or weapons whenever the deployed dog holds the corresponding specialty certification
-- Bladder and bowel needs, automatic relief, manual bathroom-break commands, urine effects and temporary dog-waste props
+- Automatic natural bladder and bowel relief during safe idle periods, with urine effects and temporary dog-waste props
 - Track a nearby suspect or missing person for up to two minutes
 - Non-lethal apprehension with automatic recall, a configurable health floor and hands-up surrender
 - Fetch minigame
@@ -31,7 +31,7 @@ The compiled release includes AdvancedK9, its configuration, and the MIT-license
 - Push-to-talk voice recognition using OpenAI or Groq transcription; the microphone opens only while `V` is held
 - Persistent command and profile menus that remain open until explicitly closed
 - Runtime command registry shared by menu and voice recognition, with multiple natural verbal alternatives for every action
-- Movable, scalable compact/expanded K9 status HUD
+- Fully optional K9 status HUD with five designs, icon sets, color themes and text styles plus individual data toggles
 - Per-dog XP, certifications, health, injuries, stamina, trust and statistics
 - Optional runtime bridge to Policing Redefined/Common Data Framework search records
 - Persistent 0–100 handler trust with obedience, response-time, detection and deployment effects
@@ -122,7 +122,6 @@ Hold `V`, begin with the configured dog name or `K9`, and then say one of the ph
 | Pet | pet the dog; praise the dog; reward him; reward her; show affection; good dog; pet |
 | Feed / treat | give the dog a treat; give a treat; reward with a treat; give food; feed the dog; treat; feed |
 | Give water | give the dog water; give water; water the dog; get a drink; drink water; water break; hydrate; drink |
-| Bathroom break | bathroom break; go potty; go pee; go poop; relieve yourself; do your business; potty; pee; poop |
 | Rest | rest the dog; take a rest; sleep; rest |
 | Inspect | inspect the dog; check the dog; check status; check injury; check health; medical check; inspect |
 | First aid | give first aid; apply first aid; provide treatment; field treatment; treat the injury; treat injury; first aid |
@@ -178,6 +177,10 @@ Model=whisper-large-v3-turbo
 Language=en
 ApiKey=gsk_your_key_here
 ApiKeyEnvironmentVariable=GROQ_API_KEY
+
+[Notifications]
+ShowVoiceStatusText=false
+ShowActionNotifications=false
 ```
 
 Do not add quotes around the key. Save the INI and restart RAGE Plugin Hook because voice configuration is loaded when the plugin starts. The key is never displayed or logged. If `ApiKey` is blank, the configured environment variable is used as an optional fallback.
@@ -192,6 +195,10 @@ ApiKeyEnvironmentVariable=OPENAI_API_KEY
 ```
 
 AI voice requires internet access and may incur provider charges. Audio is sent only while push-to-talk is held. `ContinuousListening` is retained as a legacy setting but is intentionally ignored. Set `Enabled=false` for keyboard-only play; all commands remain accessible through `Left Ctrl + J`.
+
+Holding V is silent by default. Voice errors remain visible even when status text is disabled. Routine command acknowledgement popups are also disabled by default; K9 search/detection results, failures and safety warnings remain visible.
+
+Updates preserve the live AdvancedK9.ini. The release package supplies AdvancedK9.default.ini and copies it to the live name only when no user configuration exists.
 
 ## Trust and handler safety
 

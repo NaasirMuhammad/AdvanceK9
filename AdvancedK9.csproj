@@ -22,6 +22,7 @@
     <MakeDir Directories="$(GtaVDir)\Plugins\LSPDFR\AdvancedK9" />
     <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(GtaVDir)\Plugins" />
     <Copy SourceFiles="@(ReferenceCopyLocalPaths)" DestinationFolder="$(GtaVDir)\Plugins\LSPDFR" SkipUnchangedFiles="true" />
-    <Copy SourceFiles="Config\AdvancedK9.ini;Config\AcademyCourses.json;Config\CompatibilityPresets.json" DestinationFolder="$(GtaVDir)\Plugins\LSPDFR\AdvancedK9" />
+    <Copy SourceFiles="Config\AdvancedK9.ini" DestinationFiles="$(GtaVDir)\Plugins\LSPDFR\AdvancedK9\AdvancedK9.default.ini" />
+    <Copy SourceFiles="Config\AcademyCourses.json;Config\CompatibilityPresets.json" DestinationFolder="$(GtaVDir)\Plugins\LSPDFR\AdvancedK9" />
   </Target>
 </Project>

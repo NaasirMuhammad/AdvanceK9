@@ -1,4 +1,4 @@
-ADVANCED K9 v0.22-beta — DRAG-AND-DROP INSTALL
+ADVANCED K9 v0.22.1-beta — DRAG-AND-DROP INSTALL
 
 1. Close GTA V and RAGE Plugin Hook.
 2. Open the compiled release ZIP.
@@ -13,7 +13,10 @@ become available after LSPDFR places the player on duty.
 Correct file locations
   LemonUI.RagePluginHook.dll
   Plugins\AdvancedK9.dll
-  Plugins\LSPDFR\AdvancedK9\AdvancedK9.ini
+  Plugins\LSPDFR\AdvancedK9\AdvancedK9.default.ini
+
+The default file is copied to AdvancedK9.ini only on a first installation.
+Existing AdvancedK9.ini files and user settings are never replaced by updates.
 
 Remove any older copy at Plugins\LSPDFR\AdvancedK9.dll. AdvancedK9 is a
 RAGE Plugin Hook plugin that monitors LSPDFR duty state; it is not loaded by
@@ -28,7 +31,7 @@ Controls
   Hold V          AI push-to-talk
 
 K9 care
-  FOOD and H2O are shown on the HUD and persist in profile.dat. Use Feed and
+  FOOD and H2O can be shown on the optional HUD and persist in profile.dat. Use Feed and
   Give Water from the command menu or say commands such as "K9, feed" and
   "K9, give water." Active deployments consume water and food more quickly.
 

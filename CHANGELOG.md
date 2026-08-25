@@ -2,6 +2,18 @@
 
 All published AdvancedK9 versions are beta builds.
 
+## 0.22.1-beta
+
+- Makes urination and bowel relief fully automatic during safe idle periods; removes the menu command, verbal phrases, HUD meters and routine bathroom notifications.
+- Makes push-to-talk listening/transcribing text optional and disabled by default; microphone, API and transcription failures always remain visible.
+- Makes routine K9 command/action notifications optional and disabled by default while preserving errors, safety warnings and actual K9 outcomes such as positive/negative detection results.
+- Removes the gardening scenario/prop from petting and uses a prop-free handler interaction.
+- Removes the handler bending/gardening animation from feeding and watering; a real bowl is placed in front of the K9 for the eating/drinking interaction.
+- Adds five HUD designs, five icon treatments, five color themes and five text treatments.
+- Makes state, health, stamina, food, water, certifications, trust, training, injury and voice HUD fields individually optional and persistent.
+- Preserves an existing AdvancedK9.ini during updates. The package now ships AdvancedK9.default.ini, copied to the live filename only on a first installation.
+- Keeps the latest LemonUI RPH package (2.2.0) while removing the direct MouseBehavior setter dependency that caused older runtime DLLs to throw MissingMethodException.
+
 ## 0.22-beta
 
 - Replaces the one-Boolean Policing Redefined probe with automatic `PolicingRedefined`, `StopThePed`, and `Standalone` compatibility modes.
@@ -30,7 +42,7 @@ All published AdvancedK9 versions are beta builds.
 - Reworks tracking cadence into one brief scent acquisition followed by sustained 12–28 meter running segments, with realistic scent confirmation only every 18–28 seconds.
 - Makes track completion non-contact: the K9 clears its task, barks, sits and holds until the handler separately aims at the located suspect and commands Apprehend.
 - Changes vehicle searches to four deliberate alert checkpoints at all four corners; negative sweeps remain silent and positive sweeps bark only after the fourth corner.
-- Adds bladder and bowel needs, automatic critical relief, a manual Bathroom Break command, pee effects and a temporary dog-waste prop.
+- Adds bladder and bowel needs, automatic relief, pee effects and a temporary dog-waste prop.
 - Makes General Search report any narcotics, explosives or weapons specialty for which the dog is certified, without requiring the dedicated specialty command.
 - Reloads `VehicleSeatConfigurations.ini` before every vehicle entry and applies the saved offsets through the same forced live-calibration path, preventing GTA's seat task from restoring defaults.
 - Keeps the active K9 rear door open throughout seat calibration and closes it when the user leaves the calibration menu, unloads the K9 or dismisses the partner.

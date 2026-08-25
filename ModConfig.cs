@@ -16,6 +16,8 @@ namespace AdvancedK9
         public Keys KennelKey = Keys.U;
         public bool VoiceEnabled = true;
         public bool ContinuousListening = false;
+        public bool ShowVoiceStatusText = false;
+        public bool ShowActionNotifications = false;
         public string VoiceProvider = "Groq";
         public string VoiceModel = "whisper-large-v3-turbo";
         public string VoiceLanguage = "en";
@@ -48,6 +50,13 @@ namespace AdvancedK9
         {
             var result = new ModConfig();
             var path = Path.Combine("Plugins", "LSPDFR", "AdvancedK9", "AdvancedK9.ini");
+            var defaults = Path.Combine("Plugins", "LSPDFR", "AdvancedK9", "AdvancedK9.default.ini");
+            if (!File.Exists(path) && File.Exists(defaults))
+            {
+                var directory = Path.GetDirectoryName(path);
+                if (!Directory.Exists(directory)) Directory.CreateDirectory(directory);
+                File.Copy(defaults, path, false);
+            }
             var ini = new InitializationFile(path);
             if (!File.Exists(path)) ini.Create();
             result.SpawnKey = ini.ReadEnum("Keys", "SpawnDismiss", result.SpawnKey);
@@ -61,6 +70,8 @@ namespace AdvancedK9
             // Continuous capture is intentionally disabled. Voice is push-to-talk only so
             // ambient game, radio and room audio cannot trigger K9 commands.
             result.ContinuousListening = false;
+            result.ShowVoiceStatusText = ini.ReadBoolean("Notifications", "ShowVoiceStatusText", result.ShowVoiceStatusText);
+            result.ShowActionNotifications = ini.ReadBoolean("Notifications", "ShowActionNotifications", result.ShowActionNotifications);
             result.VoiceProvider = ini.ReadString("Voice", "Provider", result.VoiceProvider);
             result.VoiceModel = ini.ReadString("Voice", "Model", result.VoiceModel);
             result.VoiceLanguage = ini.ReadString("Voice", "Language", result.VoiceLanguage);

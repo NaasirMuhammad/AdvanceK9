@@ -50,6 +50,20 @@ namespace AdvancedK9
         public float HudY { get; private set; } = .16f;
         public float HudScale { get; private set; } = 1f;
         public int HudMode { get; private set; } = 1;
+        public int HudDesign { get; private set; }
+        public int HudIconSet { get; private set; }
+        public int HudColorTheme { get; private set; }
+        public int HudTextStyle { get; private set; }
+        public bool HudShowState { get; private set; } = true;
+        public bool HudShowHealth { get; private set; } = true;
+        public bool HudShowStamina { get; private set; } = true;
+        public bool HudShowFood { get; private set; } = true;
+        public bool HudShowWater { get; private set; } = true;
+        public bool HudShowCertifications { get; private set; } = true;
+        public bool HudShowTrust { get; private set; } = true;
+        public bool HudShowTraining { get; private set; } = true;
+        public bool HudShowInjury { get; private set; } = true;
+        public bool HudShowVoice { get; private set; }
 
         public string Breed => Breeds[BreedIndex];
         public string ModelName => !string.IsNullOrWhiteSpace(CustomModel) && VestIndex == 11 ? CustomModel : Models[BreedIndex];
@@ -70,6 +84,7 @@ namespace AdvancedK9
             LoadSpecialtyProgress();
             LoadNeeds();
             LoadOperationalData();
+            LoadHudPreferences();
             MigrateTrainingProgress();
         }
 
@@ -108,6 +123,11 @@ namespace AdvancedK9
         public void SetInjury(string injury,int health){Injury=injury??"None";Health=Clamp(health,0,100);Save();}
         public void FirstAid(){Health=Clamp(Health+20,0,100);if(Health>=70)Injury="Minor/treated";Save();}
         public void CycleHudMode(){HudMode=(HudMode+1)%3;Save();} public void MoveHud(float x,float y){HudX=Math.Max(.13f,Math.Min(.87f,HudX+x));HudY=Math.Max(.08f,Math.Min(.90f,HudY+y));Save();} public void ScaleHud(){HudScale+=.1f;if(HudScale>1.5f)HudScale=.7f;Save();}
+        public void AdjustHudDesign(int delta){HudDesign=Wrap(HudDesign+delta,5);Save();}
+        public void AdjustHudIcons(int delta){HudIconSet=Wrap(HudIconSet+delta,5);Save();}
+        public void AdjustHudColor(int delta){HudColorTheme=Wrap(HudColorTheme+delta,5);Save();}
+        public void AdjustHudText(int delta){HudTextStyle=Wrap(HudTextStyle+delta,5);Save();}
+        public void ToggleHudField(int field){switch(field){case 0:HudShowState=!HudShowState;break;case 1:HudShowHealth=!HudShowHealth;break;case 2:HudShowStamina=!HudShowStamina;break;case 3:HudShowFood=!HudShowFood;break;case 4:HudShowWater=!HudShowWater;break;case 5:HudShowCertifications=!HudShowCertifications;break;case 6:HudShowTrust=!HudShowTrust;break;case 7:HudShowTraining=!HudShowTraining;break;case 8:HudShowInjury=!HudShowInjury;break;case 9:HudShowVoice=!HudShowVoice;break;}Save();}
 
         public void Apply(Ped dog)
         {
@@ -136,7 +156,7 @@ namespace AdvancedK9
             {
                 var directory = Path.GetDirectoryName(_path);
                 if (!Directory.Exists(directory)) Directory.CreateDirectory(directory);
-                File.WriteAllLines(_path, new[]{"Version=7","Name="+Name,"Breed="+BreedIndex,"Skin="+CoatVariation,"Equipment="+VestIndex,"Texture="+VestTexture,"XP="+TrainingXp,"Trust="+Trust,"Health="+Health,"Stamina="+Stamina,"Injury="+Injury,"Food="+Food,"Water="+Water,"FoodMeals="+FoodMeals,"WaterBottles="+WaterBottles,"FirstAidKits="+FirstAidKits,"ScentBags="+ScentBags,"Treats="+Treats,"TrainingLevel="+TrainingLevel,"TrainingProgress="+TrainingLevelProgress,"CertObedience="+ObedienceCertified,"CertAgility="+AgilityCertified,"CertDetection="+DetectionCertified,"CertTracking="+TrackingCertified,"CertApprehension="+ApprehensionCertified,"NarcoticsProgress="+NarcoticsProgress,"ExplosivesProgress="+ExplosivesProgress,"WeaponsProgress="+WeaponsProgress,"CertNarcotics="+NarcoticsCertified,"CertExplosives="+ExplosivesCertified,"CertWeapons="+WeaponsCertified,"Deployments="+Deployments,"Searches="+SuccessfulSearches,"HudX="+HudX,"HudY="+HudY,"HudScale="+HudScale,"HudMode="+HudMode});
+                File.WriteAllLines(_path, new[]{"Version=8","Name="+Name,"Breed="+BreedIndex,"Skin="+CoatVariation,"Equipment="+VestIndex,"Texture="+VestTexture,"XP="+TrainingXp,"Trust="+Trust,"Health="+Health,"Stamina="+Stamina,"Injury="+Injury,"Food="+Food,"Water="+Water,"FoodMeals="+FoodMeals,"WaterBottles="+WaterBottles,"FirstAidKits="+FirstAidKits,"ScentBags="+ScentBags,"Treats="+Treats,"TrainingLevel="+TrainingLevel,"TrainingProgress="+TrainingLevelProgress,"CertObedience="+ObedienceCertified,"CertAgility="+AgilityCertified,"CertDetection="+DetectionCertified,"CertTracking="+TrackingCertified,"CertApprehension="+ApprehensionCertified,"NarcoticsProgress="+NarcoticsProgress,"ExplosivesProgress="+ExplosivesProgress,"WeaponsProgress="+WeaponsProgress,"CertNarcotics="+NarcoticsCertified,"CertExplosives="+ExplosivesCertified,"CertWeapons="+WeaponsCertified,"Deployments="+Deployments,"Searches="+SuccessfulSearches,"HudX="+HudX,"HudY="+HudY,"HudScale="+HudScale,"HudMode="+HudMode,"HudDesign="+HudDesign,"HudIconSet="+HudIconSet,"HudColorTheme="+HudColorTheme,"HudTextStyle="+HudTextStyle,"HudShowState="+HudShowState,"HudShowHealth="+HudShowHealth,"HudShowStamina="+HudShowStamina,"HudShowFood="+HudShowFood,"HudShowWater="+HudShowWater,"HudShowCertifications="+HudShowCertifications,"HudShowTrust="+HudShowTrust,"HudShowTraining="+HudShowTraining,"HudShowInjury="+HudShowInjury,"HudShowVoice="+HudShowVoice});
             }
             catch (Exception ex) { Game.LogTrivial("AdvancedK9 profile save: " + ex.Message); }
         }
@@ -179,6 +199,7 @@ namespace AdvancedK9
         private void LoadSpecialtyProgress(){try{if(!File.Exists(_path))return;foreach(var line in File.ReadAllLines(_path)){int split=line.IndexOf('=');if(split<1)continue;string key=line.Substring(0,split),value=line.Substring(split+1);int number;bool flag;if(key=="NarcoticsProgress"&&int.TryParse(value,out number))NarcoticsProgress=Clamp(number,0,100);else if(key=="ExplosivesProgress"&&int.TryParse(value,out number))ExplosivesProgress=Clamp(number,0,100);else if(key=="WeaponsProgress"&&int.TryParse(value,out number))WeaponsProgress=Clamp(number,0,100);else if(key=="CertNarcotics"&&bool.TryParse(value,out flag))NarcoticsCertified=flag;else if(key=="CertExplosives"&&bool.TryParse(value,out flag))ExplosivesCertified=flag;else if(key=="CertWeapons"&&bool.TryParse(value,out flag))WeaponsCertified=flag;}}catch(Exception ex){Game.LogTrivial("AdvancedK9 specialty profile load: "+ex.Message);}}
         private void LoadNeeds(){try{if(!File.Exists(_path))return;foreach(var line in File.ReadAllLines(_path)){int split=line.IndexOf('=');if(split<1)continue;string key=line.Substring(0,split),value=line.Substring(split+1);int number;if(key=="Food"&&int.TryParse(value,out number))Food=Clamp(number,0,100);else if(key=="Water"&&int.TryParse(value,out number))Water=Clamp(number,0,100);}}catch(Exception ex){Game.LogTrivial("AdvancedK9 needs profile load: "+ex.Message);}}
         private void LoadOperationalData(){try{if(!File.Exists(_path))return;foreach(var line in File.ReadAllLines(_path)){int split=line.IndexOf('=');if(split<1)continue;string key=line.Substring(0,split),value=line.Substring(split+1);int n;if(!int.TryParse(value,out n))continue;if(key=="FoodMeals")FoodMeals=Math.Max(0,n);else if(key=="WaterBottles")WaterBottles=Math.Max(0,n);else if(key=="FirstAidKits")FirstAidKits=Math.Max(0,n);else if(key=="ScentBags")ScentBags=Math.Max(0,n);else if(key=="Treats")Treats=Math.Max(0,n);}}catch(Exception ex){Game.LogTrivial("AdvancedK9 equipment load: "+ex.Message);}}
+        private void LoadHudPreferences(){try{if(!File.Exists(_path))return;foreach(var line in File.ReadAllLines(_path)){int split=line.IndexOf('=');if(split<1)continue;string key=line.Substring(0,split),value=line.Substring(split+1);int n;bool flag;if(key=="HudDesign"&&int.TryParse(value,out n))HudDesign=Clamp(n,0,4);else if(key=="HudIconSet"&&int.TryParse(value,out n))HudIconSet=Clamp(n,0,4);else if(key=="HudColorTheme"&&int.TryParse(value,out n))HudColorTheme=Clamp(n,0,4);else if(key=="HudTextStyle"&&int.TryParse(value,out n))HudTextStyle=Clamp(n,0,4);else if(key=="HudShowState"&&bool.TryParse(value,out flag))HudShowState=flag;else if(key=="HudShowHealth"&&bool.TryParse(value,out flag))HudShowHealth=flag;else if(key=="HudShowStamina"&&bool.TryParse(value,out flag))HudShowStamina=flag;else if(key=="HudShowFood"&&bool.TryParse(value,out flag))HudShowFood=flag;else if(key=="HudShowWater"&&bool.TryParse(value,out flag))HudShowWater=flag;else if(key=="HudShowCertifications"&&bool.TryParse(value,out flag))HudShowCertifications=flag;else if(key=="HudShowTrust"&&bool.TryParse(value,out flag))HudShowTrust=flag;else if(key=="HudShowTraining"&&bool.TryParse(value,out flag))HudShowTraining=flag;else if(key=="HudShowInjury"&&bool.TryParse(value,out flag))HudShowInjury=flag;else if(key=="HudShowVoice"&&bool.TryParse(value,out flag))HudShowVoice=flag;}}catch(Exception ex){Game.LogTrivial("AdvancedK9 HUD preference load: "+ex.Message);}}
 
         private static int FindVestComponent(Ped dog)
         {

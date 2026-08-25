@@ -28,7 +28,9 @@ namespace AdvancedK9
             _menu.Width = 330f;
             _menu.MaxItems = 6;
             _menu.Offset = new PointF(18f, 28f);
-            _menu.MouseBehavior = MenuMouseBehavior.Disabled;
+            // Do not call NativeMenu.MouseBehavior here. Older LemonUI RPH builds do
+            // not expose this setter and would throw MissingMethodException while the
+            // controller starts. Keyboard-only operation remains the default.
             _menu.BannerText.Text = "ADVANCED K9";
             _menu.BannerText.Scale = 0.56f;
             _menu.BannerText.Color = Color.White;
