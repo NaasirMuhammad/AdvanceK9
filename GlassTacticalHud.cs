@@ -39,10 +39,11 @@ namespace AdvancedK9
                 DisposePortrait();
                 string root=Path.Combine("Plugins","LSPDFR","AdvancedK9","Portraits");
                 string configured=ResolvePortraitPath(value.PortraitFile);
+                string profile=Path.Combine(root,SafeName(value.Name)+".png");
                 string model=Path.Combine(root,SafeName(value.Model)+".png");
                 string breed=Path.Combine(root,SafeName(value.Breed)+".png");
                 string fallback=Path.Combine(root,"default.png");
-                string selected=File.Exists(configured)?configured:File.Exists(model)?model:File.Exists(breed)?breed:File.Exists(fallback)?fallback:null;
+                string selected=File.Exists(configured)?configured:File.Exists(profile)?profile:File.Exists(model)?model:File.Exists(breed)?breed:File.Exists(fallback)?fallback:null;
                 if(selected!=null){_portrait=Game.CreateTextureFromFile(selected);Game.LogTrivial("AdvancedK9 HUD portrait cached: "+selected);}
                 else Game.LogTrivial("AdvancedK9 HUD portrait fallback: no custom/model/breed image; using breed badge.");
             }
@@ -90,6 +91,7 @@ namespace AdvancedK9
                 }
                 DrawText(args.Graphics,"K9 "+Upper(s.Name),left,box.Y+10f*scale,20f*scale,Color.White);
                 if(s.ShowState)DrawText(args.Graphics,Upper(s.State),box.Right-91f*scale,box.Y+12f*scale,14f*scale,StateColor(s.State));
+                DrawText(args.Graphics,"🐾",box.Right-31f*scale,box.Bottom-30f*scale,20f*scale,Color.FromArgb(255,35,214,235),"Segoe UI Symbol");
                 float row=box.Y+42f*scale;
                 if(s.ShowHealth){DrawMeter(args.Graphics,"HEALTH",s.Health,left,row,box.Right-left-12f*scale,Color.FromArgb(255,58,210,118),scale);row+=25f*scale;}
                 if(s.ShowStamina){DrawMeter(args.Graphics,"STAMINA",s.Stamina,left,row,box.Right-left-12f*scale,Color.FromArgb(255,35,214,235),scale);row+=25f*scale;}
@@ -118,11 +120,12 @@ namespace AdvancedK9
 
         private static void DrawGlass(Rage.Graphics g,RectangleF r,int alpha){g.DrawRectangle(r,Color.FromArgb(230,35,215,235));g.DrawRectangle(new RectangleF(r.X+2,r.Y+2,r.Width-4,r.Height-4),Color.FromArgb(alpha,10,18,24));g.DrawRectangle(new RectangleF(r.X+4,r.Y+4,r.Width-8,1),Color.FromArgb(115,74,105,116));}
         private static void DrawMeter(Rage.Graphics g,string label,int value,float x,float y,float width,Color color,float scale){DrawText(g,label+"  "+value+"%",x,y,12f*scale,Color.FromArgb(255,225,239,242));float barY=y+17f*scale;g.DrawRectangle(new RectangleF(x,barY,width,4f*scale),Color.FromArgb(220,38,49,56));g.DrawRectangle(new RectangleF(x,barY,width*Math.Max(0,Math.Min(100,value))/100f,4f*scale),color);}
-        private static void DrawText(Rage.Graphics g,string text,float x,float y,float size,Color color){if(string.IsNullOrWhiteSpace(text))return;g.DrawText(text,"Arial Narrow",size,new PointF(x,y),color);}
+        private static void DrawText(Rage.Graphics g,string text,float x,float y,float size,Color color){DrawText(g,text,x,y,size,color,"Arial Narrow");}
+        private static void DrawText(Rage.Graphics g,string text,float x,float y,float size,Color color,string font){if(string.IsNullOrWhiteSpace(text))return;g.DrawText(text,font,size,new PointF(x,y),color);}
         private static string Upper(string value)=>(value??"").ToUpperInvariant();
         private static string Join(string current,string value)=>string.IsNullOrWhiteSpace(current)?value:current+"  •  "+value;
         private static string BreedBadge(string breed){if(string.IsNullOrWhiteSpace(breed))return "K9";string[] words=breed.Split(' ');return words.Length>1?(words[0][0].ToString()+words[1][0]).ToUpperInvariant():breed.Substring(0,Math.Min(2,breed.Length)).ToUpperInvariant();}
-        private static Color StateColor(string state){return state!=null&&(state.IndexOf("search",StringComparison.OrdinalIgnoreCase)>=0||state.IndexOf("track",StringComparison.OrdinalIgnoreCase)>=0||state.IndexOf("appreh",StringComparison.OrdinalIgnoreCase)>=0)?Color.FromArgb(255,245,179,62):Color.FromArgb(255,65,222,138);}
+        private static Color StateColor(string state){if(state!=null&&state.IndexOf("down",StringComparison.OrdinalIgnoreCase)>=0)return Color.FromArgb(255,255,82,82);return state!=null&&(state.IndexOf("search",StringComparison.OrdinalIgnoreCase)>=0||state.IndexOf("track",StringComparison.OrdinalIgnoreCase)>=0||state.IndexOf("appreh",StringComparison.OrdinalIgnoreCase)>=0)?Color.FromArgb(255,245,179,62):Color.FromArgb(255,65,222,138);}
         private void DisposePortrait(){var disposable=_portrait as IDisposable;if(disposable!=null)disposable.Dispose();_portrait=null;}
         public void Dispose(){if(_disposed)return;_disposed=true;Game.RawFrameRender-=Render;DisposePortrait();}
     }

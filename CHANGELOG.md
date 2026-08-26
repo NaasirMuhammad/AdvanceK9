@@ -2,6 +2,16 @@
 
 All published AdvancedK9 versions are beta builds.
 
+## 0.22.3-beta
+
+- Replaced the dead-K9/kenneled-state collision with a recoverable `DOWNED` state.
+- A critically injured K9 keeps its field position and red K9 blip instead of being reported as kenneled.
+- Care & Medical > First Aid now revives and stabilizes a downed K9; veterinary care is still required for full recovery.
+- Recreates a deployed K9 at its last known position as downed if another plugin removes the dead ped before treatment.
+- Added the missing cyan paw indicator to the Glass Tactical HUD.
+- Portrait lookup now checks the explicit override, K9 profile name, ped model, breed and default image in that order.
+- Reduced HUD snapshot work to 20 updates per second, kennel proximity checks to four per second, and scent sampling to a capped 2.5-second pass within 200 meters to reduce intermittent frame hitches.
+
 ## 0.22.2-beta
 
 - Replaces the legacy panel with one compact lower-right Glass Tactical card using smoked charcoal, a thin cyan frame, condensed white text, green health status and attached amber K9 alerts.
