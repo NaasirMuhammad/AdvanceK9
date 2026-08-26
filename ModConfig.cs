@@ -45,6 +45,7 @@ namespace AdvancedK9
         public bool CompatibilityUseActiveTargets = true;
         public bool CompatibilityShareResults = true;
         public bool CompatibilityProtectManagedPeds = true;
+        public string PortraitFile = "";
 
         public static ModConfig Load()
         {
@@ -99,6 +100,7 @@ namespace AdvancedK9
             result.CompatibilityUseActiveTargets = ini.ReadBoolean("Compatibility", "UseActiveTargets", result.CompatibilityUseActiveTargets);
             result.CompatibilityShareResults = ini.ReadBoolean("Compatibility", "ShareK9Results", result.CompatibilityShareResults);
             result.CompatibilityProtectManagedPeds = ini.ReadBoolean("Compatibility", "ProtectRestrainedPeds", result.CompatibilityProtectManagedPeds);
+            result.PortraitFile = ini.ReadString("HUD", "PortraitFile", result.PortraitFile);
             return result;
         }
 
