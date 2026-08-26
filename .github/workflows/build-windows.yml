@@ -20,8 +20,8 @@ jobs:
         shell: pwsh
         run: |
           dotnet restore AdvancedK9.csproj
-          dotnet restore AdvancedK9.LSPDFRBridge.csproj
           dotnet build AdvancedK9.csproj -c Release --no-restore /p:ContinuousIntegrationBuild=true
+          dotnet restore AdvancedK9.LSPDFRBridge.csproj
           dotnet build AdvancedK9.LSPDFRBridge.csproj -c Release --no-restore /p:ContinuousIntegrationBuild=true
       - name: Verify v0.22.1-beta assembly and compiled systems
         shell: pwsh
