@@ -12,7 +12,7 @@ namespace AdvancedK9
             public bool Visible,Collapsed,ShowPortrait,ShowState,ShowHealth,ShowStamina,ShowDistance,ShowCommand,ShowBehavior,ShowSearchProgress;
             public float X,Y,Scale,Opacity,Distance;
             public int Health,Stamina,SearchProgress;
-            public string Name,State,Command,Behavior,SearchLabel,Alert,PortraitFile,Breed,Model;
+            public string Name,State,Command,Behavior,SearchLabel,Alert,PortraitFile,Breed,Model,AppearanceKey;
             public bool Metric;
         }
 
@@ -28,7 +28,7 @@ namespace AdvancedK9
         {
             if(value==null)return;
             lock(_sync)_snapshot=value;
-            string key=(value.PortraitFile??"")+"|"+(value.Model??"")+"|"+(value.Breed??"");
+            string key=(value.PortraitFile??"")+"|"+(value.Model??"")+"|"+(value.Breed??"")+"|"+(value.AppearanceKey??"");
             if(value.ShowPortrait&&key!=_portraitKey){_portraitKey=key;LoadPortrait(value);}
         }
 
