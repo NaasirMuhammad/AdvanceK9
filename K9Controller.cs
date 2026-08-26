@@ -622,7 +622,7 @@ namespace AdvancedK9
                 }
             }
             var compatibility=_pr.GetSearchResult(target,specialty,_profile.NarcoticsCertified,_profile.ExplosivesCertified,_profile.WeaponsCertified);
-            var positive=compatibility!=null?compatibility.Positive:(_random.NextDouble()<_config.PositiveChance);
+            var positive=compatibility!=null?compatibility.Positive:(_pr.IsAvailable?false:_random.NextDouble()<_config.PositiveChance);
             var resultSpecialty=compatibility!=null&&compatibility.Specialty!=DetectionSpecialty.General?compatibility.Specialty:positive&&specialty==DetectionSpecialty.General?CertifiedGeneralSearchSpecialty():specialty;
             if (positive && _random.NextDouble() > _trust.DetectionReliability)
             {

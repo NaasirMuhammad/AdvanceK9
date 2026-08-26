@@ -4,6 +4,7 @@ All published AdvancedK9 versions are beta builds.
 
 ## 0.22.1-beta
 
+- Prevents fabricated specialty alerts when PR/CDF is active but has not supplied an inventory record; the bridge now accepts explicit vehicle/ped record requests by entity handle, waits for the matching response, and maps handgun/firearm text to Weapons instead of using random certification selection.
 - Expands physical station doghouses to seventeen accessible police, sheriff, highway patrol, ranger, port, airport, corrections and state locations; kennels snap to the exterior ground and receive labeled blue dog-icon map blips while on duty.
 - Adds `AdvancedK9.LSPDFRBridge.dll` under `Plugins\LSPDFR` so Policing Redefined and CommonDataFramework are detected inside LSPDFR's AppDomain instead of being incorrectly reported as unloaded by the isolated RPH controller.
 - Shares live PR/CDF active-vehicle, interaction-pedestrian, pursuit-suspect and exposed search-record state with the main controller through a guarded heartbeat snapshot.

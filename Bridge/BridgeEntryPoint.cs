@@ -16,6 +16,7 @@ namespace AdvancedK9.LSPDFRBridge
         private static readonly string DirectoryPath=Path.Combine("Plugins","LSPDFR","AdvancedK9");
         private static readonly string StatePath=Path.Combine(DirectoryPath,"CompatibilityBridge.state");
         private static readonly string TempPath=StatePath+".tmp";
+        private static readonly string RequestPath=Path.Combine(DirectoryPath,"CompatibilityBridge.request");
         private static readonly string[] VehicleNames={"GetActiveStopVehicle","GetCurrentStopVehicle","GetTrafficStopVehicle","GetPulloverVehicle","ActiveStopVehicle","CurrentStopVehicle","TrafficStopVehicle","PulloverVehicle","ContextVehicle","SelectedVehicle"};
         private static readonly string[] PedNames={"GetActiveInteractionPed","GetCurrentStopPed","GetStoppedPed","GetSelectedPed","ActiveInteractionPed","CurrentStopPed","StoppedPed","ContextPed","SelectedPed"};
         private static readonly string[] PursuitNames={"GetActivePursuitSuspect","GetCurrentPursuitSuspect","ActivePursuitSuspect","CurrentPursuitSuspect","GetSuspect","PursuitSuspect"};
@@ -39,7 +40,7 @@ namespace AdvancedK9.LSPDFRBridge
         public override void Finally()
         {
             _running=false;
-            try{if(File.Exists(StatePath))File.Delete(StatePath);if(File.Exists(TempPath))File.Delete(TempPath);}catch{}
+            try{if(File.Exists(StatePath))File.Delete(StatePath);if(File.Exists(TempPath))File.Delete(TempPath);if(File.Exists(RequestPath))File.Delete(RequestPath);}catch{}
         }
 
         private static void Publish()
@@ -49,6 +50,8 @@ namespace AdvancedK9.LSPDFRBridge
             Vehicle vehicle=FindEntity<Vehicle>(active,VehicleNames);Ped ped=FindEntity<Ped>(active,PedNames);Ped pursuit=FindEntity<Ped>(active,PursuitNames);
             string vehicleData=Flatten(GetRecord(active,vehicle),0,new HashSet<object>(ReferenceComparer.Instance));
             string pedData=Flatten(GetRecord(active,ped),0,new HashSet<object>(ReferenceComparer.Instance));
+            string queryHandle="",queryData="";Entity query=ReadRequestedEntity(out queryHandle);
+            if(query!=null&&query.Exists())queryData=Flatten(GetRecord(active,query),0,new HashSet<object>(ReferenceComparer.Instance));
             var lines=new[]{
                 "Protocol=1",
                 "HeartbeatUtcTicks="+DateTime.UtcNow.Ticks,
@@ -59,11 +62,26 @@ namespace AdvancedK9.LSPDFRBridge
                 "ActivePedHandle="+HandleOf(ped),
                 "PursuitPedHandle="+HandleOf(pursuit),
                 "ActiveVehicleData="+Encode(vehicleData),
-                "ActivePedData="+Encode(pedData)
+                "ActivePedData="+Encode(pedData),
+                "QueryHandle="+queryHandle,
+                "QueryData="+Encode(queryData)
             };
             if(!Directory.Exists(DirectoryPath))Directory.CreateDirectory(DirectoryPath);
             File.WriteAllLines(TempPath,lines);
             File.Copy(TempPath,StatePath,true);File.Delete(TempPath);
+        }
+
+        private static Entity ReadRequestedEntity(out string handle)
+        {
+            handle="";try
+            {
+                if(!File.Exists(RequestPath))return null;
+                var map=File.ReadAllLines(RequestPath).Select(line=>new{line,split=line.IndexOf('=')}).Where(x=>x.split>0).ToDictionary(x=>x.line.Substring(0,x.split),x=>x.line.Substring(x.split+1),StringComparer.OrdinalIgnoreCase);
+                string type;if(!map.TryGetValue("Handle",out handle)||!map.TryGetValue("Type",out type))return null;
+                if(type.Equals("Vehicle",StringComparison.OrdinalIgnoreCase))return World.GetAllVehicles().FirstOrDefault(v=>v!=null&&v.Exists()&&v.Handle.ToString()==handle);
+                return World.GetAllPeds().FirstOrDefault(p=>p!=null&&p.Exists()&&p.Handle.ToString()==handle);
+            }
+            catch{return null;}
         }
 
         private static T FindEntity<T>(IEnumerable<Assembly> assemblies,IEnumerable<string> names) where T:Entity
@@ -90,8 +108,8 @@ namespace AdvancedK9.LSPDFRBridge
         }
 
         private static IEnumerable<Type> Types(IEnumerable<Assembly> assemblies){foreach(Assembly assembly in assemblies){Type[] types;try{types=assembly.GetTypes();}catch(ReflectionTypeLoadException ex){types=ex.Types.Where(t=>t!=null).ToArray();}catch{continue;}foreach(Type type in types)yield return type;}}
-        private static IEnumerable<MethodInfo> Methods(Type type){try{return type.GetMethods(BindingFlags.Public|BindingFlags.Static);}catch{return Array.Empty<MethodInfo>();}}
-        private static IEnumerable<PropertyInfo> Properties(Type type){try{return type.GetProperties(BindingFlags.Public|BindingFlags.Static);}catch{return Array.Empty<PropertyInfo>();}}
+        private static IEnumerable<MethodInfo> Methods(Type type){try{return type.GetMethods(BindingFlags.Public|BindingFlags.NonPublic|BindingFlags.Static);}catch{return Array.Empty<MethodInfo>();}}
+        private static IEnumerable<PropertyInfo> Properties(Type type){try{return type.GetProperties(BindingFlags.Public|BindingFlags.NonPublic|BindingFlags.Static);}catch{return Array.Empty<PropertyInfo>();}}
         private static Assembly Find(params string[] names)=>AppDomain.CurrentDomain.GetAssemblies().FirstOrDefault(a=>names.Any(n=>a.GetName().Name.IndexOf(n,StringComparison.OrdinalIgnoreCase)>=0));
         private static string VersionOf(Assembly assembly)=>assembly==null?"":assembly.GetName().Name+" "+assembly.GetName().Version;
         private static string HandleOf(Entity entity)=>entity!=null&&entity.Exists()?entity.Handle.ToString():"";

@@ -44,10 +44,10 @@ jobs:
           $compiled = Get-ChildItem verified-source -Recurse -File | Get-Content -Raw
           ilspycmd $bridge -o verified-bridge
           $bridgeCompiled = Get-ChildItem verified-bridge -Recurse -File | Get-Content -Raw
-          foreach ($marker in @('Initialize', 'HeartbeatUtcTicks', 'ActiveVehicleHandle', 'PursuitPedHandle', 'PolicingRedefined')) {
+          foreach ($marker in @('Initialize', 'HeartbeatUtcTicks', 'ActiveVehicleHandle', 'PursuitPedHandle', 'QueryHandle', 'CompatibilityBridge.request', 'PolicingRedefined')) {
             if ($bridgeCompiled -notmatch [regex]::Escape($marker)) { throw "Compiled LSPDFR bridge is missing marker: $marker" }
           }
-          foreach ($marker in @('SpawnStationKennels', 'CompatibilityBridge.state', 'hard-dismiss delete failed')) {
+          foreach ($marker in @('SpawnStationKennels', 'CompatibilityBridge.state', 'random fallback suppressed', 'RequestBridgeRecord', 'hard-dismiss delete failed')) {
             if ($compiled -notmatch [regex]::Escape($marker)) { throw "Compiled AdvancedK9 DLL is missing marker: $marker" }
           }
           foreach ($marker in @('VehicleSeatProfiles','VehicleSeatConfigurations.ini','VehicleSeatConfigurationLog.csv','OpenCommandGroup','SEARCH & DETECTION','TRAINING & CERTIFICATIONS','DrawStatusBar','Completed certifications','180000','ApplySeatCalibration','IsDalmatian','GetVestComponent','Loaded saved','GET_WORLD_POSITION_OF_ENTITY_BONE','Live K9 seat','No traffic stop or close-range contact','250f','seat profile loaded','CloseSeatCalibrationDoor','four-corner vehicle sweep','SpawnDogWaste','CertifiedGeneralSearchSpecialty','FindVehicleScentSubject','Track subject identified by handler aim','Track complete — person located','CompatibilityMode','Stop The Ped','GetActiveVehicle','GetSearchResult','RecordK9Indication','CaptureScentTrails','BuildRecordedTrailRoute','ReacquireTrail','SearchBuilding','K9Warning','K9DeploymentReport','POLICE K9! SHOW ME YOUR HANDS','TryArrestHandoff','TryRequestService','HudDesignNames','ShowVoiceStatusText')) {
