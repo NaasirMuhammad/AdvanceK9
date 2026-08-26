@@ -5,7 +5,7 @@ on:
   pull_request:
     branches: [ main ]
   push:
-    branches: [ main, codex/advancedk9-v0.20-academy-progression ]
+    branches: [ main, codex/advancedk9-v0.20-academy-progression, codex/advancedk9-v0.22.1-quiet-hud-care ]
 jobs:
   build:
     runs-on: windows-latest
