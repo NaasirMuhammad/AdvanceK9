@@ -1,6 +1,12 @@
-# Advanced K9 v0.22.1-beta for LSPDFR
+# Advanced K9 v0.22.2-beta for LSPDFR
 
-AdvancedK9 v0.22.1-beta is a persistent LSPDFR/RAGE Plugin Hook police-dog partner with push-to-talk voice control, per-dog progression, health and a compact EUP-style LemonUI command/profile interface. All published builds are beta builds while gameplay and model compatibility continue to be tested.
+AdvancedK9 v0.22.2-beta is a persistent LSPDFR/RAGE Plugin Hook police-dog partner with push-to-talk voice control, per-dog progression, health and a compact Glass Tactical HUD with grouped LemonUI command/profile menus. All published builds are beta builds while gameplay and model compatibility continue to be tested.
+
+## Glass Tactical HUD
+
+The default HUD is one compact lower-right card. Open the kennel/profile menu, then choose **HUD & Display** to move or resize it, adjust opacity, preview searches and alerts, switch distance units, reset its position, or independently hide any displayed field. Inactive, kenneled and vehicle-secured states can collapse automatically.
+
+Custom profile portraits are cached and never loaded every frame. Set `PortraitFile=` in `AdvancedK9.ini` or `profile.dat`, for example `Plugins\LSPDFR\AdvancedK9\Portraits\Rex.png`. If unavailable, AdvancedK9 checks model and breed filenames in the Portraits folder and then uses a safe breed badge. Example filenames are `a_c_shepherd.png` and `german_shepherd.png`.
 
 AdvancedK9 runs as an RPH plugin and starts its controller directly. It avoids a reflection-based LSPDFR duty gate because RPH plugins run in isolated AppDomains. Instead, it follows LSPDFR's own duty-state messages from the active RAGEPluginHook log. GTA's native cop flag is diagnostic only because LSPDFR may set it while the player is still off duty. While off duty, the K9, HUD, menus, shortcuts and voice capture remain disabled. Going off duty closes the UI, stops voice capture and dismisses the active dog.
 
