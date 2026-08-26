@@ -5,12 +5,14 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text;
+using LSPD_First_Response.Mod.API;
 using Rage;
 
 namespace AdvancedK9.LSPDFRBridge
 {
-    public static class EntryPoint
+    public sealed class EntryPoint : Plugin
     {
+        private volatile bool _running;
         private static readonly string DirectoryPath=Path.Combine("Plugins","LSPDFR","AdvancedK9");
         private static readonly string StatePath=Path.Combine(DirectoryPath,"CompatibilityBridge.state");
         private static readonly string TempPath=StatePath+".tmp";
@@ -18,18 +20,25 @@ namespace AdvancedK9.LSPDFRBridge
         private static readonly string[] PedNames={"GetActiveInteractionPed","GetCurrentStopPed","GetStoppedPed","GetSelectedPed","ActiveInteractionPed","CurrentStopPed","StoppedPed","ContextPed","SelectedPed"};
         private static readonly string[] PursuitNames={"GetActivePursuitSuspect","GetCurrentPursuitSuspect","ActivePursuitSuspect","CurrentPursuitSuspect","GetSuspect","PursuitSuspect"};
 
-        public static void Main()
+        public override void Initialize()
+        {
+            _running=true;
+            GameFiber.StartNew(Run,"AdvancedK9 LSPDFR compatibility bridge");
+        }
+
+        private void Run()
         {
             Game.LogTrivial("AdvancedK9 bridge: started inside the LSPDFR plugin AppDomain.");
-            while(true)
+            while(_running)
             {
                 try{Publish();}catch(Exception ex){Game.LogTrivial("AdvancedK9 bridge publish error: "+ex.Message);}
                 GameFiber.Sleep(1000);
             }
         }
 
-        public static void Finally()
+        public override void Finally()
         {
+            _running=false;
             try{if(File.Exists(StatePath))File.Delete(StatePath);if(File.Exists(TempPath))File.Delete(TempPath);}catch{}
         }
 

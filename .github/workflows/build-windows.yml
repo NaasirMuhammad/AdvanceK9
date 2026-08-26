@@ -21,6 +21,8 @@ jobs:
         run: |
           dotnet restore AdvancedK9.csproj
           dotnet build AdvancedK9.csproj -c Release --no-restore /p:ContinuousIntegrationBuild=true
+          dotnet restore Bridge/LspdfrApiShim/LspdfrApiShim.csproj
+          dotnet build Bridge/LspdfrApiShim/LspdfrApiShim.csproj -c Release --no-restore /p:ContinuousIntegrationBuild=true
           dotnet restore AdvancedK9.LSPDFRBridge.csproj
           dotnet build AdvancedK9.LSPDFRBridge.csproj -c Release --no-restore /p:ContinuousIntegrationBuild=true
       - name: Verify v0.22.1-beta assembly and compiled systems
@@ -40,7 +42,7 @@ jobs:
           $compiled = Get-ChildItem verified-source -Recurse -File | Get-Content -Raw
           ilspycmd $bridge -o verified-bridge
           $bridgeCompiled = Get-ChildItem verified-bridge -Recurse -File | Get-Content -Raw
-          foreach ($marker in @('HeartbeatUtcTicks', 'ActiveVehicleHandle', 'PursuitPedHandle', 'PolicingRedefined')) {
+          foreach ($marker in @('LSPD_First_Response.Mod.API.Plugin', 'Initialize', 'HeartbeatUtcTicks', 'ActiveVehicleHandle', 'PursuitPedHandle', 'PolicingRedefined')) {
             if ($bridgeCompiled -notmatch [regex]::Escape($marker)) { throw "Compiled LSPDFR bridge is missing marker: $marker" }
           }
           foreach ($marker in @('SpawnStationKennels', 'CompatibilityBridge.state', 'hard-dismiss delete failed')) {
