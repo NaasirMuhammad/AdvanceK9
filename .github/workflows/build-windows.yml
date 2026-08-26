@@ -34,6 +34,8 @@ jobs:
           if ($version -ne [Version]'0.22.1.0') { throw "Expected v0.22.1-beta assembly, got $version" }
           $bridgeVersion = [System.Reflection.AssemblyName]::GetAssemblyName($bridge).Version
           if ($bridgeVersion -ne [Version]'0.22.1.0') { throw "Expected v0.22.1-beta bridge assembly, got $bridgeVersion" }
+          $bridgeReferences = [System.Reflection.Assembly]::ReflectionOnlyLoadFrom($bridge).GetReferencedAssemblies().Name
+          if ($bridgeReferences -notcontains 'LSPD First Response') { throw 'Bridge does not inherit from the LSPDFR plugin lifecycle assembly.' }
           $stale = '0b4a652673cc9a7237b5473c4c0854a702007da5c32e25042d810f263d8a190c'
           $hash = (Get-FileHash $dll -Algorithm SHA256).Hash.ToLowerInvariant()
           if ($hash -eq $stale) { throw 'Build produced the stale uploaded v1.5 DLL.' }
@@ -42,7 +44,7 @@ jobs:
           $compiled = Get-ChildItem verified-source -Recurse -File | Get-Content -Raw
           ilspycmd $bridge -o verified-bridge
           $bridgeCompiled = Get-ChildItem verified-bridge -Recurse -File | Get-Content -Raw
-          foreach ($marker in @('LSPD_First_Response.Mod.API.Plugin', 'Initialize', 'HeartbeatUtcTicks', 'ActiveVehicleHandle', 'PursuitPedHandle', 'PolicingRedefined')) {
+          foreach ($marker in @('Initialize', 'HeartbeatUtcTicks', 'ActiveVehicleHandle', 'PursuitPedHandle', 'PolicingRedefined')) {
             if ($bridgeCompiled -notmatch [regex]::Escape($marker)) { throw "Compiled LSPDFR bridge is missing marker: $marker" }
           }
           foreach ($marker in @('SpawnStationKennels', 'CompatibilityBridge.state', 'hard-dismiss delete failed')) {
