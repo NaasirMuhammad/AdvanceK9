@@ -2,6 +2,15 @@
 
 All published AdvancedK9 versions are beta builds.
 
+## 0.22.2-beta
+
+- Replaces the legacy panel with one compact lower-right Glass Tactical card using smoked charcoal, a thin cyan frame, condensed white text, green health status and attached amber K9 alerts.
+- Adds contextual normal, collapsed, search and alert states in the same card area, plus actual distance, profile health/stamina, current command and behavior data.
+- Adds cached custom portraits through `PortraitFile`, followed by model, breed and safe badge fallbacks; missing or invalid images cannot stop the plugin.
+- Adds in-game movement, scaling, opacity, preview/reset, automatic collapse, metric/imperial distance and individual visibility controls for every tracked HUD field.
+- Reorganizes the profile UI into focused Identity & Appearance, HUD & Display, Vehicle Seat, Profile/Health/Certifications and Voice sections while keeping commands grouped and scrollable.
+- Migrates older HUD profiles to the compact lower-right safe-zone default without changing gameplay, training, seating or certification data.
+
 ## 0.22.1-beta
 
 - Prevents fabricated specialty alerts when PR/CDF is active but has not supplied an inventory record; the bridge now accepts explicit vehicle/ped record requests by entity handle, waits for the matching response, and maps handgun/firearm text to Weapons instead of using random certification selection.
