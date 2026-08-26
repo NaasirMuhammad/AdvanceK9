@@ -78,8 +78,9 @@ namespace AdvancedK9.LSPDFRBridge
                 if(!File.Exists(RequestPath))return null;
                 var map=File.ReadAllLines(RequestPath).Select(line=>new{line,split=line.IndexOf('=')}).Where(x=>x.split>0).ToDictionary(x=>x.line.Substring(0,x.split),x=>x.line.Substring(x.split+1),StringComparer.OrdinalIgnoreCase);
                 string type;if(!map.TryGetValue("Handle",out handle)||!map.TryGetValue("Type",out type))return null;
-                if(type.Equals("Vehicle",StringComparison.OrdinalIgnoreCase))return World.GetAllVehicles().FirstOrDefault(v=>v!=null&&v.Exists()&&v.Handle.ToString()==handle);
-                return World.GetAllPeds().FirstOrDefault(p=>p!=null&&p.Exists()&&p.Handle.ToString()==handle);
+                string requestedHandle=handle;
+                if(type.Equals("Vehicle",StringComparison.OrdinalIgnoreCase))return World.GetAllVehicles().FirstOrDefault(v=>v!=null&&v.Exists()&&v.Handle.ToString()==requestedHandle);
+                return World.GetAllPeds().FirstOrDefault(p=>p!=null&&p.Exists()&&p.Handle.ToString()==requestedHandle);
             }
             catch{return null;}
         }
