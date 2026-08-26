@@ -22,6 +22,7 @@ namespace AdvancedK9
         private readonly VehicleSeatProfiles _seatProfiles;
         private VoiceCommandService _voice;
         private Ped _dog;
+        private readonly List<StationKennel> _stationKennels=new List<StationKennel>();
         private Vehicle _dogVehicle;
         private bool _dogSeatAttached;
         private Blip _blip;
@@ -76,6 +77,12 @@ namespace AdvancedK9
             public ScentTrailPoint(Vector3 position,uint time){Position=position;Time=time;}
         }
 
+        private sealed class StationKennel
+        {
+            public string Name;public Vector3 Position;public float Heading;public Rage.Object Prop;
+            public StationKennel(string name,Vector3 position,float heading){Name=name;Position=position;Heading=heading;}
+        }
+
         public K9Controller(ModConfig config)
         {
             _config = config;
@@ -103,6 +110,7 @@ namespace AdvancedK9
                 _voice?.Tick();
                 _menu.Tick();
                 DrawHud();
+                MaintainStationKennels();
                 CaptureScentTrails();
                 UpdateCompatibilityPursuit();
                 if (ChordPressed(_config.ModifierKey, _config.SpawnKey)) Execute(K9Command.SpawnDismiss);
@@ -183,6 +191,7 @@ namespace AdvancedK9
         private void ActivateForDuty()
         {
             if (_voice == null) InitializeVoice();
+            SpawnStationKennels();
             ActionNotification("~b~Advanced K9 Beta active~s~. Hold ~y~" + _config.ModifierKey + "~s~ + ~y~" + _config.SpawnKey + "~s~ to deploy " + _profile.Name + ".");
         }
 
@@ -192,7 +201,8 @@ namespace AdvancedK9
             _voice?.StopListening();
             _voiceActive = false;
             _voiceStatus = "Off duty";
-            if (DogExists()) Dismiss(false);
+            if (_dog!=null&&_dog.Exists()) Dismiss(false);
+            DeleteStationKennels();
             Game.LogTrivial("AdvancedK9: player is off duty; K9, UI and voice are inactive.");
         }
 
@@ -286,7 +296,7 @@ namespace AdvancedK9
                 if (RequiresTrustCheck(command) && !TrustAllowsCommand(command)) return;
                 switch (command)
                 {
-                    case K9Command.SpawnDismiss: if (DogExists()) Dismiss(); else Deploy(); break;
+                    case K9Command.SpawnDismiss: HandleKennelDeployment(); break;
                     case K9Command.Follow:
                     case K9Command.Heel: Follow(); break;
                     case K9Command.Sit: Sit(); break;
@@ -361,13 +371,48 @@ namespace AdvancedK9
             return false;
         }
 
-        private void Deploy()
+        private void HandleKennelDeployment()
+        {
+            StationKennel kennel=NearestKennel(7f);if(kennel==null){Game.DisplayNotification("~y~K9 kennel required.~s~~n~Pick up and return your K9 at a police-station doghouse.");return;}
+            if(DogExists())Dismiss(true);else Deploy(kennel);
+        }
+
+        private void SpawnStationKennels()
+        {
+            if(_stationKennels.Count==0)_stationKennels.AddRange(new[]{
+                new StationKennel("Mission Row Police Station",new Vector3(452.15f,-1011.45f,28.48f),90f),
+                new StationKennel("Davis Police Station",new Vector3(368.72f,-1602.36f,29.29f),320f),
+                new StationKennel("Vespucci Police Station",new Vector3(-1112.76f,-846.47f,13.44f),126f),
+                new StationKennel("Rockford Hills Police Station",new Vector3(-564.82f,-128.64f,38.22f),205f),
+                new StationKennel("Vinewood Police Station",new Vector3(631.64f,2.16f,82.79f),250f),
+                new StationKennel("La Mesa Police Station",new Vector3(816.81f,-1290.32f,26.28f),91f),
+                new StationKennel("Sandy Shores Sheriff Station",new Vector3(1844.67f,3690.84f,34.27f),210f),
+                new StationKennel("Paleto Bay Sheriff Station",new Vector3(-442.36f,6012.58f,31.72f),315f),
+                new StationKennel("LSIA Police Station",new Vector3(-1037.76f,-2732.31f,20.17f),240f)
+            });
+            var model=new Model("prop_doghouse_01");if(!model.IsValid){Game.LogTrivial("AdvancedK9 kennel prop unavailable: prop_doghouse_01.");return;}model.LoadAndWait();
+            foreach(StationKennel kennel in _stationKennels)if(kennel.Prop==null||!kennel.Prop.Exists()){kennel.Prop=new Rage.Object(model,kennel.Position);kennel.Prop.Heading=kennel.Heading;kennel.Prop.IsPersistent=true;}
+            model.Dismiss();
+        }
+
+        private void MaintainStationKennels()
+        {
+            StationKennel kennel=NearestKennel(3.2f);if(kennel==null)return;
+            Game.DisplayHelp((DogExists()?"Return "+_profile.Name+" to":"Pick up "+_profile.Name+" from")+" the K9 kennel: hold "+_config.ModifierKey+" and press "+_config.SpawnKey+".");
+        }
+
+        private StationKennel NearestKennel(float radius){var handler=Game.LocalPlayer.Character;if(handler==null||!handler.Exists())return null;return _stationKennels.Where(k=>k.Prop!=null&&k.Prop.Exists()&&k.Position.DistanceTo(handler.Position)<=radius).OrderBy(k=>k.Position.DistanceTo(handler.Position)).FirstOrDefault();}
+        private void DeleteStationKennels(){foreach(StationKennel kennel in _stationKennels)try{if(kennel.Prop!=null&&kennel.Prop.Exists())kennel.Prop.Delete();}catch{}foreach(StationKennel kennel in _stationKennels)kennel.Prop=null;}
+        private static Vector3 HeadingOffset(float heading,float distance){double radians=heading*Math.PI/180.0;return new Vector3((float)(-Math.Sin(radians)*distance),(float)(Math.Cos(radians)*distance),0f);}
+
+        private void Deploy(StationKennel kennel)
         {
             var officer = Game.LocalPlayer.Character;
-            if(!CreateDogAt(officer.GetOffsetPosition(new Vector3(-1.2f,-1.8f,0f)),officer.Heading))return;
+            Vector3 release=kennel.Position+HeadingOffset(kennel.Heading,1.4f);
+            if(!CreateDogAt(release,kennel.Heading))return;
             _profile.RecordDeployment();
             Follow();
-            ActionNotification("~b~K9 " + _profile.Name + "~s~ is deployed.~n~" + _profile.Breed + " • " + _profile.Vest + " vest~n~Trust: " + _trust.Level + "/100 — " + _trust.Rank);
+            ActionNotification("~b~K9 " + _profile.Name + "~s~ picked up from " + kennel.Name + ".~n~" + _profile.Breed + " • " + _profile.Vest + " vest");
         }
 
         private bool CreateDogAt(Vector3 position,float heading)
@@ -1041,10 +1086,15 @@ namespace AdvancedK9
             DeleteLeashRope();
             ReleaseVehicleSeat();
             if (_blip != null && _blip.Exists()) _blip.Delete();
-            if (_dog != null && _dog.Exists()) _dog.Dismiss();
-            _dog = null;
+            Ped dog=_dog;_dog=null;
+            if(dog!=null&&dog.Exists())
+            {
+                try{dog.Tasks.ClearImmediately();}catch{}
+                try{NativeFunction.Natives.DETACH_ENTITY(dog,true,true);NativeFunction.Natives.SET_ENTITY_COLLISION(dog,false,false);NativeFunction.Natives.SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(dog,true);NativeFunction.Natives.SET_PED_KEEP_TASK(dog,false);NativeFunction.Natives.SET_ENTITY_AS_MISSION_ENTITY(dog,true,true);}catch{}
+                try{dog.Delete();}catch(Exception ex){Game.LogTrivial("AdvancedK9 hard-dismiss delete failed: "+ex.Message);}
+            }
             _state = K9State.Dismissed;
-            if (notify) ActionNotification("~b~Advanced K9 dismissed.");
+            if (notify) ActionNotification("~b~"+_profile.Name+" returned to the station kennel.");
         }
 
         public void Dispose()
@@ -1054,7 +1104,8 @@ namespace AdvancedK9
             _voice = null;
             _trust.Save();
             _profile.Save();
-            Dismiss();
+            Dismiss(false);
+            DeleteStationKennels();
         }
     }
 }

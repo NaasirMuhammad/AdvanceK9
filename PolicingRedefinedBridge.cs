@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Text;
+using System.IO;
 using Rage;
 using Rage.Native;
 
@@ -19,6 +20,9 @@ namespace AdvancedK9
         private readonly Assembly _pr,_cdf,_stp;
         private readonly string _configuredMode;
         private readonly bool _shareResults;
+        private readonly string _bridgePath=Path.Combine("Plugins","LSPDFR","AdvancedK9","CompatibilityBridge.state");
+        private bool _bridgePr,_bridgeCdf,_bridgeStp;
+        private string _bridgePrVersion="",_bridgeCdfVersion="",_bridgeStpVersion="",_bridgeVehicleHandle="",_bridgePedHandle="",_bridgePursuitHandle="",_bridgeVehicleData="",_bridgePedData="";
         private uint _nextDiagnostic;
         public CompatibilityMode Mode{get;private set;}
         public bool IsAvailable=>Mode!=CompatibilityMode.Standalone;
@@ -28,20 +32,17 @@ namespace AdvancedK9
         {
             _configuredMode=string.IsNullOrWhiteSpace(configuredMode)?"Auto":configuredMode.Trim();_shareResults=shareResults;
             _pr=Find("PolicingRedefined","Policing Redefined");_cdf=Find("CommonDataFramework");_stp=Find("StopThePed","Stop The Ped","STP");
-            if(_configuredMode.Equals("Standalone",StringComparison.OrdinalIgnoreCase))Mode=CompatibilityMode.Standalone;
-            else if(_configuredMode.Equals("StopThePed",StringComparison.OrdinalIgnoreCase)||_configuredMode.Equals("STP",StringComparison.OrdinalIgnoreCase))Mode=_stp!=null?CompatibilityMode.StopThePed:CompatibilityMode.Standalone;
-            else if(_configuredMode.Equals("PolicingRedefined",StringComparison.OrdinalIgnoreCase)||_configuredMode.Equals("PR",StringComparison.OrdinalIgnoreCase))Mode=(_pr!=null||_cdf!=null)?CompatibilityMode.PolicingRedefined:CompatibilityMode.Standalone;
-            else Mode=_pr!=null?CompatibilityMode.PolicingRedefined:_stp!=null?CompatibilityMode.StopThePed:CompatibilityMode.Standalone;
+            RefreshBridgeState();SelectMode();
             if(_pr!=null&&_stp!=null)Game.LogTrivial("AdvancedK9 compatibility WARNING: PR and STP are both loaded. PR mode selected; remove STP to prevent conflicting stop/arrest tasks.");
             LogDiagnostics();
         }
 
-        public void TickDiagnostics(){if(Game.GameTime>=_nextDiagnostic)LogDiagnostics();}
-        private void LogDiagnostics(){_nextDiagnostic=Game.GameTime+60000;Game.LogTrivial("AdvancedK9 compatibility: configured="+_configuredMode+", active="+ModeLabel+", PR="+VersionOf(_pr)+", CDF="+VersionOf(_cdf)+", STP="+VersionOf(_stp)+", shareResults="+_shareResults+".");}
+        public void TickDiagnostics(){RefreshBridgeState();SelectMode();if(Game.GameTime>=_nextDiagnostic)LogDiagnostics();}
+        private void LogDiagnostics(){_nextDiagnostic=Game.GameTime+60000;Game.LogTrivial("AdvancedK9 compatibility: configured="+_configuredMode+", active="+ModeLabel+", PR="+DetectedVersion(_pr,_bridgePr,_bridgePrVersion)+", CDF="+DetectedVersion(_cdf,_bridgeCdf,_bridgeCdfVersion)+", STP="+DetectedVersion(_stp,_bridgeStp,_bridgeStpVersion)+", bridge="+BridgeAvailable()+", shareResults="+_shareResults+".");}
 
-        public Vehicle GetActiveVehicle(Ped handler,float radius){var value=FindEntity<Vehicle>(VehicleNames(),handler);if(value!=null&&value.Exists()&&value.DistanceTo(handler)<=Math.Max(radius,35f)){LogUse("active vehicle",value);return value;}return null;}
-        public Ped GetActivePed(Ped handler,float radius){var value=FindEntity<Ped>(PedNames(),handler);if(value!=null&&value.Exists()&&!value.IsDead&&value!=handler&&value.DistanceTo(handler)<=Math.Max(radius,250f)){LogUse("active ped",value);return value;}return null;}
-        public Ped GetPursuitSuspect(Ped handler){var value=FindEntity<Ped>(new[]{"GetActivePursuitSuspect","GetCurrentPursuitSuspect","ActivePursuitSuspect","CurrentPursuitSuspect","GetSuspect","PursuitSuspect"},handler);if(value!=null&&value.Exists()&&!value.IsDead&&value!=handler){LogUse("pursuit suspect",value);return value;}return null;}
+        public Vehicle GetActiveVehicle(Ped handler,float radius){var value=FindEntity<Vehicle>(VehicleNames(),handler)??FindWorldVehicle(_bridgeVehicleHandle);if(value!=null&&value.Exists()&&value.DistanceTo(handler)<=Math.Max(radius,35f)){LogUse("active vehicle",value);return value;}return null;}
+        public Ped GetActivePed(Ped handler,float radius){var value=FindEntity<Ped>(PedNames(),handler)??FindWorldPed(_bridgePedHandle);if(value!=null&&value.Exists()&&!value.IsDead&&value!=handler&&value.DistanceTo(handler)<=Math.Max(radius,250f)){LogUse("active ped",value);return value;}return null;}
+        public Ped GetPursuitSuspect(Ped handler){var value=FindEntity<Ped>(new[]{"GetActivePursuitSuspect","GetCurrentPursuitSuspect","ActivePursuitSuspect","CurrentPursuitSuspect","GetSuspect","PursuitSuspect"},handler)??FindWorldPed(_bridgePursuitHandle);if(value!=null&&value.Exists()&&!value.IsDead&&value!=handler){LogUse("pursuit suspect",value);return value;}return null;}
 
         public bool IsProtectedPed(Ped ped)
         {
@@ -55,7 +56,7 @@ namespace AdvancedK9
         public CompatibilitySearchResult GetSearchResult(Entity target,DetectionSpecialty requested,bool narcoticsCertified,bool explosivesCertified,bool weaponsCertified)
         {
             if(target==null||!target.Exists()||Mode==CompatibilityMode.Standalone)return null;
-            object record=GetRecord(target);string inventory=Flatten(record,0,new HashSet<object>(ReferenceComparer.Instance));if(string.IsNullOrWhiteSpace(inventory))inventory=GetSearchText(target);
+            object record=GetRecord(target);string inventory=Flatten(record,0,new HashSet<object>(ReferenceComparer.Instance));if(string.IsNullOrWhiteSpace(inventory))inventory=GetSearchText(target);if(string.IsNullOrWhiteSpace(inventory)){string handle=target.Handle.ToString();if(handle==_bridgeVehicleHandle)inventory=_bridgeVehicleData;else if(handle==_bridgePedHandle)inventory=_bridgePedData;}
             DetectionSpecialty detected=Classify(inventory);bool? positive=InvokeSearchBoolean(target,requested);if(detected!=DetectionSpecialty.General)positive=true;if(!positive.HasValue)return null;
             bool certified=detected==DetectionSpecialty.Narcotics?narcoticsCertified:detected==DetectionSpecialty.Explosives?explosivesCertified:detected==DetectionSpecialty.Weapons?weaponsCertified:true;
             bool matches=requested==DetectionSpecialty.General||detected==DetectionSpecialty.General||requested==detected;
@@ -104,6 +105,16 @@ namespace AdvancedK9
         private static bool ContainsAny(string value,params string[] terms)=>terms.Any(term=>value.IndexOf(term,StringComparison.OrdinalIgnoreCase)>=0);
         private static Assembly Find(params string[] names)=>AppDomain.CurrentDomain.GetAssemblies().FirstOrDefault(a=>names.Any(n=>a.GetName().Name.IndexOf(n,StringComparison.OrdinalIgnoreCase)>=0));
         private static string VersionOf(Assembly assembly)=>assembly==null?"not loaded":assembly.GetName().Name+" "+assembly.GetName().Version;
+        private static string DetectedVersion(Assembly assembly,bool bridged,string version)=>assembly!=null?VersionOf(assembly):bridged?(string.IsNullOrWhiteSpace(version)?"detected by bridge":version+" (bridge)"):"not loaded";
+        private bool BridgeAvailable()=>_bridgePr||_bridgeCdf||_bridgeStp;
+        private void SelectMode(){bool pr=_pr!=null||_cdf!=null||_bridgePr||_bridgeCdf,stp=_stp!=null||_bridgeStp;if(_configuredMode.Equals("Standalone",StringComparison.OrdinalIgnoreCase))Mode=CompatibilityMode.Standalone;else if(_configuredMode.Equals("StopThePed",StringComparison.OrdinalIgnoreCase)||_configuredMode.Equals("STP",StringComparison.OrdinalIgnoreCase))Mode=stp?CompatibilityMode.StopThePed:CompatibilityMode.Standalone;else if(_configuredMode.Equals("PolicingRedefined",StringComparison.OrdinalIgnoreCase)||_configuredMode.Equals("PR",StringComparison.OrdinalIgnoreCase))Mode=pr?CompatibilityMode.PolicingRedefined:CompatibilityMode.Standalone;else Mode=pr?CompatibilityMode.PolicingRedefined:stp?CompatibilityMode.StopThePed:CompatibilityMode.Standalone;}
+        private void RefreshBridgeState(){try{if(!File.Exists(_bridgePath)){ClearBridgeState();return;}var map=File.ReadAllLines(_bridgePath).Select(line=>new{line,split=line.IndexOf('=')}).Where(x=>x.split>0).ToDictionary(x=>x.line.Substring(0,x.split),x=>x.line.Substring(x.split+1),StringComparer.OrdinalIgnoreCase);string heartbeat;if(!map.TryGetValue("HeartbeatUtcTicks",out heartbeat)){ClearBridgeState();return;}long ticks;if(!long.TryParse(heartbeat,out ticks)||DateTime.UtcNow-new DateTime(ticks,DateTimeKind.Utc)>TimeSpan.FromSeconds(8)){ClearBridgeState();return;}_bridgePr=ReadBool(map,"PR");_bridgeCdf=ReadBool(map,"CDF");_bridgeStp=ReadBool(map,"STP");_bridgePrVersion=Read(map,"PRVersion");_bridgeCdfVersion=Read(map,"CDFVersion");_bridgeStpVersion=Read(map,"STPVersion");_bridgeVehicleHandle=Read(map,"ActiveVehicleHandle");_bridgePedHandle=Read(map,"ActivePedHandle");_bridgePursuitHandle=Read(map,"PursuitPedHandle");_bridgeVehicleData=Decode(Read(map,"ActiveVehicleData"));_bridgePedData=Decode(Read(map,"ActivePedData"));}catch(Exception ex){ClearBridgeState();Game.LogTrivial("AdvancedK9 bridge state read: "+ex.Message);}}
+        private void ClearBridgeState(){_bridgePr=_bridgeCdf=_bridgeStp=false;_bridgePrVersion=_bridgeCdfVersion=_bridgeStpVersion=_bridgeVehicleHandle=_bridgePedHandle=_bridgePursuitHandle=_bridgeVehicleData=_bridgePedData="";}
+        private static bool ReadBool(IDictionary<string,string> map,string key){bool value;return bool.TryParse(Read(map,key),out value)&&value;}
+        private static string Read(IDictionary<string,string> map,string key){string value;return map.TryGetValue(key,out value)?value:"";}
+        private static string Decode(string value){try{return string.IsNullOrWhiteSpace(value)?"":Encoding.UTF8.GetString(Convert.FromBase64String(value));}catch{return "";}}
+        private static Vehicle FindWorldVehicle(string handle)=>string.IsNullOrWhiteSpace(handle)?null:World.GetAllVehicles().FirstOrDefault(v=>v!=null&&v.Exists()&&v.Handle.ToString()==handle);
+        private static Ped FindWorldPed(string handle)=>string.IsNullOrWhiteSpace(handle)?null:World.GetAllPeds().FirstOrDefault(p=>p!=null&&p.Exists()&&p.Handle.ToString()==handle);
         private static void LogMethod(string purpose,MethodInfo method)=>Game.LogTrivial("AdvancedK9 compatibility: "+purpose+" API "+method.DeclaringType.FullName+"."+method.Name+".");
         private static void LogMember(string purpose,string member)=>Game.LogTrivial("AdvancedK9 compatibility: "+purpose+" member "+member+".");
         private void LogUse(string purpose,Entity entity)=>Game.LogTrivial("AdvancedK9 compatibility: "+ModeLabel+" "+purpose+" selected entity "+entity.Handle+".");

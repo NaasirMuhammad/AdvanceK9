@@ -20,6 +20,7 @@ The compiled release includes AdvancedK9, its configuration, and the MIT-license
 - Pedestrian and four-corner vehicle odor searches; silent sit means clear, sit plus repeated bark after the completed sweep means positive
 - General searches identify narcotics, explosives or weapons whenever the deployed dog holds the corresponding specialty certification
 - Automatic natural bladder and bowel relief during safe idle periods, with urine effects and temporary dog-waste props
+- Physical doghouse kennels at nine police/sheriff stations with required beginning-of-shift pickup and end-of-shift return
 - Track a nearby suspect or missing person for up to two minutes
 - Non-lethal apprehension with automatic recall, a configurable health floor and hands-up surrender
 - Fetch minigame
@@ -69,7 +70,7 @@ The build copies the RAGE Plugin Hook entry-point assembly `AdvancedK9.dll` to `
 
 ## Controls
 
-- `Left Ctrl + K`: deploy/dismiss
+- `Left Ctrl + K`: pick up/return K9 while standing at a station doghouse
 - `Left Ctrl + J`: command menu, then `0`–`9`
 - `Left Ctrl + C`: dog camera
 - `Left Ctrl + L`: leash
@@ -208,7 +209,7 @@ The dog uses the handler's friendly relationship group and has friendly attacks 
 
 ## Compatibility and search semantics
 
-`Compatibility.Mode=Auto` selects Policing Redefined/CommonDataFramework first, Stop The Ped second, and standalone fallback otherwise. Never run Policing Redefined and Stop The Ped together. No external compatibility assembly is a hard dependency.
+`Compatibility.Mode=Auto` selects Policing Redefined/CommonDataFramework first, Stop The Ped second, and standalone fallback otherwise. Never run Policing Redefined and Stop The Ped together. `Plugins\LSPDFR\AdvancedK9.LSPDFRBridge.dll` runs inside LSPDFR's AppDomain and publishes a guarded heartbeat snapshot to the isolated RPH controller, allowing PR/CDF detection and live target/search-state sharing without making either external plugin a hard dependency.
 
 When supported by the detected plugin, AdvancedK9 prioritizes its active traffic-stop vehicle or selected pedestrian, reads exposed inventory/search records, classifies narcotics, explosives and weapons, shares K9 indications, recognizes pursuit suspects and vehicle bailouts, and rejects restrained, surrendered, arrested or transported peds from apprehension. Detailed adapter/version/API diagnostics are written to `RagePluginHook.log`. Tracking and apprehension never require a PR or STP stop.
 

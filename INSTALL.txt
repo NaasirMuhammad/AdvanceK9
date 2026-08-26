@@ -13,6 +13,7 @@ become available after LSPDFR places the player on duty.
 Correct file locations
   LemonUI.RagePluginHook.dll
   Plugins\AdvancedK9.dll
+  Plugins\LSPDFR\AdvancedK9.LSPDFRBridge.dll
   Plugins\LSPDFR\AdvancedK9\AdvancedK9.default.ini
 
 The default file is copied to AdvancedK9.ini only on a first installation.
@@ -23,7 +24,7 @@ RAGE Plugin Hook plugin that monitors LSPDFR duty state; it is not loaded by
 the LSPDFR sub-plugin loader.
 
 Controls
-  Left Ctrl + K   Deploy/dismiss K9
+  Left Ctrl + K   Pick up/return K9 at a station doghouse
   Left Ctrl + J   Command menu
   Left Ctrl + U   Kennel/profile menu
   Left Ctrl + C   Dog camera

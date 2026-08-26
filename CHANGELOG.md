@@ -4,6 +4,10 @@ All published AdvancedK9 versions are beta builds.
 
 ## 0.22.1-beta
 
+- Adds `AdvancedK9.LSPDFRBridge.dll` under `Plugins\LSPDFR` so Policing Redefined and CommonDataFramework are detected inside LSPDFR's AppDomain instead of being incorrectly reported as unloaded by the isolated RPH controller.
+- Shares live PR/CDF active-vehicle, interaction-pedestrian, pursuit-suspect and exposed search-record state with the main controller through a guarded heartbeat snapshot.
+- Adds physical doghouse kennels at nine police and sheriff stations. Normal deployment requires station pickup and normal dismissal requires station return.
+- Replaces `Ped.Dismiss()` with task, seat, leash and combat cleanup followed by hard entity deletion, preventing a released K9 from becoming ambient AI or stealing a cruiser.
 - Makes urination and bowel relief fully automatic during safe idle periods; removes the menu command, verbal phrases, HUD meters and routine bathroom notifications.
 - Makes push-to-talk listening/transcribing text optional and disabled by default; microphone, API and transcription failures always remain visible.
 - Makes routine K9 command/action notifications optional and disabled by default while preserving errors, safety warnings and actual K9 outcomes such as positive/negative detection results.
