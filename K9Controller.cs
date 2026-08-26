@@ -15,6 +15,7 @@ namespace AdvancedK9
         private readonly ModConfig _config;
         private readonly PolicingRedefinedBridge _pr;
         private readonly DogCamera _camera = new DogCamera();
+        private readonly GlassTacticalHud _hud = new GlassTacticalHud();
         private readonly ConcurrentQueue<K9Command> _voiceQueue = new ConcurrentQueue<K9Command>();
         private readonly Random _random = new Random();
         private readonly TrustProfile _trust;
@@ -69,6 +70,13 @@ namespace AdvancedK9
         private Ped _warnedTarget;
         private bool _warningSurrendered;
         private uint _biteStarted;
+        private string _hudCommand="READY";
+        private string _hudSearchLabel="";
+        private int _hudSearchProgress;
+        private string _hudAlert="";
+        private uint _hudAlertUntil;
+        private bool _hudPreviewSearch;
+        private bool _hudPreviewAlert;
 
         private sealed class ScentTrailPoint
         {
@@ -198,6 +206,7 @@ namespace AdvancedK9
         private void DeactivateForDuty()
         {
             _menu.Close();
+            _hud.Update(new GlassTacticalHud.Snapshot{Visible=false});
             _voice?.StopListening();
             _voiceActive = false;
             _voiceStatus = "Off duty";
@@ -248,24 +257,35 @@ namespace AdvancedK9
             CloseSeatCalibrationDoor();_menuMode="profile"; RefreshProfileMenu();
         }
 
-        private void RefreshProfileMenu(){int m=_profile.HudMode;_menu.Update("K9 PROFILE — "+_profile.Name,new[]{"Edit name: "+_profile.Name,"Breed/model: "+_profile.Breed,"Skin/coat: "+(_profile.CoatVariation+1),"Equipment: "+_profile.Vest,"Vest texture: "+_profile.VestTextureName(_dog),"HUD: "+(m==0?"Hidden":m==1?"Compact":"Expanded"),"Customize HUD","Move HUD left","Move HUD right","Move HUD up","Move HUD down","HUD scale: "+_profile.HudScale.ToString("0.0"),"Vehicle Seat Configuration","Inspect Profile / Certifications",VoiceMenuLabel()});}
-        private void OnMenuSelected(int index){if(_menuMode=="commands_root"){if(index>=0&&index<7){OpenCommandGroup(index);return;}if(index==7){Execute(K9Command.SpawnDismiss);return;}if(index==8)ToggleVoice();return;}if(_menuMode!=null&&_menuMode.StartsWith("commands_group_")){int group;if(!int.TryParse(_menuMode.Substring(15),out group)||group<0||group>=CommandGroups.Length)return;if(index>=0&&index<CommandGroups[group].Length)Execute(CommandGroups[group][index]);else ShowCommandMenu();return;}if(_menuMode=="hud_config"){HandleHudMenu(index);return;}if(_menuMode=="seat_config"){HandleSeatMenu(index);return;}if(_menuMode!="profile")return;switch(index){case 0:string n=PromptForDogName(24);if(!string.IsNullOrWhiteSpace(n)){_profile.SetName(n);_voice?.UpdateWakeWord(_profile.Name);ActionNotification("~b~Voice wake word changed immediately to:~s~ "+_profile.Name);}break;case 1:PreviewBreed(1);break;case 2:_profile.NextSkin(_dog);break;case 3:_profile.NextEquipment(_dog);break;case 4:_profile.NextEquipmentTexture(_dog);break;case 5:_profile.CycleHudMode();break;case 6:OpenHudConfiguration();return;case 7:_profile.MoveHud(-.02f,0);break;case 8:_profile.MoveHud(.02f,0);break;case 9:_profile.MoveHud(0,-.02f);break;case 10:_profile.MoveHud(0,.02f);break;case 11:_profile.ScaleHud();break;case 12:OpenSeatConfiguration();return;case 13:Inspect();break;case 14:ToggleVoice();break;}RefreshProfileMenu();}
+        private void RefreshProfileMenu(){_menu.Update("K9 PROFILE — "+_profile.Name,new[]{"Identity & Appearance","HUD & Display","Vehicle Seat Configuration","Profile, Health & Certifications",VoiceMenuLabel()});}
+        private void OpenAppearanceMenu(){_menuMode="profile_appearance";_menu.Open("K9 PROFILE — APPEARANCE",new[]{"Edit name: "+_profile.Name,"Breed/model: "+_profile.Breed,"Skin/coat: "+(_profile.CoatVariation+1),"Equipment/vest: "+_profile.Vest,"Vest texture: "+_profile.VestTextureName(_dog),"← Back to K9 Profile"});}
+        private void OnMenuSelected(int index)
+        {
+            if(_menuMode=="commands_root"){if(index>=0&&index<7){OpenCommandGroup(index);return;}if(index==7){_menu.Close();Execute(K9Command.SpawnDismiss);return;}if(index==8)ToggleVoice();return;}
+            if(_menuMode!=null&&_menuMode.StartsWith("commands_group_")){int group;if(!int.TryParse(_menuMode.Substring(15),out group)||group<0||group>=CommandGroups.Length)return;if(index>=0&&index<CommandGroups[group].Length){_menu.Close();Execute(CommandGroups[group][index]);}else ShowCommandMenu();return;}
+            if(_menuMode=="hud_config"){HandleHudMenu(index);return;}
+            if(_menuMode=="seat_config"){HandleSeatMenu(index);return;}
+            if(_menuMode=="profile_appearance")
+            {
+                if(index==0){string n=PromptForDogName(24);if(!string.IsNullOrWhiteSpace(n)){_profile.SetName(n);_voice?.UpdateWakeWord(_profile.Name);}}
+                else if(index==1)PreviewBreed(1);else if(index==2)_profile.NextSkin(_dog);else if(index==3)_profile.NextEquipment(_dog);else if(index==4)_profile.NextEquipmentTexture(_dog);else if(index==5){_menuMode="profile";RefreshProfileMenu();return;}
+                OpenAppearanceMenu();return;
+            }
+            if(_menuMode!="profile")return;
+            if(index==0)OpenAppearanceMenu();else if(index==1)OpenHudConfiguration();else if(index==2)OpenSeatConfiguration();else if(index==3)Inspect();else if(index==4)ToggleVoice();
+        }
 
         private void InitializeVoice(){_voice=new VoiceCommandService(_config.VoiceProvider,_config.VoiceModel,_config.VoiceLanguage,_config.VoiceApiKey,_config.VoiceApiKeyEnvironmentVariable,_profile.Name,_config.ShowVoiceStatusText);_voice.CommandRecognized+=c=>_voiceQueue.Enqueue(c);_voice.StatusChanged+=s=>_voiceStatus=s;_voiceActive=_config.VoiceEnabled&&_voice.IsAvailable;_voiceStatus=_voice.IsAvailable?"Ready (hold V)":"Key missing";}
         private string VoiceMenuLabel()=>"Voice microphone: "+(_voice==null||!_voice.IsAvailable?"UNAVAILABLE — add ApiKey in INI":_voiceActive?"ON — hold "+_config.PushToTalkKey:"OFF — select to activate");
         private void ToggleVoice(){if(_voice==null)InitializeVoice();if(!_voice.IsAvailable){Game.DisplayNotification("~r~Voice cannot activate.~s~~n~Add your provider key after ~y~ApiKey=~s~ in AdvancedK9.ini, then reload the plugin.");return;}_voiceActive=!_voiceActive;if(_voiceActive){_voiceStatus="Ready (hold V)";ActionNotification("~g~K9 push-to-talk activated.~s~ Hold "+_config.PushToTalkKey+" while speaking.");}else{_voice.StopListening();_voiceStatus="Off";ActionNotification("~y~K9 voice microphone disabled.");}}
 
-        private void OnMenuAdjusted(int index,int delta){if(_menuMode=="hud_config"){AdjustHudMenu(index,delta);return;}if(_menuMode=="seat_config"){AdjustSeat(index,delta);return;}if(_menuMode!="profile")return;switch(index){case 1:PreviewBreed(delta);break;case 2:_profile.AdjustSkin(_dog,delta);break;case 3:_profile.AdjustEquipment(_dog,delta);break;case 4:_profile.AdjustEquipmentTexture(_dog,delta);break;case 5:_profile.CycleHudMode();break;case 7:case 8:_profile.MoveHud(delta*.01f,0);break;case 9:case 10:_profile.MoveHud(0,delta*.01f);break;case 11:_profile.ScaleHud();break;default:return;}RefreshProfileMenu();}
+        private void OnMenuAdjusted(int index,int delta){if(_menuMode=="hud_config"){AdjustHudMenu(index,delta);return;}if(_menuMode=="seat_config"){AdjustSeat(index,delta);return;}if(_menuMode!="profile_appearance")return;if(index==1)PreviewBreed(delta);else if(index==2)_profile.AdjustSkin(_dog,delta);else if(index==3)_profile.AdjustEquipment(_dog,delta);else if(index==4)_profile.AdjustEquipmentTexture(_dog,delta);else return;OpenAppearanceMenu();}
 
-        private static readonly string[] HudDesignNames={"EUP Panel","Minimal Strip","Tactical Card","Rounded Modern","Transparent Compact"};
-        private static readonly string[] HudIconNames={"Labels","Police Symbols","Paw Set","Minimal Dots","No Icons"};
-        private static readonly string[] HudColorNames={"Police Blue","Sheriff Gold","Tactical Green","Emergency Red","Monochrome"};
-        private static readonly string[] HudTextNames={"Standard","Condensed","Bold","Digital","Minimal"};
         private static string OnOff(bool value)=>value?"ON":"OFF";
         private void OpenHudConfiguration(){_menuMode="hud_config";RefreshHudMenu();}
-        private void RefreshHudMenu(){_menu.Update("K9 HUD — CUSTOMIZE",new[]{"Design: "+HudDesignNames[_profile.HudDesign],"Icons: "+HudIconNames[_profile.HudIconSet],"Color: "+HudColorNames[_profile.HudColorTheme],"Text: "+HudTextNames[_profile.HudTextStyle],"State: "+OnOff(_profile.HudShowState),"Health: "+OnOff(_profile.HudShowHealth),"Stamina: "+OnOff(_profile.HudShowStamina),"Food: "+OnOff(_profile.HudShowFood),"Water: "+OnOff(_profile.HudShowWater),"Certifications: "+OnOff(_profile.HudShowCertifications),"Trust: "+OnOff(_profile.HudShowTrust),"Training: "+OnOff(_profile.HudShowTraining),"Injury: "+OnOff(_profile.HudShowInjury),"Voice: "+OnOff(_profile.HudShowVoice),"← Back to K9 Profile"});}
-        private void HandleHudMenu(int index){if(index>=4&&index<=13){_profile.ToggleHudField(index-4);RefreshHudMenu();}else if(index==14){_menuMode="profile";RefreshProfileMenu();}}
-        private void AdjustHudMenu(int index,int delta){if(index==0)_profile.AdjustHudDesign(delta);else if(index==1)_profile.AdjustHudIcons(delta);else if(index==2)_profile.AdjustHudColor(delta);else if(index==3)_profile.AdjustHudText(delta);else return;RefreshHudMenu();}
+        private void RefreshHudMenu(){_menu.Update("K9 HUD — GLASS TACTICAL",new[]{"HUD: "+(_profile.HudMode==0?"OFF":_profile.HudMode==1?"COMPACT":"FULL"),"Portrait: "+OnOff(_profile.HudShowPortrait),"State: "+OnOff(_profile.HudShowState),"Health: "+OnOff(_profile.HudShowHealth),"Stamina: "+OnOff(_profile.HudShowStamina),"Distance: "+OnOff(_profile.HudShowDistance),"Current command: "+OnOff(_profile.HudShowCommand),"Behavior: "+OnOff(_profile.HudShowBehavior),"Automatic collapse: "+OnOff(_profile.HudAutoCollapse),"Search progress: "+OnOff(_profile.HudSearchProgress),"Distance units: "+(_profile.HudMetricDistance?"METRIC":"IMPERIAL"),"Food: "+OnOff(_profile.HudShowFood),"Water: "+OnOff(_profile.HudShowWater),"Certifications: "+OnOff(_profile.HudShowCertifications),"Trust: "+OnOff(_profile.HudShowTrust),"Training: "+OnOff(_profile.HudShowTraining),"Injury: "+OnOff(_profile.HudShowInjury),"Voice: "+OnOff(_profile.HudShowVoice),"Move left","Move right","Move up","Move down","Scale: "+_profile.HudScale.ToString("0.00"),"Opacity: "+_profile.HudOpacity.ToString("0.00"),"Preview search: "+OnOff(_hudPreviewSearch),"Preview alert: "+OnOff(_hudPreviewAlert),"Reset HUD position and size","← Back to K9 Profile"});}
+        private void HandleHudMenu(int index){if(index==0)_profile.CycleHudMode();else if(index==1)_profile.ToggleHudOption(1);else if(index>=2&&index<=4)_profile.ToggleHudField(index-2);else if(index>=5&&index<=7)_profile.ToggleHudOption(index-3);else if(index==8)_profile.ToggleHudOption(0);else if(index==9)_profile.ToggleHudOption(5);else if(index==10)_profile.ToggleHudOption(6);else if(index>=11&&index<=17)_profile.ToggleHudField(index-8);else if(index==18)_profile.MoveHud(-.01f,0);else if(index==19)_profile.MoveHud(.01f,0);else if(index==20)_profile.MoveHud(0,-.01f);else if(index==21)_profile.MoveHud(0,.01f);else if(index==24)_hudPreviewSearch=!_hudPreviewSearch;else if(index==25)_hudPreviewAlert=!_hudPreviewAlert;else if(index==26)_profile.ResetHud();else if(index==27){_hudPreviewSearch=false;_hudPreviewAlert=false;_menuMode="profile";RefreshProfileMenu();return;}RefreshHudMenu();}
+        private void AdjustHudMenu(int index,int delta){if(index==18||index==19)_profile.MoveHud(delta*.005f,0);else if(index==20||index==21)_profile.MoveHud(0,delta*.005f);else if(index==22)_profile.AdjustHudScale(delta*.05f);else if(index==23)_profile.AdjustHudOpacity(delta*.05f);else return;RefreshHudMenu();}
 
         private static string PromptForDogName(int maxLength)
         {
@@ -290,6 +310,7 @@ namespace AdvancedK9
         {
             try
             {
+                _hudCommand=CommandLabel(command);
                 if(_state==K9State.Leashed&&(command==K9Command.SearchArea||command==K9Command.SearchBuilding||command==K9Command.SearchVehicle||command==K9Command.SearchNarcotics||command==K9Command.SearchExplosives||command==K9Command.SearchWeapons||command==K9Command.Track||command==K9Command.FindTrail||command==K9Command.Apprehend||command==K9Command.Fetch)){DeleteLeashRope();_state=K9State.Following;ActionNotification("~b~Leash automatically released for K9 deployment.");}
                 if(_state==K9State.Leashed&&(command==K9Command.Training||command==K9Command.TrainNarcotics||command==K9Command.TrainExplosives||command==K9Command.TrainWeapons)){Game.DisplayNotification("~y~Remove the leash before traveling to the academy.");return;}
                 if(_profile.Health<=25 && command!=K9Command.Inspect && command!=K9Command.FirstAid && command!=K9Command.SpawnDismiss){Game.DisplayNotification("~r~K9 REMOVED FROM SERVICE~s~~n~Serious injury requires veterinary treatment. Earned certifications remain saved.");return;}
@@ -604,6 +625,8 @@ namespace AdvancedK9
                 return;
             }
             _state = K9State.Searching;
+            _hudSearchLabel=target is Vehicle?"VEHICLE SEARCH":"AREA SEARCH";
+            _hudSearchProgress=0;
             _dog.Tasks.Clear();
             if(target is Vehicle)
             {
@@ -615,6 +638,7 @@ namespace AdvancedK9
                 if(!DogExists()||!target.Exists()){Follow();return;}
                 for(var i=0;i<3;i++)
                 {
+                    _hudSearchProgress=(i*100)/3;
                     var sniffPoint=target.GetOffsetPosition(new Vector3(i==0?-.8f:i==1?.8f:0f,-.45f,0f));
                     _dog.Tasks.FollowNavigationMeshToPosition(sniffPoint,target.Heading,1.2f).WaitForCompletion(2500);
                     PlayDogAnimation("creatures@rottweiler@indication@","indicate_low",650,0);
@@ -634,6 +658,7 @@ namespace AdvancedK9
             {
                 Sit();
                 Bark(3);
+                SetHudAlert(resultSpecialty);
                 Game.DisplayNotification("~r~POSITIVE "+SpecialtyLabel(resultSpecialty).ToUpperInvariant()+" K9 INDICATION~s~ — " + TargetLabel(target) + ".");
                 _trust.Change(1, "successful detection");
                 _profile.RecordSearch();
@@ -645,6 +670,8 @@ namespace AdvancedK9
                 Sit();
                 _pr.RecordK9Indication(target,false,specialty);
             }
+            _hudSearchProgress=100;
+            _hudSearchLabel="";
         }
 
         private void SearchBuilding()
@@ -715,6 +742,8 @@ namespace AdvancedK9
             var labels=new[]{"front-left","front-right","rear-right","rear-left"};
             for(var i=0;i<points.Length;i++)
             {
+                _hudSearchLabel="VEHICLE SEARCH";
+                _hudSearchProgress=i*25;
                 if(!DogExists()||!vehicle.Exists()||_state!=K9State.Searching)return false;
                 var point=vehicle.GetOffsetPosition(points[i]);
                 Game.DisplaySubtitle("~b~Vehicle search~s~ — "+labels[i]+" corner "+(i+1)+"/4",1800);
@@ -725,6 +754,7 @@ namespace AdvancedK9
                 PlayDogAnimation("creatures@rottweiler@indication@","indicate_low",800,0);
                 GameFiber.Wait(300);
             }
+            _hudSearchProgress=100;
             return DogExists()&&vehicle.Exists();
         }
 
@@ -965,37 +995,17 @@ namespace AdvancedK9
 
         private void DrawHud()
         {
-            int mode=_profile.HudMode;
-            if(mode!=0)
-            {
-                float[] designWidths={.30f,.24f,.32f,.29f,.26f};float x=_profile.HudX,y=_profile.HudY,s=_profile.HudScale,w=designWidths[_profile.HudDesign]*s;
-                var lines=new List<string>();
-                if(_profile.HudShowCertifications&&mode==2)lines.Add("CERTIFIED  "+Certifications());
-                string details="";
-                if(_profile.HudShowTrust)details+="TRUST "+_profile.Trust+"%  ";
-                if(_profile.HudShowTraining)details+="LEVEL "+_profile.TrainingLevel+"/5  ";
-                if(_profile.HudShowInjury)details+="INJURY "+_profile.Injury;
-                if(mode==2&&!string.IsNullOrWhiteSpace(details))lines.Add(details.Trim());
-                if(mode==2&&_profile.HudShowVoice)lines.Add("VOICE  "+_voiceStatus);
-                int barRows=(_profile.HudShowHealth?1:0)+(_profile.HudShowStamina?1:0)+(_profile.HudShowFood?1:0)+(_profile.HudShowWater?1:0);
-                float h=(.055f+barRows*.032f+lines.Count*.027f)*s,left=x-w/2+.012f*s,top=y-h/2;
-                int[][] themes={new[]{7,13,20,8,76,116,26,181,232},new[]{25,21,12,128,86,16,236,181,55},new[]{8,20,14,22,91,50,61,206,111},new[]{25,8,10,132,24,31,238,67,79},new[]{18,18,18,58,58,58,210,210,210}};
-                int[] c=themes[_profile.HudColorTheme];int alpha=_profile.HudDesign==4?155:225;
-                NativeFunction.Natives.DRAW_RECT(x,y,w,h,c[0],c[1],c[2],alpha);
-                NativeFunction.Natives.DRAW_RECT(x,top+.019f*s,w,.038f*s,c[3],c[4],c[5],245);
-                if(_profile.HudDesign!=1)NativeFunction.Natives.DRAW_RECT(x-w/2+.003f*s,y,.006f*s,h,c[6],c[7],c[8],255);
-                string[] icons={"K9  ","UNIT  ","PAW  ","•  ",""};string icon=icons[_profile.HudIconSet];
-                float[] textScales={.30f,.27f,.33f,.29f,.24f};
-                DrawText(icon+_profile.Name.ToUpper()+(_profile.HudShowState?"     "+_state.ToString().ToUpper():""),left,top+.006f*s,textScales[_profile.HudTextStyle]*s);
-                float row=top+.052f*s;
-                if(_profile.HudShowHealth){DrawStatusBar("HEALTH",_profile.Health,left,row,w-.024f*s,34,197,94);row+=.032f*s;}
-                if(_profile.HudShowStamina){DrawStatusBar("STAMINA",_profile.Stamina,left,row,w-.024f*s,241,196,15);row+=.032f*s;}
-                if(_profile.HudShowFood){DrawStatusBar("FOOD",_profile.Food,left,row,w-.024f*s,230,126,34);row+=.032f*s;}
-                if(_profile.HudShowWater){DrawStatusBar("WATER",_profile.Water,left,row,w-.024f*s,37,162,232);row+=.032f*s;}
-                foreach(string line in lines){DrawText(line,left,row-.006f*s,.235f*s);row+=.027f*s;}
-            }
+            bool inactive=!DogExists()||_state==K9State.Dismissed||_state==K9State.InVehicle;
+            bool collapsed=_profile.HudMode==1&&_profile.HudAutoCollapse&&inactive&&!_hudPreviewSearch&&!_hudPreviewAlert;
+            string search=_hudPreviewSearch?"VEHICLE SEARCH":_state==K9State.Searching?(_hudSearchLabel.Length>0?_hudSearchLabel:"SCANNING"):_state==K9State.Tracking?"SCENT TRACK":"";
+            int searchProgress=_hudPreviewSearch?64:_hudSearchProgress;
+            string alert=_hudPreviewAlert?"NARCOTICS":Game.GameTime<_hudAlertUntil?_hudAlert:"";
+            float distance=DogExists()?_dog.DistanceTo(Game.LocalPlayer.Character):0f;
+            _hud.Update(new GlassTacticalHud.Snapshot{Visible=_profile.HudMode!=0,Collapsed=collapsed,ShowPortrait=_profile.HudShowPortrait,ShowState=_profile.HudShowState,ShowHealth=_profile.HudShowHealth,ShowStamina=_profile.HudShowStamina,ShowDistance=_profile.HudShowDistance&&DogExists(),ShowCommand=_profile.HudShowCommand,ShowBehavior=_profile.HudShowBehavior,ShowSearchProgress=_profile.HudSearchProgress,X=_profile.HudX,Y=_profile.HudY,Scale=_profile.HudScale,Opacity=_profile.HudOpacity,Distance=distance,Health=_profile.Health,Stamina=_profile.Stamina,SearchProgress=searchProgress,Name=_profile.Name,State=DogExists()?_state.ToString():"KENNELED",Command=_hudCommand,Behavior=HudBehavior(),SearchLabel=search,Alert=alert,PortraitFile=_profile.PortraitFile,Breed=_profile.Breed,Model=_profile.ModelName,Metric=_profile.HudMetricDistance});
             if(_camera.Active&&DogExists()){float d=_dog.DistanceTo(Game.LocalPlayer.Character);NativeFunction.Natives.DRAW_RECT(.5f,.91f,.52f,.09f,0,0,0,180);DrawText("K9 CAM  GPS "+_dog.Position.X.ToString("0")+","+_dog.Position.Y.ToString("0")+"  HDG "+HeadingCardinal(_dog.Heading)+"  HANDLER "+d.ToString("0.0")+"m",.25f,.875f,.31f);DrawText("STATE "+_state+"  HP "+_profile.Health+"  STA "+_profile.Stamina+"  H2O "+_profile.Water,.25f,.91f,.27f);}
         }
+        private string HudBehavior(){if(!DogExists())return "INACTIVE";switch(_state){case K9State.Following:return "FOLLOWING";case K9State.Heeling:return "AT HEEL";case K9State.Searching:return "SEARCHING";case K9State.Tracking:return "TRACKING";case K9State.Apprehending:return "DEPLOYED";case K9State.InVehicle:return "SECURED";case K9State.Leashed:return "LEASHED";default:return _state.ToString().ToUpperInvariant();}}
+        private void SetHudAlert(DetectionSpecialty specialty){_hudAlert=SpecialtyLabel(specialty).ToUpperInvariant();_hudAlertUntil=Game.GameTime+(uint)_profile.HudAlertDuration;}
         private static void DrawStatusBar(string label,int value,float x,float y,float width,int r,int g,int b){DrawText(label+" "+value+"%",x,y-.015f,.22f);NativeFunction.Natives.DRAW_RECT(x+width/2,y+.012f,width,.009f,32,40,48,235);float fill=width*Math.Max(0,Math.Min(100,value))/100f;if(fill>0)NativeFunction.Natives.DRAW_RECT(x+fill/2,y+.012f,fill,.009f,r,g,b,255);}
         private static string HeadingCardinal(float h){h=(h%360+360)%360;return h<22.5f||h>=337.5f?"N":h<67.5f?"NE":h<112.5f?"E":h<157.5f?"SE":h<202.5f?"S":h<247.5f?"SW":h<292.5f?"W":"NW";}
         private static void DrawText(string value,float x,float y,float scale){NativeFunction.Natives.SET_TEXT_FONT(0);NativeFunction.Natives.SET_TEXT_SCALE(scale,scale);NativeFunction.Natives.SET_TEXT_COLOUR(235,245,255,255);NativeFunction.Natives.SET_TEXT_OUTLINE();NativeFunction.Natives.BEGIN_TEXT_COMMAND_DISPLAY_TEXT("STRING");NativeFunction.Natives.ADD_TEXT_COMPONENT_SUBSTRING_PLAYER_NAME(value);NativeFunction.Natives.END_TEXT_COMMAND_DISPLAY_TEXT(x,y);}
@@ -1120,6 +1130,7 @@ namespace AdvancedK9
             _running = false;
             _voice?.Dispose();
             _voice = null;
+            _hud.Dispose();
             _trust.Save();
             _profile.Save();
             Dismiss(false);
