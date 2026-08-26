@@ -4,6 +4,7 @@ All published AdvancedK9 versions are beta builds.
 
 ## 0.22.1-beta
 
+- Expands physical station doghouses to seventeen accessible police, sheriff, highway patrol, ranger, port, airport, corrections and state locations; kennels snap to the exterior ground and receive labeled blue dog-icon map blips while on duty.
 - Adds `AdvancedK9.LSPDFRBridge.dll` under `Plugins\LSPDFR` so Policing Redefined and CommonDataFramework are detected inside LSPDFR's AppDomain instead of being incorrectly reported as unloaded by the isolated RPH controller.
 - Shares live PR/CDF active-vehicle, interaction-pedestrian, pursuit-suspect and exposed search-record state with the main controller through a guarded heartbeat snapshot.
 - Adds physical doghouse kennels at nine police and sheriff stations. Normal deployment requires station pickup and normal dismissal requires station return.

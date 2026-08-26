@@ -20,7 +20,7 @@ The compiled release includes AdvancedK9, its configuration, and the MIT-license
 - Pedestrian and four-corner vehicle odor searches; silent sit means clear, sit plus repeated bark after the completed sweep means positive
 - General searches identify narcotics, explosives or weapons whenever the deployed dog holds the corresponding specialty certification
 - Automatic natural bladder and bowel relief during safe idle periods, with urine effects and temporary dog-waste props
-- Physical doghouse kennels at nine police/sheriff stations with required beginning-of-shift pickup and end-of-shift return
+- Physical ground-snapped doghouse kennels at seventeen accessible police, sheriff, highway patrol, ranger, port, airport, corrections and state locations, with labeled blue dog-icon map blips and required pickup/return
 - Track a nearby suspect or missing person for up to two minutes
 - Non-lethal apprehension with automatic recall, a configurable health floor and hands-up surrender
 - Fetch minigame
