@@ -2,6 +2,15 @@
 
 All published AdvancedK9 versions are beta builds.
 
+## 0.22.6-beta
+
+- Moved the kennels reported inside buildings or over landscaping at Davis, Vespucci/San Andreas, Rockford Hills, Vinewood, La Mesa, Sandy Shores, Paleto Bay, Beaver Bush, Bolingbroke, FIB, Del Perro/Docks and Fort Zancudo onto exterior paved or parking areas.
+- Preserved the confirmed-good horizontal locations for Mission Row, LSIA/Airport, Los Santos Port, Raton Canyon/Great Ocean Highway and Senora/Brook Trail.
+- All doghouses, including those already in good locations, now wait for nearby collision and snap down to the locally loaded ground surface.
+- Kept all K9 kennel map blips available while on duty, but now streams the physical doghouse only when the handler is within 350 metres.
+- Requests local collision before creating a nearby kennel, allowing ground placement to use loaded pavement instead of freezing distant props in midair.
+- Removes distant physical kennel props again to reduce world-object overhead while retaining their map locations.
+
 ## 0.22.5-beta
 
 - Moved the Davis station kennel from inside the building to the exterior rear parking lot.

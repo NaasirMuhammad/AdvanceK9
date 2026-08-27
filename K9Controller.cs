@@ -410,57 +410,72 @@ namespace AdvancedK9
         {
             if(_stationKennels.Count==0)_stationKennels.AddRange(new[]{
                 new StationKennel("Downtown / Mission Row Police Station",new Vector3(452.15f,-1011.45f,29.0f),90f),
-                new StationKennel("Davis Sheriff Station",new Vector3(381.35f,-1603.15f,29.29f),270f,false),
-                new StationKennel("Vespucci Police Station",new Vector3(-1113.9f,-851.4f,14.0f),126f),
-                new StationKennel("Rockford Hills Police Station",new Vector3(-568.8f,-136.4f,38.7f),205f),
-                new StationKennel("Vinewood Police Station",new Vector3(621.15f,10.35f,82.74f),160f,false),
-                new StationKennel("La Mesa Highway Patrol Station",new Vector3(834.8f,-1281.6f,28.8f),180f),
-                new StationKennel("Sandy Shores Sheriff Station",new Vector3(1858.2f,3695.6f,34.8f),210f),
-                new StationKennel("Paleto Bay Sheriff Station",new Vector3(-442.4f,6019.8f,32.2f),315f),
-                new StationKennel("Beaver Bush State Ranger Station",new Vector3(386.2f,796.4f,190.9f),180f),
+                new StationKennel("Davis Sheriff Station",new Vector3(399.2f,-1607.6f,29.3f),270f),
+                new StationKennel("Vespucci Police Station",new Vector3(-1092.5f,-836.8f,19.0f),215f),
+                new StationKennel("Rockford Hills Police Station",new Vector3(-555.8f,-132.2f,38.2f),115f),
+                new StationKennel("Vinewood Police Station",new Vector3(645.3f,17.8f,82.8f),160f),
+                new StationKennel("La Mesa Highway Patrol Station",new Vector3(855.2f,-1274.6f,26.4f),180f),
+                new StationKennel("Sandy Shores Sheriff Station",new Vector3(1871.8f,3691.7f,33.7f),210f),
+                new StationKennel("Paleto Bay Sheriff Station",new Vector3(-459.7f,6005.8f,31.3f),45f),
+                new StationKennel("Beaver Bush State Ranger Station",new Vector3(374.4f,789.4f,187.7f),90f),
                 new StationKennel("LSIA Field Office",new Vector3(-870.6f,-2417.4f,14.6f),150f),
-                new StationKennel("Bolingbroke Penitentiary",new Vector3(1838.4f,2577.8f,46.2f),90f),
-                new StationKennel("FIB Headquarters",new Vector3(151.2f,-765.8f,46.3f),250f),
-                new StationKennel("Del Perro Police Station",new Vector3(-1638.4f,-1021.5f,13.7f),140f),
+                new StationKennel("Bolingbroke Penitentiary",new Vector3(1848.9f,2604.6f,45.6f),180f),
+                new StationKennel("FIB Headquarters",new Vector3(116.8f,-743.6f,45.8f),250f),
+                new StationKennel("Del Perro Police Station",new Vector3(-1628.7f,-1012.2f,13.1f),140f),
                 new StationKennel("Los Santos Port Police",new Vector3(-338.1f,-2784.2f,5.7f),180f),
                 new StationKennel("Raton Canyon Ranger Office",new Vector3(-1497.4f,4976.5f,63.9f),45f),
                 new StationKennel("Senora Ranger Station",new Vector3(1732.4f,3036.2f,63.7f),270f),
-                new StationKennel("Fort Zancudo State Police",new Vector3(-2348.6f,3267.8f,33.3f),60f)
+                new StationKennel("Fort Zancudo State Police",new Vector3(-2362.8f,3264.2f,32.8f),60f)
             });
-            var model=new Model("prop_doghouse_01");if(!model.IsValid){Game.LogTrivial("AdvancedK9 kennel prop unavailable: prop_doghouse_01.");return;}model.LoadAndWait();
-            foreach(StationKennel kennel in _stationKennels)if(kennel.Prop==null||!kennel.Prop.Exists())
+            foreach(StationKennel kennel in _stationKennels)if(kennel.Blip==null||!kennel.Blip.Exists())
             {
-                Vector3 configuredPosition=kennel.Position;kennel.Prop=new Rage.Object(model,configuredPosition);kennel.Prop.Heading=kennel.Heading;kennel.Prop.IsPersistent=true;
-                try
-                {
-                    if(kennel.SnapToGround)
-                    {
-                        NativeFunction.Natives.PLACE_OBJECT_ON_GROUND_PROPERLY(kennel.Prop);
-                        Vector3 snapped=kennel.Prop.Position;
-                        if(Math.Abs(snapped.Z-configuredPosition.Z)<=2.0f)kennel.Position=snapped;
-                        else{kennel.Prop.Position=configuredPosition;Game.LogTrivial("AdvancedK9 kennel ground-snap rejected unsafe Z change for "+kennel.Name+".");}
-                    }
-                    else kennel.Prop.Position=configuredPosition;
-                    NativeFunction.Natives.FREEZE_ENTITY_POSITION(kennel.Prop,true);
-                    kennel.Position=kennel.Prop.Position;
-                    int interior=NativeFunction.Natives.GET_INTERIOR_FROM_ENTITY<int>(kennel.Prop);
-                    if(interior!=0)Game.LogTrivial("AdvancedK9 kennel exterior audit WARNING: "+kennel.Name+" resolved inside interior "+interior+" at "+kennel.Position+".");
-                    else Game.LogTrivial("AdvancedK9 kennel exterior audit passed: "+kennel.Name+" at "+kennel.Position+".");
-                }
-                catch{kennel.Prop.Position=configuredPosition;kennel.Position=configuredPosition;}
-                if(kennel.Blip==null||!kennel.Blip.Exists())
-                {
-                    kennel.Blip=new Blip(kennel.Position);kennel.Blip.Name="K9 Kennel — "+kennel.Name;kennel.Blip.Color=Color.DodgerBlue;
-                    try{NativeFunction.Natives.SET_BLIP_SPRITE(kennel.Blip,273);NativeFunction.Natives.SET_BLIP_SCALE(kennel.Blip,.75f);NativeFunction.Natives.SET_BLIP_AS_SHORT_RANGE(kennel.Blip,true);}catch{}
-                }
-                Game.LogTrivial("AdvancedK9 kennel spawned: "+kennel.Name+" at "+kennel.Position+".");
+                kennel.Blip=new Blip(kennel.Position);kennel.Blip.Name="K9 Kennel — "+kennel.Name;kennel.Blip.Color=Color.DodgerBlue;
+                try{NativeFunction.Natives.SET_BLIP_SPRITE(kennel.Blip,273);NativeFunction.Natives.SET_BLIP_SCALE(kennel.Blip,.75f);NativeFunction.Natives.SET_BLIP_AS_SHORT_RANGE(kennel.Blip,true);}catch{}
             }
-            model.Dismiss();
+            UpdateNearbyKennelProps();
+        }
+
+        private void UpdateNearbyKennelProps()
+        {
+            Ped handler=Game.LocalPlayer.Character;if(handler==null||!handler.Exists())return;
+            foreach(StationKennel kennel in _stationKennels)
+            {
+                float distance=kennel.Position.DistanceTo(handler.Position);
+                if(distance>350f){try{if(kennel.Prop!=null&&kennel.Prop.Exists())kennel.Prop.Delete();}catch{}kennel.Prop=null;continue;}
+                if(kennel.Prop!=null&&kennel.Prop.Exists())continue;
+                SpawnNearbyKennelProp(kennel);
+            }
+        }
+
+        private void SpawnNearbyKennelProp(StationKennel kennel)
+        {
+            var model=new Model("prop_doghouse_01");if(!model.IsValid)return;model.LoadAndWait();
+            Vector3 configuredPosition=kennel.Position;
+            try
+            {
+                NativeFunction.Natives.REQUEST_COLLISION_AT_COORD(configuredPosition.X,configuredPosition.Y,configuredPosition.Z);
+                kennel.Prop=new Rage.Object(model,configuredPosition);kennel.Prop.Heading=kennel.Heading;kennel.Prop.IsPersistent=true;
+                if(kennel.SnapToGround)
+                {
+                    NativeFunction.Natives.PLACE_OBJECT_ON_GROUND_PROPERLY(kennel.Prop);
+                    Vector3 snapped=kennel.Prop.Position;
+                    if(Math.Abs(snapped.Z-configuredPosition.Z)<=2.0f)kennel.Position=snapped;
+                    else{kennel.Prop.Position=configuredPosition;Game.LogTrivial("AdvancedK9 kennel ground-snap rejected unsafe Z change for "+kennel.Name+".");}
+                }
+                NativeFunction.Natives.FREEZE_ENTITY_POSITION(kennel.Prop,true);kennel.Position=kennel.Prop.Position;
+                int interior=NativeFunction.Natives.GET_INTERIOR_FROM_ENTITY<int>(kennel.Prop);
+                if(interior!=0)Game.LogTrivial("AdvancedK9 kennel exterior audit WARNING: "+kennel.Name+" resolved inside interior "+interior+" at "+kennel.Position+".");
+                else Game.LogTrivial("AdvancedK9 kennel exterior audit passed: "+kennel.Name+" at "+kennel.Position+".");
+                Game.LogTrivial("AdvancedK9 nearby kennel spawned: "+kennel.Name+" at "+kennel.Position+".");
+            }
+            catch(Exception ex){try{if(kennel.Prop!=null&&kennel.Prop.Exists())kennel.Prop.Delete();}catch{}kennel.Prop=null;Game.LogTrivial("AdvancedK9 nearby kennel spawn failed for "+kennel.Name+": "+ex.Message);}
+            finally{model.Dismiss();}
         }
 
         private void MaintainStationKennels()
         {
             if(Game.GameTime<_nextKennelPrompt)return;_nextKennelPrompt=Game.GameTime+250;
+            UpdateNearbyKennelProps();
             StationKennel kennel=NearestKennel(3.2f);if(kennel==null)return;
             Game.DisplayHelp((DogExists()?"Return "+_profile.Name+" to":"Pick up "+_profile.Name+" from")+" the K9 kennel: hold "+_config.ModifierKey+" and press "+_config.SpawnKey+".");
         }
