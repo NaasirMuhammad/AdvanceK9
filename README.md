@@ -221,6 +221,8 @@ Stand where the doghouse should be placed, record the GTA coordinates and headin
 
 The same locations can be edited visually from **K9 Profile → Kennel Location Editor**. Select a station, place its doghouse near the player if needed, then hold the left mouse button and move the mouse—or use W/A/S/D—to drag it across the ground. R/F raises or lowers it and Q/E rotates it. Ground snap, revert, reset and save controls are available in the same menu. Changes are written only when **Save location to AdvancedK9.ini** is selected.
 
+Saved kennel positions are authoritative: AdvancedK9 reuses the exact X/Y/Z and heading on the next session instead of automatically rotating or ground-snapping them again.
+
 Inside **HUD & Display**, enable **Live HUD drag** to move the Glass Tactical card while viewing it. Hold the left mouse button and move the mouse, or use W/A/S/D; Q/E resizes the card. Leaving the menu saves the HUD layout.
 
 ## Trust and handler safety

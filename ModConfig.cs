@@ -108,36 +108,63 @@ namespace AdvancedK9
             result.CompatibilityProtectManagedPeds = ini.ReadBoolean("Compatibility", "ProtectRestrainedPeds", result.CompatibilityProtectManagedPeds);
             result.PortraitFile = ini.ReadString("HUD", "PortraitFile", result.PortraitFile);
             foreach(string key in KennelKeys)result._kennelLocations[key]=ini.ReadString("KennelLocations",key,"");
-            result.MigrateMeasuredKennelHeadings();
+            result.MigrateLegacyKennelDefaults();
             return result;
         }
 
-        private void MigrateMeasuredKennelHeadings()
+        private void MigrateLegacyKennelDefaults()
         {
-            var headings=new Dictionary<string,float[]>(StringComparer.OrdinalIgnoreCase){
-                {"MissionRow",new[]{84.88242f,174.88242f}},{"Davis",new[]{45.5168f,135.5168f}},{"Vespucci",new[]{10.9947f,100.9947f}},
-                {"Vinewood",new[]{246.6745f,336.6745f}},{"LaMesa",new[]{2.712838f,92.712838f}},{"Paleto",new[]{314.0662f,44.0662f}},
-                {"Ranger",new[]{166.3364f,256.3364f}},{"DelPerro",new[]{55.20818f,145.20818f}},{"PortOfLosSantos",new[]{5.843473f,95.843473f}},
-                {"GreatOceanHighway",new[]{94.95189f,184.95189f}},{"FortZancudo",new[]{145.3562f,235.3562f}},{"FIB",new[]{331.6973f,61.6973f}},{"BrookTrail",new[]{80.94661f,170.94661f}}
+            // Each final entry is last. Earlier entries are only the exact defaults shipped
+            // by the two preceding v0.22.10 packages; genuinely edited values do not match
+            // and are therefore never overwritten.
+            var placements=new Dictionary<string,string[]>(StringComparer.OrdinalIgnoreCase){
+                {"MissionRow",new[]{"435.4404,-974.9838,30.71601,84.88242","435.4404,-974.9838,30.71601,174.88242","436.4405,-974.9838,29.78568,359.8824"}},
+                {"Davis",new[]{"354.2758,-1591.15,29.29195,45.5168","354.2758,-1591.15,29.29195,135.5168","354.2758,-1591.15,28.31161,320.5168"}},
+                {"Vespucci",new[]{"-1082.498,-802.5654,19.22887,10.9947","-1082.498,-802.5654,19.22887,100.9947","-1082.498,-803.2653,18.24856,280.9947"}},
+                {"Vinewood",new[]{"637.631,-3.024063,82.78731,246.6745","637.631,-3.024063,82.78731,336.6745","636.7312,-2.824063,81.80692,161.6745"}},
+                {"LaMesa",new[]{"840.4388,-1276.318,26.44634,2.712838","840.4388,-1276.318,26.44634,92.712838","840.4388,-1276.518,25.46601,267.7128"}},
+                {"SandyShores",new[]{"1871.8,3691.7,33.7,210","1873.2,3692.601,32.66043,115"}},
+                {"Paleto",new[]{"-445.2472,6023.268,31.49012,314.0662","-445.2472,6023.268,31.49012,44.0662","-445.2472,6022.968,30.55979,224.0662"}},
+                {"Ranger",new[]{"370.1926,793.9409,187.5991,166.3364","370.1926,793.9409,187.5991,256.3364","370.1926,793.9409,186.6179,96.3364"}},
+                {"DelPerro",new[]{"-1621.023,-1013.941,13.15342,55.20818","-1621.023,-1013.941,13.15342,145.20818","-1621.023,-1013.941,12.17308,320.2082"}},
+                {"PortOfLosSantos",new[]{"-343.7605,-2787.573,5.000235,5.843473","-343.7605,-2787.573,5.000235,95.843473","-343.8605,-2788.374,4.0199,265.8435"}},
+                {"GreatOceanHighway",new[]{"-1490.288,4975.141,63.71766,94.95189","-1490.288,4975.141,63.71766,184.95189","-1490.288,4975.141,62.78698,354.9519"}},
+                {"FortZancudo",new[]{"-2363.956,3274.042,32.99627,145.3562","-2363.956,3274.042,32.99627,235.3562","-2363.756,3274.542,32.01595,60.3562"}},
+                {"FIB",new[]{"110.5135,-759.2312,45.75479,331.6973","110.5135,-759.2312,45.75479,61.6973","110.5135,-759.2312,44.77443,246.6973"}},
+                {"BrookTrail",new[]{"1744.612,3035.371,61.8116,80.94661","1744.612,3035.371,61.8116,170.94661","1744.612,3035.371,60.83065,335.9466"}}
             };
-            foreach(var pair in headings)
+            foreach(var pair in placements)
             {
-                Vector3 position;float heading;if(!TryGetKennelLocation(pair.Key,out position,out heading)||Math.Abs(heading-pair.Value[0])>.001f)continue;
-                try{SaveKennelLocation(pair.Key,position,pair.Value[1]);Game.LogTrivial("AdvancedK9 rotated measured kennel default 90 degrees right: "+pair.Key+".");}catch{}
+                string current;if(!_kennelLocations.TryGetValue(pair.Key,out current)||string.IsNullOrWhiteSpace(current))continue;bool legacy=false;
+                for(int i=0;i<pair.Value.Length-1;i++)if(SamePlacement(current,pair.Value[i])){legacy=true;break;}
+                if(!legacy)continue;Vector3 position;float heading;if(!TryParsePlacement(pair.Value[pair.Value.Length-1],out position,out heading))continue;
+                try{SaveKennelLocation(pair.Key,position,heading);Game.LogTrivial("AdvancedK9 migrated finalized kennel default: "+pair.Key+".");}catch{}
             }
+        }
+
+        private static bool SamePlacement(string left,string right)
+        {
+            Vector3 a,b;float ah,bh;if(!TryParsePlacement(left,out a,out ah)||!TryParsePlacement(right,out b,out bh))return false;
+            return Math.Abs(a.X-b.X)<.002f&&Math.Abs(a.Y-b.Y)<.002f&&Math.Abs(a.Z-b.Z)<.002f&&Math.Abs(ah-bh)<.002f;
+        }
+
+        private static bool TryParsePlacement(string value,out Vector3 position,out float heading)
+        {
+            position=new Vector3();heading=0f;if(string.IsNullOrWhiteSpace(value))return false;string[] parts=value.Split(',');float x,y,z,h;
+            if(parts.Length!=4||!float.TryParse(parts[0].Trim(),NumberStyles.Float,CultureInfo.InvariantCulture,out x)||!float.TryParse(parts[1].Trim(),NumberStyles.Float,CultureInfo.InvariantCulture,out y)||!float.TryParse(parts[2].Trim(),NumberStyles.Float,CultureInfo.InvariantCulture,out z)||!float.TryParse(parts[3].Trim(),NumberStyles.Float,CultureInfo.InvariantCulture,out h))return false;
+            position=new Vector3(x,y,z);heading=h;return true;
         }
 
         public bool TryGetKennelLocation(string key,out Vector3 position,out float heading)
         {
             position=new Vector3();heading=0f;string value;
             if(!_kennelLocations.TryGetValue(key,out value)||string.IsNullOrWhiteSpace(value))return false;
-            string[] parts=value.Split(',');float x,y,z,h;
-            if(parts.Length!=4||!float.TryParse(parts[0].Trim(),NumberStyles.Float,CultureInfo.InvariantCulture,out x)||!float.TryParse(parts[1].Trim(),NumberStyles.Float,CultureInfo.InvariantCulture,out y)||!float.TryParse(parts[2].Trim(),NumberStyles.Float,CultureInfo.InvariantCulture,out z)||!float.TryParse(parts[3].Trim(),NumberStyles.Float,CultureInfo.InvariantCulture,out h))
+            if(!TryParsePlacement(value,out position,out heading))
             {
                 Game.LogTrivial("AdvancedK9 ignored invalid kennel override '"+key+"'. Expected X,Y,Z,Heading.");
                 return false;
             }
-            position=new Vector3(x,y,z);heading=h;return true;
+            return true;
         }
 
         public void SaveKennelLocation(string key,Vector3 position,float heading)

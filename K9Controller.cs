@@ -539,23 +539,23 @@ namespace AdvancedK9
         private void SpawnStationKennels()
         {
             if(_stationKennels.Count==0)_stationKennels.AddRange(new[]{
-                ConfiguredKennel("MissionRow","Downtown / Mission Row Police Station",new Vector3(435.4404f,-974.9838f,30.71601f),174.88242f),
-                ConfiguredKennel("Davis","Davis Police Station",new Vector3(354.2758f,-1591.15f,29.29195f),135.5168f),
-                ConfiguredKennel("Vespucci","Vespucci Police Station",new Vector3(-1082.498f,-802.5654f,19.22887f),100.9947f),
+                ConfiguredKennel("MissionRow","Downtown / Mission Row Police Station",new Vector3(436.4405f,-974.9838f,29.78568f),359.8824f),
+                ConfiguredKennel("Davis","Davis Police Station",new Vector3(354.2758f,-1591.15f,28.31161f),320.5168f),
+                ConfiguredKennel("Vespucci","Vespucci Police Station",new Vector3(-1082.498f,-803.2653f,18.24856f),280.9947f),
                 ConfiguredKennel("RockfordHills","Rockford Hills Police Station",new Vector3(-555.8f,-132.2f,38.2f),115f,true),
-                ConfiguredKennel("Vinewood","Vinewood Police Station",new Vector3(637.631f,-3.024063f,82.78731f),336.6745f),
-                ConfiguredKennel("LaMesa","La Mesa Police Station",new Vector3(840.4388f,-1276.318f,26.44634f),92.712838f),
-                ConfiguredKennel("SandyShores","Sandy Shores Sheriff Station",new Vector3(1871.8f,3691.7f,33.7f),210f,true),
-                ConfiguredKennel("Paleto","Paleto Police Station",new Vector3(-445.2472f,6023.268f,31.49012f),44.0662f),
-                ConfiguredKennel("Ranger","Ranger Police Station",new Vector3(370.1926f,793.9409f,187.5991f),256.3364f),
+                ConfiguredKennel("Vinewood","Vinewood Police Station",new Vector3(636.7312f,-2.824063f,81.80692f),161.6745f),
+                ConfiguredKennel("LaMesa","La Mesa Police Station",new Vector3(840.4388f,-1276.518f,25.46601f),267.7128f),
+                ConfiguredKennel("SandyShores","Sandy Shores Sheriff Station",new Vector3(1873.2f,3692.601f,32.66043f),115f),
+                ConfiguredKennel("Paleto","Paleto Police Station",new Vector3(-445.2472f,6022.968f,30.55979f),224.0662f),
+                ConfiguredKennel("Ranger","Ranger Police Station",new Vector3(370.1926f,793.9409f,186.6179f),96.3364f),
                 ConfiguredKennel("LSIA","LSIA Field Office",new Vector3(-870.6f,-2417.4f,14.6f),150f,true),
                 ConfiguredKennel("Bolingbroke","Bolingbroke Penitentiary",new Vector3(1848.9f,2604.6f,45.6f),180f,true),
-                ConfiguredKennel("DelPerro","Del Perro Police Station",new Vector3(-1621.023f,-1013.941f,13.15342f),145.20818f),
-                ConfiguredKennel("PortOfLosSantos","Port Of Los Santos Police Station",new Vector3(-343.7605f,-2787.573f,5.000235f),95.843473f),
-                ConfiguredKennel("GreatOceanHighway","Great Ocean Highway Police Station",new Vector3(-1490.288f,4975.141f,63.71766f),184.95189f),
-                ConfiguredKennel("FortZancudo","Fort Zancudo Police Station",new Vector3(-2363.956f,3274.042f,32.99627f),235.3562f),
-                ConfiguredKennel("FIB","FIB Police Station",new Vector3(110.5135f,-759.2312f,45.75479f),61.6973f),
-                ConfiguredKennel("BrookTrail","Brook Trail Police Station",new Vector3(1744.612f,3035.371f,61.8116f),170.94661f)
+                ConfiguredKennel("DelPerro","Del Perro Police Station",new Vector3(-1621.023f,-1013.941f,12.17308f),320.2082f),
+                ConfiguredKennel("PortOfLosSantos","Port Of Los Santos Police Station",new Vector3(-343.8605f,-2788.374f,4.0199f),265.8435f),
+                ConfiguredKennel("GreatOceanHighway","Great Ocean Highway Police Station",new Vector3(-1490.288f,4975.141f,62.78698f),354.9519f),
+                ConfiguredKennel("FortZancudo","Fort Zancudo Police Station",new Vector3(-2363.756f,3274.542f,32.01595f),60.3562f),
+                ConfiguredKennel("FIB","FIB Police Station",new Vector3(110.5135f,-759.2312f,44.77443f),246.6973f),
+                ConfiguredKennel("BrookTrail","Brook Trail Police Station",new Vector3(1744.612f,3035.371f,60.83065f),335.9466f)
             });
             foreach(StationKennel kennel in _stationKennels)if(kennel.Blip==null||!kennel.Blip.Exists())
             {
@@ -571,7 +571,7 @@ namespace AdvancedK9
             if(!overridden){position=defaultPosition;heading=defaultHeading;}
             // Measured placements retain their X/Y coordinates while nearby collision
             // allows the doghouse to settle onto the surface before it is forced level.
-            StationKennel kennel=retainGrounding&&!overridden?new StationKennel(key,name,position,heading):new StationKennel(key,name,position,heading,true,true,0f,true);
+            StationKennel kennel=retainGrounding&&!overridden?new StationKennel(key,name,position,heading):new StationKennel(key,name,position,heading,false,false,0f,true);
             kennel.DefaultPosition=defaultPosition;kennel.DefaultHeading=defaultHeading;return kennel;
         }
 
