@@ -2,6 +2,13 @@
 
 All published AdvancedK9 versions are beta builds.
 
+## 0.22.8-beta
+
+- Removed the Brook Trail kennel and its map blip because the location remained unreliable and floating.
+- Removed the FIB kennel and its map blip because the location remained inside or inaccessible around the building.
+- Restored the Great Ocean Highway kennel to the station side of its previous area, then offset it in the opposite direction from the highway toward the left/bottom side of the police-station map symbol.
+- Left every other station kennel unchanged from v0.22.7.
+
 ## 0.22.7-beta
 
 - Restored the San Andreas/Vespucci kennel to its previous horizontal location and applies the corrected ground alignment there.

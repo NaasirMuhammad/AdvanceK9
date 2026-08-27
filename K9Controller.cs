@@ -420,11 +420,9 @@ namespace AdvancedK9
                 new StationKennel("Beaver Bush State Ranger Station",new Vector3(402.6f,788.8f,187.7f),270f),
                 new StationKennel("LSIA Field Office",new Vector3(-870.6f,-2417.4f,14.6f),150f),
                 new StationKennel("Bolingbroke Penitentiary",new Vector3(1848.9f,2604.6f,45.6f),180f),
-                new StationKennel("FIB Headquarters",new Vector3(158.2f,-776.4f,43.6f),250f),
                 new StationKennel("Del Perro Police Station",new Vector3(-1628.7f,-1012.2f,13.1f),140f),
                 new StationKennel("Los Santos Port Police",new Vector3(-338.1f,-2784.2f,5.7f),180f),
-                new StationKennel("Raton Canyon Ranger Office",new Vector3(-1508.2f,4985.6f,63.2f),45f),
-                new StationKennel("Senora Ranger Station",new Vector3(1732.4f,3036.2f,63.7f),270f,true,true),
+                new StationKennel("Raton Canyon Ranger Office",new Vector3(-1491.2f,4970.2f,63.9f),45f),
                 new StationKennel("Fort Zancudo State Police",new Vector3(-2362.8f,3264.2f,32.8f),60f)
             });
             foreach(StationKennel kennel in _stationKennels)if(kennel.Blip==null||!kennel.Blip.Exists())
