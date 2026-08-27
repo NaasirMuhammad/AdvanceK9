@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Windows.Forms;
 using Rage;
@@ -46,6 +48,9 @@ namespace AdvancedK9
         public bool CompatibilityShareResults = true;
         public bool CompatibilityProtectManagedPeds = true;
         public string PortraitFile = "";
+        private readonly Dictionary<string,string> _kennelLocations=new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase);
+
+        private static readonly string[] KennelKeys={"MissionRow","Davis","Vespucci","RockfordHills","Vinewood","LaMesa","SandyShores","Paleto","Ranger","LSIA","Bolingbroke","DelPerro","PortOfLosSantos","GreatOceanHighway","FortZancudo","FIB","BrookTrail"};
 
         public static ModConfig Load()
         {
@@ -101,7 +106,21 @@ namespace AdvancedK9
             result.CompatibilityShareResults = ini.ReadBoolean("Compatibility", "ShareK9Results", result.CompatibilityShareResults);
             result.CompatibilityProtectManagedPeds = ini.ReadBoolean("Compatibility", "ProtectRestrainedPeds", result.CompatibilityProtectManagedPeds);
             result.PortraitFile = ini.ReadString("HUD", "PortraitFile", result.PortraitFile);
+            foreach(string key in KennelKeys)result._kennelLocations[key]=ini.ReadString("KennelLocations",key,"");
             return result;
+        }
+
+        public bool TryGetKennelLocation(string key,out Vector3 position,out float heading)
+        {
+            position=new Vector3();heading=0f;string value;
+            if(!_kennelLocations.TryGetValue(key,out value)||string.IsNullOrWhiteSpace(value))return false;
+            string[] parts=value.Split(',');float x,y,z,h;
+            if(parts.Length!=4||!float.TryParse(parts[0].Trim(),NumberStyles.Float,CultureInfo.InvariantCulture,out x)||!float.TryParse(parts[1].Trim(),NumberStyles.Float,CultureInfo.InvariantCulture,out y)||!float.TryParse(parts[2].Trim(),NumberStyles.Float,CultureInfo.InvariantCulture,out z)||!float.TryParse(parts[3].Trim(),NumberStyles.Float,CultureInfo.InvariantCulture,out h))
+            {
+                Game.LogTrivial("AdvancedK9 ignored invalid kennel override '"+key+"'. Expected X,Y,Z,Heading.");
+                return false;
+            }
+            position=new Vector3(x,y,z);heading=h;return true;
         }
 
         private static float Clamp(float value, float min, float max) => Math.Max(min, Math.Min(max, value));

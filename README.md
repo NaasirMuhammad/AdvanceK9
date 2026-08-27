@@ -1,6 +1,6 @@
-# Advanced K9 v0.22.9-beta for LSPDFR
+# Advanced K9 v0.22.10-beta for LSPDFR
 
-AdvancedK9 v0.22.9-beta is a persistent LSPDFR/RAGE Plugin Hook police-dog partner with push-to-talk voice control, per-dog progression, recoverable field injuries, accessible exterior station kennels and a compact Glass Tactical HUD with silent negative vehicle searches and attached result alerts. All published builds are beta builds while gameplay and model compatibility continue to be tested.
+AdvancedK9 v0.22.10-beta is a persistent LSPDFR/RAGE Plugin Hook police-dog partner with push-to-talk voice control, per-dog progression, user-positioned exterior station kennels and a compact Glass Tactical HUD with silent negative vehicle searches and attached result alerts. All published builds are beta builds while gameplay and model compatibility continue to be tested.
 
 ## Glass Tactical HUD
 
@@ -206,6 +206,18 @@ AI voice requires internet access and may incur provider charges. Audio is sent 
 Holding V is silent by default. Voice errors remain visible even when status text is disabled. Routine command acknowledgement popups are also disabled by default; K9 search/detection results, failures and safety warnings remain visible.
 
 Updates preserve the live AdvancedK9.ini. The release package supplies AdvancedK9.default.ini and copies it to the live name only when no user configuration exists.
+
+## Custom kennel locations
+
+Station doghouses can be repositioned in the preserved `AdvancedK9.ini`. Under `[KennelLocations]`, each entry uses `X,Y,Z,Heading`:
+
+```ini
+[KennelLocations]
+Davis=354.2758,-1591.15,29.29195,45.5168
+Vinewood=637.631,-3.024063,82.78731,246.6745
+```
+
+Stand where the doghouse should be placed, record the GTA coordinates and heading, then replace that station's four values. User-entered locations use the exact supplied Z coordinate and remain level; invalid entries are ignored safely and reported in `RagePluginHook.log`.
 
 ## Trust and handler safety
 

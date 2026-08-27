@@ -409,21 +409,23 @@ namespace AdvancedK9
         private void SpawnStationKennels()
         {
             if(_stationKennels.Count==0)_stationKennels.AddRange(new[]{
-                new StationKennel("Downtown / Mission Row Police Station",new Vector3(452.15f,-1011.45f,29.0f),90f),
-                new StationKennel("Davis Sheriff Station",new Vector3(399.2f,-1607.6f,29.3f),270f,true,true,.12f,true),
-                new StationKennel("Vespucci Police Station",new Vector3(-1113.9f,-851.4f,14.0f),126f,true,true,.05f),
-                new StationKennel("Rockford Hills Police Station",new Vector3(-555.8f,-132.2f,38.2f),115f),
-                new StationKennel("Vinewood Police Station",new Vector3(645.3f,17.8f,82.8f),160f,true,true,.08f),
-                new StationKennel("La Mesa Highway Patrol Station",new Vector3(855.2f,-1274.6f,26.4f),180f),
-                new StationKennel("Sandy Shores Sheriff Station",new Vector3(1871.8f,3691.7f,33.7f),210f),
-                new StationKennel("Paleto Bay Sheriff Station",new Vector3(-474.8f,6028.6f,31.3f),135f),
-                new StationKennel("Beaver Bush State Ranger Station",new Vector3(402.6f,788.8f,187.7f),270f),
-                new StationKennel("LSIA Field Office",new Vector3(-870.6f,-2417.4f,14.6f),150f),
-                new StationKennel("Bolingbroke Penitentiary",new Vector3(1848.9f,2604.6f,45.6f),180f),
-                new StationKennel("Del Perro Police Station",new Vector3(-1628.7f,-1012.2f,13.1f),140f),
-                new StationKennel("Los Santos Port Police",new Vector3(-338.1f,-2784.2f,5.7f),180f),
-                new StationKennel("Raton Canyon Ranger Office",new Vector3(-1491.2f,4970.2f,63.9f),45f),
-                new StationKennel("Fort Zancudo State Police",new Vector3(-2362.8f,3264.2f,32.8f),60f)
+                ConfiguredKennel("MissionRow","Downtown / Mission Row Police Station",new Vector3(435.4404f,-974.9838f,30.71601f),84.88242f),
+                ConfiguredKennel("Davis","Davis Police Station",new Vector3(354.2758f,-1591.15f,29.29195f),45.5168f),
+                ConfiguredKennel("Vespucci","Vespucci Police Station",new Vector3(-1082.498f,-802.5654f,19.22887f),10.9947f),
+                ConfiguredKennel("RockfordHills","Rockford Hills Police Station",new Vector3(-555.8f,-132.2f,38.2f),115f,true),
+                ConfiguredKennel("Vinewood","Vinewood Police Station",new Vector3(637.631f,-3.024063f,82.78731f),246.6745f),
+                ConfiguredKennel("LaMesa","La Mesa Police Station",new Vector3(840.4388f,-1276.318f,26.44634f),2.712838f),
+                ConfiguredKennel("SandyShores","Sandy Shores Sheriff Station",new Vector3(1871.8f,3691.7f,33.7f),210f,true),
+                ConfiguredKennel("Paleto","Paleto Police Station",new Vector3(-445.2472f,6023.268f,31.49012f),314.0662f),
+                ConfiguredKennel("Ranger","Ranger Police Station",new Vector3(370.1926f,793.9409f,187.5991f),166.3364f),
+                ConfiguredKennel("LSIA","LSIA Field Office",new Vector3(-870.6f,-2417.4f,14.6f),150f,true),
+                ConfiguredKennel("Bolingbroke","Bolingbroke Penitentiary",new Vector3(1848.9f,2604.6f,45.6f),180f,true),
+                ConfiguredKennel("DelPerro","Del Perro Police Station",new Vector3(-1621.023f,-1013.941f,13.15342f),55.20818f),
+                ConfiguredKennel("PortOfLosSantos","Port Of Los Santos Police Station",new Vector3(-343.7605f,-2787.573f,5.000235f),5.843473f),
+                ConfiguredKennel("GreatOceanHighway","Great Ocean Highway Police Station",new Vector3(-1490.288f,4975.141f,63.71766f),94.95189f),
+                ConfiguredKennel("FortZancudo","Fort Zancudo Police Station",new Vector3(-2363.956f,3274.042f,32.99627f),145.3562f),
+                ConfiguredKennel("FIB","FIB Police Station",new Vector3(110.5135f,-759.2312f,45.75479f),331.6973f),
+                ConfiguredKennel("BrookTrail","Brook Trail Police Station",new Vector3(1744.612f,3035.371f,61.8116f),80.94661f)
             });
             foreach(StationKennel kennel in _stationKennels)if(kennel.Blip==null||!kennel.Blip.Exists())
             {
@@ -431,6 +433,16 @@ namespace AdvancedK9
                 try{NativeFunction.Natives.SET_BLIP_SPRITE(kennel.Blip,273);NativeFunction.Natives.SET_BLIP_SCALE(kennel.Blip,.75f);NativeFunction.Natives.SET_BLIP_AS_SHORT_RANGE(kennel.Blip,true);}catch{}
             }
             UpdateNearbyKennelProps();
+        }
+
+        private StationKennel ConfiguredKennel(string key,string name,Vector3 defaultPosition,float defaultHeading,bool retainGrounding=false)
+        {
+            Vector3 position;float heading;bool overridden=_config.TryGetKennelLocation(key,out position,out heading);
+            if(!overridden){position=defaultPosition;heading=defaultHeading;}
+            // User-measured placements are authoritative. Forced level rotation prevents
+            // the doghouse from tilting; automatic ground correction remains only for
+            // legacy unmodified stations whose previous placement was already approved.
+            return retainGrounding&&!overridden?new StationKennel(name,position,heading):new StationKennel(name,position,heading,false,false,0f,true);
         }
 
         private void UpdateNearbyKennelProps()
