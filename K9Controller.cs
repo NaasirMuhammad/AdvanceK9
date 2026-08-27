@@ -79,6 +79,7 @@ namespace AdvancedK9
         private uint _hudAlertUntil;
         private bool _hudPreviewSearch;
         private bool _hudPreviewAlert;
+        private bool _searchInProgress;
         private bool _deployed;
         private bool _downed;
         private Vector3 _lastDogPosition;
@@ -333,12 +334,12 @@ namespace AdvancedK9
                     case K9Command.Recall: Follow(); break;
                     case K9Command.WhistleRecall: WhistleRecall(); break;
                     case K9Command.HandSignal: HandSignal(); break;
-                    case K9Command.SearchArea: Search(false); break;
-                    case K9Command.SearchBuilding: SearchBuilding(); break;
-                    case K9Command.SearchVehicle: Search(true); break;
-                    case K9Command.SearchNarcotics: Search(false,DetectionSpecialty.Narcotics); break;
-                    case K9Command.SearchExplosives: Search(false,DetectionSpecialty.Explosives); break;
-                    case K9Command.SearchWeapons: Search(false,DetectionSpecialty.Weapons); break;
+                    case K9Command.SearchArea: BeginSearch(false,DetectionSpecialty.General); break;
+                    case K9Command.SearchBuilding: BeginBuildingSearch(); break;
+                    case K9Command.SearchVehicle: BeginSearch(true,DetectionSpecialty.General); break;
+                    case K9Command.SearchNarcotics: BeginSearch(false,DetectionSpecialty.Narcotics); break;
+                    case K9Command.SearchExplosives: BeginSearch(false,DetectionSpecialty.Explosives); break;
+                    case K9Command.SearchWeapons: BeginSearch(false,DetectionSpecialty.Weapons); break;
                     case K9Command.CollectScent: CollectScent(); break;
                     case K9Command.Track: Track(); break;
                     case K9Command.FindTrail: ReacquireTrail(); break;
@@ -669,9 +670,9 @@ namespace AdvancedK9
             }
             if (positive)
             {
+                SetHudAlert(resultSpecialty);
                 Sit();
                 Bark(3);
-                SetHudAlert(resultSpecialty);
                 Game.DisplayNotification("~r~POSITIVE "+SpecialtyLabel(resultSpecialty).ToUpperInvariant()+" K9 INDICATION~s~ — " + TargetLabel(target) + ".");
                 _trust.Change(1, "successful detection");
                 _profile.RecordSearch();
@@ -685,6 +686,20 @@ namespace AdvancedK9
             }
             _hudSearchProgress=100;
             _hudSearchLabel="";
+        }
+
+        private void BeginSearch(bool vehicleOnly,DetectionSpecialty specialty)
+        {
+            if(_searchInProgress){Game.DisplayNotification("~y~K9 search already in progress.");return;}
+            _searchInProgress=true;_state=K9State.Searching;_hudSearchLabel=vehicleOnly?"VEHICLE SEARCH":"AREA SEARCH";_hudSearchProgress=0;
+            GameFiber.StartNew(()=>{try{Search(vehicleOnly,specialty);}catch(Exception ex){Game.LogTrivial("AdvancedK9 asynchronous search failed: "+ex);Game.DisplayNotification("~r~K9 search failed.~s~ See RagePluginHook.log.");Follow();}finally{_hudSearchLabel="";_searchInProgress=false;}},"AdvancedK9 Search");
+        }
+
+        private void BeginBuildingSearch()
+        {
+            if(_searchInProgress){Game.DisplayNotification("~y~K9 search already in progress.");return;}
+            _searchInProgress=true;_state=K9State.Searching;_hudSearchLabel="BUILDING SEARCH";_hudSearchProgress=0;
+            GameFiber.StartNew(()=>{try{SearchBuilding();}catch(Exception ex){Game.LogTrivial("AdvancedK9 asynchronous building search failed: "+ex);Game.DisplayNotification("~r~K9 building search failed.~s~ See RagePluginHook.log.");Follow();}finally{_hudSearchLabel="";_searchInProgress=false;}},"AdvancedK9 Building Search");
         }
 
         private void SearchBuilding()
@@ -1040,7 +1055,7 @@ namespace AdvancedK9
             if(Game.GameTime<_nextHudUpdate)return;_nextHudUpdate=Game.GameTime+50;
             bool inactive=!_deployed||_state==K9State.Dismissed||_state==K9State.InVehicle;
             bool collapsed=_profile.HudMode==1&&_profile.HudAutoCollapse&&inactive&&!_hudPreviewSearch&&!_hudPreviewAlert;
-            string search=_hudPreviewSearch?"VEHICLE SEARCH":_state==K9State.Searching?(_hudSearchLabel.Length>0?_hudSearchLabel:"SCANNING"):_state==K9State.Tracking?"SCENT TRACK":"";
+            string search=_hudPreviewSearch?"":_state==K9State.Searching&&!string.Equals(_hudSearchLabel,"VEHICLE SEARCH",StringComparison.OrdinalIgnoreCase)?(_hudSearchLabel.Length>0?_hudSearchLabel:"SCANNING"):_state==K9State.Tracking?"SCENT TRACK":"";
             int searchProgress=_hudPreviewSearch?64:_hudSearchProgress;
             string alert=_hudPreviewAlert?"NARCOTICS":Game.GameTime<_hudAlertUntil?_hudAlert:"";
             float distance=DogEntityExists()?_dog.DistanceTo(Game.LocalPlayer.Character):0f;

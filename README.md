@@ -1,6 +1,6 @@
-# Advanced K9 v0.22.3-beta for LSPDFR
+# Advanced K9 v0.22.4-beta for LSPDFR
 
-AdvancedK9 v0.22.3-beta is a persistent LSPDFR/RAGE Plugin Hook police-dog partner with push-to-talk voice control, per-dog progression, recoverable field injuries and a compact Glass Tactical HUD with grouped LemonUI command/profile menus. All published builds are beta builds while gameplay and model compatibility continue to be tested.
+AdvancedK9 v0.22.4-beta is a persistent LSPDFR/RAGE Plugin Hook police-dog partner with push-to-talk voice control, per-dog progression, recoverable field injuries and a compact Glass Tactical HUD with live search states and grouped LemonUI command/profile menus. All published builds are beta builds while gameplay and model compatibility continue to be tested.
 
 ## Glass Tactical HUD
 

@@ -2,6 +2,14 @@
 
 All published AdvancedK9 versions are beta builds.
 
+## 0.22.4-beta
+
+- Vehicle, area, specialty and building searches now run on a dedicated gameplay fiber so the controller and HUD remain responsive throughout the search.
+- The Glass Tactical HUD now displays `SEARCHING` during the four-corner vehicle sweep instead of retaining the stale `FOLLOWING` snapshot.
+- Removed the redundant bottom `VEHICLE SEARCH` wording from the vehicle-search HUD state.
+- Positive specialty alerts are armed before the indication bark and appear in the amber panel attached above the K9 card.
+- Added a duplicate-search guard so another search cannot begin while one is already active.
+
 ## 0.22.3-beta
 
 - Replaced the dead-K9/kenneled-state collision with a recoverable `DOWNED` state.
