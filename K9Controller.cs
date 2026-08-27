@@ -764,19 +764,20 @@ namespace AdvancedK9
             }
             if (positive)
             {
-                SetHudAlert(resultSpecialty);
+                SetHudAlert(SpecialtyLabel(resultSpecialty).ToUpperInvariant());
                 Sit();
                 Bark(3);
-                Game.DisplayNotification("~r~POSITIVE "+SpecialtyLabel(resultSpecialty).ToUpperInvariant()+" K9 INDICATION~s~ — " + TargetLabel(target) + ".");
                 _trust.Change(1, "successful detection");
                 _profile.RecordSearch();
                 _pr.RecordK9Indication(target,true,resultSpecialty);
+                Game.LogTrivial("AdvancedK9 search result: positive "+SpecialtyLabel(resultSpecialty)+" indication on "+TargetLabel(target)+"; three-bark alert authorized.");
             }
             else
             {
-                Game.DisplayNotification("~g~No "+(specialty==DetectionSpecialty.General?"certified odor":SpecialtyLabel(specialty))+" K9 indication~s~ on " + TargetLabel(target) + ".");
+                SetHudAlert("NEGATIVE — NO "+(specialty==DetectionSpecialty.General?"CERTIFIED ODOR":SpecialtyLabel(specialty).ToUpperInvariant()));
                 Sit();
                 _pr.RecordK9Indication(target,false,specialty);
+                Game.LogTrivial("AdvancedK9 search result: negative indication on "+TargetLabel(target)+"; K9 remains silent.");
             }
             _hudSearchProgress=100;
             _hudSearchLabel="";
@@ -859,22 +860,18 @@ namespace AdvancedK9
 
         private bool SearchVehiclePerimeter(Vehicle vehicle)
         {
-            Game.DisplayNotification("~b~K9 four-corner vehicle sweep started.~s~~n~A positive K9 barks only after all four corners are checked.");
             var points=new[]{new Vector3(-1.45f,2.45f,0f),new Vector3(1.45f,2.45f,0f),new Vector3(1.45f,-2.45f,0f),new Vector3(-1.45f,-2.45f,0f)};
-            var labels=new[]{"front-left","front-right","rear-right","rear-left"};
             for(var i=0;i<points.Length;i++)
             {
                 _hudSearchLabel="VEHICLE SEARCH";
                 _hudSearchProgress=i*25;
                 if(!DogExists()||!vehicle.Exists()||_state!=K9State.Searching)return false;
                 var point=vehicle.GetOffsetPosition(points[i]);
-                Game.DisplaySubtitle("~b~Vehicle search~s~ — "+labels[i]+" corner "+(i+1)+"/4",1800);
                 _dog.Tasks.Clear();
                 _dog.Tasks.FollowNavigationMeshToPosition(point,vehicle.Heading,1.45f).WaitForCompletion(5000);
                 if(_dog.DistanceTo(point)>3.5f)continue;
                 NativeFunction.Natives.TASK_TURN_PED_TO_FACE_ENTITY(_dog,vehicle,900);GameFiber.Wait(900);
-                PlayDogAnimation("creatures@rottweiler@indication@","indicate_low",800,0);
-                GameFiber.Wait(300);
+                NativeFunction.Natives.TASK_PAUSE(_dog,900);GameFiber.Wait(900);
             }
             _hudSearchProgress=100;
             return DogExists()&&vehicle.Exists();
@@ -1149,16 +1146,17 @@ namespace AdvancedK9
             if(Game.GameTime<_nextHudUpdate)return;_nextHudUpdate=Game.GameTime+50;
             bool inactive=!_deployed||_state==K9State.Dismissed||_state==K9State.InVehicle;
             bool collapsed=_profile.HudMode==1&&_profile.HudAutoCollapse&&inactive&&!_hudPreviewSearch&&!_hudPreviewAlert;
-            string search=_hudPreviewSearch?"":_state==K9State.Searching&&!string.Equals(_hudSearchLabel,"VEHICLE SEARCH",StringComparison.OrdinalIgnoreCase)?(_hudSearchLabel.Length>0?_hudSearchLabel:"SCANNING"):_state==K9State.Tracking?"SCENT TRACK":"";
+            bool hudSearching=_hudPreviewSearch||_searchInProgress||_state==K9State.Searching;
+            string search=_hudPreviewSearch?"SEARCH PREVIEW":hudSearching&&!string.Equals(_hudSearchLabel,"VEHICLE SEARCH",StringComparison.OrdinalIgnoreCase)?(_hudSearchLabel.Length>0?_hudSearchLabel:"SCANNING"):_state==K9State.Tracking?"SCENT TRACK":"";
             int searchProgress=_hudPreviewSearch?64:_hudSearchProgress;
             string alert=_hudPreviewAlert?"NARCOTICS":Game.GameTime<_hudAlertUntil?_hudAlert:"";
             float distance=DogEntityExists()?_dog.DistanceTo(Game.LocalPlayer.Character):0f;
-            string displayState=_downed?"DOWNED":_deployed?_state.ToString():"KENNELED";
-            _hud.Update(new GlassTacticalHud.Snapshot{Visible=_profile.HudMode!=0,Collapsed=collapsed,ShowPortrait=_profile.HudShowPortrait,ShowState=_profile.HudShowState,ShowHealth=_profile.HudShowHealth,ShowStamina=_profile.HudShowStamina,ShowDistance=_profile.HudShowDistance&&DogEntityExists(),ShowCommand=_profile.HudShowCommand,ShowBehavior=_profile.HudShowBehavior,ShowSearchProgress=_profile.HudSearchProgress,X=_profile.HudX,Y=_profile.HudY,Scale=_profile.HudScale,Opacity=_profile.HudOpacity,Distance=distance,Health=_profile.Health,Stamina=_profile.Stamina,SearchProgress=searchProgress,Name=_profile.Name,State=displayState,Command=_hudCommand,Behavior=HudBehavior(),SearchLabel=search,Alert=alert,PortraitFile=_profile.PortraitFile,Breed=_profile.Breed,Model=_profile.ModelName,AppearanceKey=_profile.CoatVariation+":"+_profile.VestIndex+":"+_profile.VestTexture,Metric=_profile.HudMetricDistance});
+            string displayState=_downed?"DOWNED":_deployed?(hudSearching?"SEARCHING":_state.ToString()):"KENNELED";
+            _hud.Update(new GlassTacticalHud.Snapshot{Visible=_profile.HudMode!=0,Collapsed=collapsed,ShowPortrait=_profile.HudShowPortrait,ShowState=_profile.HudShowState,ShowHealth=_profile.HudShowHealth,ShowStamina=_profile.HudShowStamina,ShowDistance=_profile.HudShowDistance&&DogEntityExists(),ShowCommand=_profile.HudShowCommand,ShowBehavior=_profile.HudShowBehavior,ShowSearchProgress=_profile.HudSearchProgress,X=_profile.HudX,Y=_profile.HudY,Scale=_profile.HudScale,Opacity=_profile.HudOpacity,Distance=distance,Health=_profile.Health,Stamina=_profile.Stamina,SearchProgress=searchProgress,Name=_profile.Name,State=displayState,Command=_hudCommand,Behavior=hudSearching?"SEARCHING":HudBehavior(),SearchLabel=search,Alert=alert,PortraitFile=_profile.PortraitFile,Breed=_profile.Breed,Model=_profile.ModelName,AppearanceKey=_profile.CoatVariation+":"+_profile.VestIndex+":"+_profile.VestTexture,Metric=_profile.HudMetricDistance});
             if(_camera.Active&&DogExists()){float d=_dog.DistanceTo(Game.LocalPlayer.Character);NativeFunction.Natives.DRAW_RECT(.5f,.91f,.52f,.09f,0,0,0,180);DrawText("K9 CAM  GPS "+_dog.Position.X.ToString("0")+","+_dog.Position.Y.ToString("0")+"  HDG "+HeadingCardinal(_dog.Heading)+"  HANDLER "+d.ToString("0.0")+"m",.25f,.875f,.31f);DrawText("STATE "+_state+"  HP "+_profile.Health+"  STA "+_profile.Stamina+"  H2O "+_profile.Water,.25f,.91f,.27f);}
         }
         private string HudBehavior(){if(_downed)return "NEEDS FIRST AID";if(!_deployed)return "INACTIVE";switch(_state){case K9State.Following:return "FOLLOWING";case K9State.Heeling:return "AT HEEL";case K9State.Searching:return "SEARCHING";case K9State.Tracking:return "TRACKING";case K9State.Apprehending:return "DEPLOYED";case K9State.InVehicle:return "SECURED";case K9State.Leashed:return "LEASHED";default:return _state.ToString().ToUpperInvariant();}}
-        private void SetHudAlert(DetectionSpecialty specialty){_hudAlert=SpecialtyLabel(specialty).ToUpperInvariant();_hudAlertUntil=Game.GameTime+(uint)_profile.HudAlertDuration;}
+        private void SetHudAlert(string result){_hudAlert=result??"";_hudAlertUntil=Game.GameTime+(uint)_profile.HudAlertDuration;}
         private static void DrawStatusBar(string label,int value,float x,float y,float width,int r,int g,int b){DrawText(label+" "+value+"%",x,y-.015f,.22f);NativeFunction.Natives.DRAW_RECT(x+width/2,y+.012f,width,.009f,32,40,48,235);float fill=width*Math.Max(0,Math.Min(100,value))/100f;if(fill>0)NativeFunction.Natives.DRAW_RECT(x+fill/2,y+.012f,fill,.009f,r,g,b,255);}
         private static string HeadingCardinal(float h){h=(h%360+360)%360;return h<22.5f||h>=337.5f?"N":h<67.5f?"NE":h<112.5f?"E":h<157.5f?"SE":h<202.5f?"S":h<247.5f?"SW":h<292.5f?"W":"NW";}
         private static void DrawText(string value,float x,float y,float scale){NativeFunction.Natives.SET_TEXT_FONT(0);NativeFunction.Natives.SET_TEXT_SCALE(scale,scale);NativeFunction.Natives.SET_TEXT_COLOUR(235,245,255,255);NativeFunction.Natives.SET_TEXT_OUTLINE();NativeFunction.Natives.BEGIN_TEXT_COMMAND_DISPLAY_TEXT("STRING");NativeFunction.Natives.ADD_TEXT_COMPONENT_SUBSTRING_PLAYER_NAME(value);NativeFunction.Natives.END_TEXT_COMMAND_DISPLAY_TEXT(x,y);}

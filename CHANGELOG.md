@@ -2,6 +2,15 @@
 
 All published AdvancedK9 versions are beta builds.
 
+## 0.22.9-beta
+
+- Keeps the compact HUD in `SEARCHING` state for the entire asynchronous four-corner vehicle sweep while continuing to omit the redundant bottom `VEHICLE SEARCH` caption.
+- Removes the legacy vehicle-search start notification and per-corner subtitles below the HUD.
+- Displays both positive and negative vehicle-search outcomes only in the result panel attached above the Glass Tactical card.
+- Makes negative searches completely silent: routine corner checks no longer play the indication animation, and the three-bark alert is authorized only after a confirmed positive result.
+- Adds explicit result diagnostics to the RPH log showing whether a three-bark positive alert was authorized or a silent negative was returned.
+- Simplifies the release archive name to `AdvancedK9-v0.22.9-beta.zip`; its install-ready internal layout is unchanged.
+
 ## 0.22.8-beta
 
 - Removed the Brook Trail kennel and its map blip because the location remained unreliable and floating.
