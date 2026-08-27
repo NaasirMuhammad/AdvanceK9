@@ -2,6 +2,17 @@
 
 All published AdvancedK9 versions are beta builds.
 
+## 0.22.5-beta
+
+- Moved the Davis station kennel from inside the building to the exterior rear parking lot.
+- Moved the Vinewood station kennel from the underground placement to its exterior parking lot.
+- Disabled automatic ground snapping for these two verified multi-level station locations.
+- Added a two-meter vertical safety limit to every other kennel ground snap and freezes placed doghouses so GTA cannot shift them underground.
+- Preserved the confirmed-good Mission Row kennel without coordinate changes.
+- Audits every spawned kennel against GTA's interior system and records its exterior/interior result in `RagePluginHook.log`.
+- Replaced the human-skeleton vehicle-entry task with a visible Rottweiler jump through the open rear door into the saved calibrated seat, preventing the K9 body from twisting or contorting.
+- Custom/add-on dogs that cannot load the animal jump animation use a brief hidden direct-seat fallback instead of the broken human animation.
+
 ## 0.22.4-beta
 
 - Vehicle, area, specialty and building searches now run on a dedicated gameplay fiber so the controller and HUD remain responsive throughout the search.

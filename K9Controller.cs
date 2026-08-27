@@ -94,8 +94,8 @@ namespace AdvancedK9
 
         private sealed class StationKennel
         {
-            public string Name;public Vector3 Position;public float Heading;public Rage.Object Prop;public Blip Blip;
-            public StationKennel(string name,Vector3 position,float heading){Name=name;Position=position;Heading=heading;}
+            public string Name;public Vector3 Position;public float Heading;public bool SnapToGround;public Rage.Object Prop;public Blip Blip;
+            public StationKennel(string name,Vector3 position,float heading,bool snapToGround=true){Name=name;Position=position;Heading=heading;SnapToGround=snapToGround;}
         }
 
         public K9Controller(ModConfig config)
@@ -410,10 +410,10 @@ namespace AdvancedK9
         {
             if(_stationKennels.Count==0)_stationKennels.AddRange(new[]{
                 new StationKennel("Downtown / Mission Row Police Station",new Vector3(452.15f,-1011.45f,29.0f),90f),
-                new StationKennel("Davis Sheriff Station",new Vector3(368.72f,-1602.36f,29.8f),320f),
+                new StationKennel("Davis Sheriff Station",new Vector3(381.35f,-1603.15f,29.29f),270f,false),
                 new StationKennel("Vespucci Police Station",new Vector3(-1113.9f,-851.4f,14.0f),126f),
                 new StationKennel("Rockford Hills Police Station",new Vector3(-568.8f,-136.4f,38.7f),205f),
-                new StationKennel("Vinewood Police Station",new Vector3(631.6f,-3.2f,83.3f),250f),
+                new StationKennel("Vinewood Police Station",new Vector3(621.15f,10.35f,82.74f),160f,false),
                 new StationKennel("La Mesa Highway Patrol Station",new Vector3(834.8f,-1281.6f,28.8f),180f),
                 new StationKennel("Sandy Shores Sheriff Station",new Vector3(1858.2f,3695.6f,34.8f),210f),
                 new StationKennel("Paleto Bay Sheriff Station",new Vector3(-442.4f,6019.8f,32.2f),315f),
@@ -430,8 +430,24 @@ namespace AdvancedK9
             var model=new Model("prop_doghouse_01");if(!model.IsValid){Game.LogTrivial("AdvancedK9 kennel prop unavailable: prop_doghouse_01.");return;}model.LoadAndWait();
             foreach(StationKennel kennel in _stationKennels)if(kennel.Prop==null||!kennel.Prop.Exists())
             {
-                kennel.Prop=new Rage.Object(model,kennel.Position);kennel.Prop.Heading=kennel.Heading;kennel.Prop.IsPersistent=true;
-                try{NativeFunction.Natives.PLACE_OBJECT_ON_GROUND_PROPERLY(kennel.Prop);kennel.Position=kennel.Prop.Position;}catch{}
+                Vector3 configuredPosition=kennel.Position;kennel.Prop=new Rage.Object(model,configuredPosition);kennel.Prop.Heading=kennel.Heading;kennel.Prop.IsPersistent=true;
+                try
+                {
+                    if(kennel.SnapToGround)
+                    {
+                        NativeFunction.Natives.PLACE_OBJECT_ON_GROUND_PROPERLY(kennel.Prop);
+                        Vector3 snapped=kennel.Prop.Position;
+                        if(Math.Abs(snapped.Z-configuredPosition.Z)<=2.0f)kennel.Position=snapped;
+                        else{kennel.Prop.Position=configuredPosition;Game.LogTrivial("AdvancedK9 kennel ground-snap rejected unsafe Z change for "+kennel.Name+".");}
+                    }
+                    else kennel.Prop.Position=configuredPosition;
+                    NativeFunction.Natives.FREEZE_ENTITY_POSITION(kennel.Prop,true);
+                    kennel.Position=kennel.Prop.Position;
+                    int interior=NativeFunction.Natives.GET_INTERIOR_FROM_ENTITY<int>(kennel.Prop);
+                    if(interior!=0)Game.LogTrivial("AdvancedK9 kennel exterior audit WARNING: "+kennel.Name+" resolved inside interior "+interior+" at "+kennel.Position+".");
+                    else Game.LogTrivial("AdvancedK9 kennel exterior audit passed: "+kennel.Name+" at "+kennel.Position+".");
+                }
+                catch{kennel.Prop.Position=configuredPosition;kennel.Position=configuredPosition;}
                 if(kennel.Blip==null||!kennel.Blip.Exists())
                 {
                     kennel.Blip=new Blip(kennel.Position);kennel.Blip.Name="K9 Kennel — "+kennel.Name;kennel.Blip.Color=Color.DodgerBlue;
@@ -529,7 +545,62 @@ namespace AdvancedK9
         private void Stay(){if(!DogExists())return;_dog.Tasks.Clear();_state=K9State.Staying;Acknowledge("Staying.");}
         private void Guard(){if(!DogExists())return;_dog.Tasks.Clear();NativeFunction.Natives.TASK_GUARD_CURRENT_POSITION(_dog,25f,25f,true);_state=K9State.Guarding;Acknowledge("Guarding this position.");}
 
-        private void EnterVehicle(){if(!DogExists())return;var handler=Game.LocalPlayer.Character;Vehicle vehicle=handler.CurrentVehicle;if(vehicle==null||!vehicle.Exists())vehicle=World.GetAllVehicles().Where(v=>v.Exists()&&v.DistanceTo(handler)<8f).OrderBy(v=>v.DistanceTo(handler)).FirstOrDefault();if(vehicle==null){Game.DisplayNotification("~y~No vehicle nearby.");return;}int seat=-99;foreach(int candidate in new[]{2,1,0})if(NativeFunction.Natives.IS_VEHICLE_SEAT_FREE<bool>(vehicle,candidate,false)){seat=candidate;break;}if(seat==-99){Game.DisplayNotification("~y~No open rear/passenger seat for the K9.");return;}_dogVehicleDoor=seat==2?3:seat==1?2:1;NativeFunction.Natives.SET_VEHICLE_DOOR_OPEN(vehicle,_dogVehicleDoor,false,false);Vector3 kennel=vehicle.GetOffsetPosition(new Vector3(seat==1?-1.15f:1.15f,-1.25f,0f));_dog.Tasks.FollowNavigationMeshToPosition(kennel,vehicle.Heading,1.6f).WaitForCompletion(4500);Sit();Game.DisplaySubtitle("~b~K9 waiting at the open kennel door. Loading...",900);GameFiber.Wait(750);NativeFunction.Natives.TASK_ENTER_VEHICLE(_dog,vehicle,8000,seat,2f,1,0);uint timeout=Game.GameTime+8000;while(DogExists()&&_dog.CurrentVehicle!=vehicle&&Game.GameTime<timeout)GameFiber.Yield();if(_dog.CurrentVehicle!=vehicle)NativeFunction.Natives.TASK_WARP_PED_INTO_VEHICLE(_dog,vehicle,seat);GameFiber.Wait(250);_dogVehicle=vehicle;_activeSeatProfile=_seatProfiles.Get(vehicle);ApplySeatCalibration();NativeFunction.Natives.SET_VEHICLE_DOOR_SHUT(vehicle,_dogVehicleDoor,false);NativeFunction.Natives.SET_ENTITY_INVINCIBLE(_dog,true);_state=K9State.InVehicle;K9IncidentLog.Write(_profile.Name,"Kennel","Loaded saved "+_seatProfiles.VehicleName(vehicle)+" seat profile",vehicle.Position);Acknowledge("Sitting safely in the saved right-rear position.");}
+        private void EnterVehicle()
+        {
+            if(!DogExists())return;var handler=Game.LocalPlayer.Character;Vehicle vehicle=handler.CurrentVehicle;
+            if(vehicle==null||!vehicle.Exists())vehicle=World.GetAllVehicles().Where(v=>v.Exists()&&v.DistanceTo(handler)<8f).OrderBy(v=>v.DistanceTo(handler)).FirstOrDefault();
+            if(vehicle==null){Game.DisplayNotification("~y~No vehicle nearby.");return;}
+            int seat=-99;foreach(int candidate in new[]{2,1,0})if(NativeFunction.Natives.IS_VEHICLE_SEAT_FREE<bool>(vehicle,candidate,false)){seat=candidate;break;}
+            if(seat==-99){Game.DisplayNotification("~y~No open rear/passenger seat for the K9.");return;}
+            _dogVehicleDoor=seat==2?3:seat==1?2:1;NativeFunction.Natives.SET_VEHICLE_DOOR_OPEN(vehicle,_dogVehicleDoor,false,false);
+            Vector3 doorPosition=vehicle.GetOffsetPosition(new Vector3(seat==1?-1.15f:1.15f,-1.25f,0f));
+            _dog.Tasks.Clear();_dog.Tasks.FollowNavigationMeshToPosition(doorPosition,vehicle.Heading,1.6f).WaitForCompletion(4500);
+            if(!DogExists()||!vehicle.Exists())return;
+            NativeFunction.Natives.TASK_TURN_PED_TO_FACE_ENTITY(_dog,vehicle,500);GameFiber.Wait(500);
+            Game.DisplaySubtitle("~b~K9 jumping into the calibrated seat...",700);
+            bool visibleJump=PlayDogVehicleJump(vehicle,seat,doorPosition);
+            if(!visibleJump)
+            {
+                Game.LogTrivial("AdvancedK9 vehicle load: animal jump unavailable for "+_profile.ModelName+"; using hidden safe-seat fallback.");
+                _dog.Tasks.ClearImmediately();NativeFunction.Natives.SET_ENTITY_VISIBLE(_dog,false,false);
+                NativeFunction.Natives.TASK_WARP_PED_INTO_VEHICLE(_dog,vehicle,seat);GameFiber.Wait(150);
+            }
+            _dogVehicle=vehicle;_activeSeatProfile=_seatProfiles.Get(vehicle);ApplySeatCalibration();
+            NativeFunction.Natives.SET_ENTITY_VISIBLE(_dog,true,false);NativeFunction.Natives.RESET_ENTITY_ALPHA(_dog);
+            NativeFunction.Natives.SET_VEHICLE_DOOR_SHUT(vehicle,_dogVehicleDoor,false);NativeFunction.Natives.SET_ENTITY_INVINCIBLE(_dog,true);
+            _state=K9State.InVehicle;K9IncidentLog.Write(_profile.Name,"Kennel","Dog-safe direct load using saved "+_seatProfiles.VehicleName(vehicle)+" seat profile",vehicle.Position);Acknowledge("Sitting safely in the saved right-rear position.");
+        }
+
+        private bool PlayDogVehicleJump(Vehicle vehicle,int seat,Vector3 doorPosition)
+        {
+            if(!DogExists()||vehicle==null||!vehicle.Exists())return false;
+            const string dictionary="creatures@rottweiler@move";const string animation="jump";
+            try
+            {
+                NativeFunction.Natives.REQUEST_ANIM_DICT(dictionary);uint timeout=Game.GameTime+1200;
+                while(!NativeFunction.Natives.HAS_ANIM_DICT_LOADED<bool>(dictionary)&&Game.GameTime<timeout)GameFiber.Yield();
+                if(!NativeFunction.Natives.HAS_ANIM_DICT_LOADED<bool>(dictionary))return false;
+                string boneName=seat==2?"seat_pside_r":seat==1?"seat_dside_r":"seat_pside_f";
+                int bone=NativeFunction.Natives.GET_ENTITY_BONE_INDEX_BY_NAME<int>(vehicle,boneName);if(bone<0)return false;
+                Vector3 seatPosition=NativeFunction.Natives.GET_WORLD_POSITION_OF_ENTITY_BONE<Vector3>(vehicle,bone);
+                Vector3 start=doorPosition;Vector3 apex=new Vector3((start.X+seatPosition.X)*.5f,(start.Y+seatPosition.Y)*.5f,Math.Max(start.Z,seatPosition.Z)+.65f);
+                _dog.Tasks.ClearImmediately();NativeFunction.Natives.SET_ENTITY_COLLISION(_dog,false,false);
+                NativeFunction.Natives.TASK_PLAY_ANIM(_dog,dictionary,animation,5f,-3f,800,0,0f,false,false,false);
+                const int frames=18;
+                for(int i=1;i<=frames&&DogExists()&&vehicle.Exists();i++)
+                {
+                    float t=i/(float)frames;float one=1f-t;
+                    float x=one*one*start.X+2f*one*t*apex.X+t*t*seatPosition.X;
+                    float y=one*one*start.Y+2f*one*t*apex.Y+t*t*seatPosition.Y;
+                    float z=one*one*start.Z+2f*one*t*apex.Z+t*t*(seatPosition.Z+.12f);
+                    NativeFunction.Natives.SET_ENTITY_COORDS_NO_OFFSET(_dog,x,y,z,false,false,false);_dog.Heading=vehicle.Heading;GameFiber.Wait(32);
+                }
+                NativeFunction.Natives.REMOVE_ANIM_DICT(dictionary);
+                Game.LogTrivial("AdvancedK9 vehicle load: visible animal jump completed for "+_profile.ModelName+".");
+                return DogExists()&&vehicle.Exists();
+            }
+            catch(Exception ex){Game.LogTrivial("AdvancedK9 vehicle jump fallback: "+ex.Message);return false;}
+        }
         private void ExitVehicle(){if(_dog==null||!_dog.Exists())return;var vehicle=_dogVehicle!=null&&_dogVehicle.Exists()?_dogVehicle:_dog.CurrentVehicle;if(vehicle==null||!vehicle.Exists()){ReleaseVehicleSeat();Follow();return;}if(vehicle.Speed>1.5f){Game.DisplayNotification("~y~Stop the vehicle before unloading the K9.");return;}NativeFunction.Natives.SET_VEHICLE_DOOR_OPEN(vehicle,_dogVehicleDoor,false,false);GameFiber.Wait(650);int savedHealth=Math.Max(100,_dog.Health);Vector3 exit=vehicle.GetOffsetPosition(new Vector3(_dogVehicleDoor==2?-1.35f:1.35f,-1.25f,.15f));_dog.Tasks.ClearImmediately();ReleaseVehicleSeat();_dog.Position=exit;_dog.Heading=vehicle.Heading;if(_dog.IsDead)NativeFunction.Natives.RESURRECT_PED(_dog);_dog.Health=savedHealth;GameFiber.Wait(650);NativeFunction.Natives.SET_VEHICLE_DOOR_SHUT(vehicle,_dogVehicleDoor,false);K9IncidentLog.Write(_profile.Name,"Kennel","Unloaded",exit);Follow();}
 
         private void ReleaseVehicleSeat(){CloseSeatCalibrationDoor();if(_dog!=null&&_dog.Exists()){if(_dogSeatAttached)NativeFunction.Natives.DETACH_ENTITY(_dog,true,true);NativeFunction.Natives.SET_ENTITY_COLLISION(_dog,true,true);NativeFunction.Natives.SET_ENTITY_INVINCIBLE(_dog,false);}_dogSeatAttached=false;_dogVehicle=null;}
