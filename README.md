@@ -217,7 +217,11 @@ Davis=354.2758,-1591.15,29.29195,45.5168
 Vinewood=637.631,-3.024063,82.78731,246.6745
 ```
 
-Stand where the doghouse should be placed, record the GTA coordinates and heading, then replace that station's four values. User-entered locations use the exact supplied Z coordinate and remain level; invalid entries are ignored safely and reported in `RagePluginHook.log`.
+Stand where the doghouse should be placed, record the GTA coordinates and heading, then replace that station's four values. Invalid entries are ignored safely and reported in `RagePluginHook.log`.
+
+The same locations can be edited visually from **K9 Profile → Kennel Location Editor**. Select a station, place its doghouse near the player if needed, then hold the left mouse button and move the mouse—or use W/A/S/D—to drag it across the ground. R/F raises or lowers it and Q/E rotates it. Ground snap, revert, reset and save controls are available in the same menu. Changes are written only when **Save location to AdvancedK9.ini** is selected.
+
+Inside **HUD & Display**, enable **Live HUD drag** to move the Glass Tactical card while viewing it. Hold the left mouse button and move the mouse, or use W/A/S/D; Q/E resizes the card. Leaving the menu saves the HUD layout.
 
 ## Trust and handler safety
 

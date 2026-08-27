@@ -136,8 +136,11 @@ namespace AdvancedK9
         public void FirstAid(){Health=Clamp(Health+20,0,100);if(Health>=70)Injury="Minor/treated";Save();}
         public void CycleHudMode(){HudMode=(HudMode+1)%3;Save();}
         public void MoveHud(float x,float y){HudX=Math.Max(.12f,Math.Min(.985f,HudX+x));HudY=Math.Max(.08f,Math.Min(.975f,HudY+y));Save();}
+        public void MoveHudPreview(float x,float y){HudX=Math.Max(.12f,Math.Min(.985f,HudX+x));HudY=Math.Max(.08f,Math.Min(.975f,HudY+y));}
         public void ScaleHud(){AdjustHudScale(.05f);}
         public void AdjustHudScale(float delta){HudScale=Math.Max(.55f,Math.Min(1.35f,HudScale+delta));Save();}
+        public void AdjustHudScalePreview(float delta){HudScale=Math.Max(.55f,Math.Min(1.35f,HudScale+delta));}
+        public void SaveHudLayout(){Save();}
         public void AdjustHudOpacity(float delta){HudOpacity=Math.Max(.35f,Math.Min(1f,HudOpacity+delta));Save();}
         public void ResetHud(){HudX=.975f;HudY=.955f;HudScale=.85f;HudOpacity=.90f;Save();}
         public void ToggleHudOption(int option){switch(option){case 0:HudAutoCollapse=!HudAutoCollapse;break;case 1:HudShowPortrait=!HudShowPortrait;break;case 2:HudShowDistance=!HudShowDistance;break;case 3:HudShowCommand=!HudShowCommand;break;case 4:HudShowBehavior=!HudShowBehavior;break;case 5:HudSearchProgress=!HudSearchProgress;break;case 6:HudMetricDistance=!HudMetricDistance;break;}Save();}

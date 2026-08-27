@@ -6,9 +6,12 @@ All published AdvancedK9 versions are beta builds.
 
 - Replaces the default positions and headings for Vespucci, Del Perro, Port of Los Santos, Davis, La Mesa, Mission Row, FIB, Vinewood, Beaver Bush Ranger, Great Ocean Highway, Fort Zancudo, Paleto Bay and Brook Trail with player-measured GTA coordinates.
 - Restores accessible FIB and Brook Trail kennels using the newly supplied locations.
-- Treats the 13 measured placements as exact coordinates, disables automatic relocation and forces each doghouse level.
+- Rotates all 13 measured doghouses 90 degrees to the right, loads nearby collision and snaps each prop down to the surface before forcing it level.
 - Leaves Rockford Hills, Sandy Shores, LSIA and Bolingbroke at their previously approved locations.
 - Adds optional `[KennelLocations]` overrides to `AdvancedK9.ini`. Each station accepts `X,Y,Z,Heading`, allowing users to move kennels while preserving their customized INI during future updates.
+- Adds a live in-game kennel editor with station selection, mouse/WASD dragging, height and heading controls, ground snapping, player-relative placement, reset/revert and explicit INI saving.
+- Adds live HUD dragging while the HUD menu is open: hold the left mouse button or use W/A/S/D to move it, and use Q/E to resize it.
+- Automatically migrates untouched v0.22.10 measured headings to the corrected 90-degree-right orientation without overwriting genuinely customized positions.
 
 ## 0.22.9-beta
 

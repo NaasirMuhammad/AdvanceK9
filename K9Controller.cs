@@ -79,6 +79,14 @@ namespace AdvancedK9
         private uint _hudAlertUntil;
         private bool _hudPreviewSearch;
         private bool _hudPreviewAlert;
+        private bool _hudDragMode;
+        private bool _kennelDragMode;
+        private StationKennel _activeKennel;
+        private Vector3 _kennelEditOriginalPosition;
+        private float _kennelEditOriginalHeading;
+        private Point _lastEditorMouse;
+        private bool _editorMouseHeld;
+        private uint _nextLiveEditorInput;
         private bool _searchInProgress;
         private bool _deployed;
         private bool _downed;
@@ -94,8 +102,8 @@ namespace AdvancedK9
 
         private sealed class StationKennel
         {
-            public string Name;public Vector3 Position;public float Heading;public bool SnapToGround;public bool PreciseGrounding;public float SurfaceLift;public bool ForceLevel;public Rage.Object Prop;public Blip Blip;
-            public StationKennel(string name,Vector3 position,float heading,bool snapToGround=true,bool preciseGrounding=false,float surfaceLift=0f,bool forceLevel=false){Name=name;Position=position;Heading=heading;SnapToGround=snapToGround;PreciseGrounding=preciseGrounding;SurfaceLift=surfaceLift;ForceLevel=forceLevel;}
+            public string Key;public string Name;public Vector3 Position;public float Heading;public Vector3 DefaultPosition;public float DefaultHeading;public bool SnapToGround;public bool PreciseGrounding;public float SurfaceLift;public bool ForceLevel;public Rage.Object Prop;public Blip Blip;
+            public StationKennel(string key,string name,Vector3 position,float heading,bool snapToGround=true,bool preciseGrounding=false,float surfaceLift=0f,bool forceLevel=false){Key=key;Name=name;Position=position;Heading=heading;DefaultPosition=position;DefaultHeading=heading;SnapToGround=snapToGround;PreciseGrounding=preciseGrounding;SurfaceLift=surfaceLift;ForceLevel=forceLevel;}
         }
 
         public K9Controller(ModConfig config)
@@ -124,6 +132,7 @@ namespace AdvancedK9
                 _pr.TickDiagnostics();
                 _voice?.Tick();
                 _menu.Tick();
+                HandleLiveMenuEditors();
                 DrawHud();
                 MaintainStationKennels();
                 CaptureScentTrails();
@@ -265,13 +274,15 @@ namespace AdvancedK9
             CloseSeatCalibrationDoor();_menuMode="profile"; RefreshProfileMenu();
         }
 
-        private void RefreshProfileMenu(){_menu.Update("K9 PROFILE — "+_profile.Name,new[]{"Identity & Appearance","HUD & Display","Vehicle Seat Configuration","Profile, Health & Certifications",VoiceMenuLabel()});}
+        private void RefreshProfileMenu(){_menu.Update("K9 PROFILE — "+_profile.Name,new[]{"Identity & Appearance","HUD & Display","Kennel Location Editor","Vehicle Seat Configuration","Profile, Health & Certifications",VoiceMenuLabel()});}
         private void OpenAppearanceMenu(){_menuMode="profile_appearance";_menu.Open("K9 PROFILE — APPEARANCE",new[]{"Edit name: "+_profile.Name,"Breed/model: "+_profile.Breed,"Skin/coat: "+(_profile.CoatVariation+1),"Equipment/vest: "+_profile.Vest,"Vest texture: "+_profile.VestTextureName(_dog),"← Back to K9 Profile"});}
         private void OnMenuSelected(int index)
         {
             if(_menuMode=="commands_root"){if(index>=0&&index<7){OpenCommandGroup(index);return;}if(index==7){_menu.Close();Execute(K9Command.SpawnDismiss);return;}if(index==8)ToggleVoice();return;}
             if(_menuMode!=null&&_menuMode.StartsWith("commands_group_")){int group;if(!int.TryParse(_menuMode.Substring(15),out group)||group<0||group>=CommandGroups.Length)return;if(index>=0&&index<CommandGroups[group].Length){_menu.Close();Execute(CommandGroups[group][index]);}else ShowCommandMenu();return;}
             if(_menuMode=="hud_config"){HandleHudMenu(index);return;}
+            if(_menuMode=="kennel_list"){HandleKennelList(index);return;}
+            if(_menuMode=="kennel_edit"){HandleKennelEditMenu(index);return;}
             if(_menuMode=="seat_config"){HandleSeatMenu(index);return;}
             if(_menuMode=="profile_appearance")
             {
@@ -280,20 +291,139 @@ namespace AdvancedK9
                 OpenAppearanceMenu();return;
             }
             if(_menuMode!="profile")return;
-            if(index==0)OpenAppearanceMenu();else if(index==1)OpenHudConfiguration();else if(index==2)OpenSeatConfiguration();else if(index==3)Inspect();else if(index==4)ToggleVoice();
+            if(index==0)OpenAppearanceMenu();else if(index==1)OpenHudConfiguration();else if(index==2)OpenKennelLocationMenu();else if(index==3)OpenSeatConfiguration();else if(index==4)Inspect();else if(index==5)ToggleVoice();
         }
 
         private void InitializeVoice(){_voice=new VoiceCommandService(_config.VoiceProvider,_config.VoiceModel,_config.VoiceLanguage,_config.VoiceApiKey,_config.VoiceApiKeyEnvironmentVariable,_profile.Name,_config.ShowVoiceStatusText);_voice.CommandRecognized+=c=>_voiceQueue.Enqueue(c);_voice.StatusChanged+=s=>_voiceStatus=s;_voiceActive=_config.VoiceEnabled&&_voice.IsAvailable;_voiceStatus=_voice.IsAvailable?"Ready (hold V)":"Key missing";}
         private string VoiceMenuLabel()=>"Voice microphone: "+(_voice==null||!_voice.IsAvailable?"UNAVAILABLE — add ApiKey in INI":_voiceActive?"ON — hold "+_config.PushToTalkKey:"OFF — select to activate");
         private void ToggleVoice(){if(_voice==null)InitializeVoice();if(!_voice.IsAvailable){Game.DisplayNotification("~r~Voice cannot activate.~s~~n~Add your provider key after ~y~ApiKey=~s~ in AdvancedK9.ini, then reload the plugin.");return;}_voiceActive=!_voiceActive;if(_voiceActive){_voiceStatus="Ready (hold V)";ActionNotification("~g~K9 push-to-talk activated.~s~ Hold "+_config.PushToTalkKey+" while speaking.");}else{_voice.StopListening();_voiceStatus="Off";ActionNotification("~y~K9 voice microphone disabled.");}}
 
-        private void OnMenuAdjusted(int index,int delta){if(_menuMode=="hud_config"){AdjustHudMenu(index,delta);return;}if(_menuMode=="seat_config"){AdjustSeat(index,delta);return;}if(_menuMode!="profile_appearance")return;if(index==1)PreviewBreed(delta);else if(index==2)_profile.AdjustSkin(_dog,delta);else if(index==3)_profile.AdjustEquipment(_dog,delta);else if(index==4)_profile.AdjustEquipmentTexture(_dog,delta);else return;OpenAppearanceMenu();}
+        private void OnMenuAdjusted(int index,int delta){if(_menuMode=="hud_config"){AdjustHudMenu(index,delta);return;}if(_menuMode=="kennel_edit"){AdjustKennel(index,delta);return;}if(_menuMode=="seat_config"){AdjustSeat(index,delta);return;}if(_menuMode!="profile_appearance")return;if(index==1)PreviewBreed(delta);else if(index==2)_profile.AdjustSkin(_dog,delta);else if(index==3)_profile.AdjustEquipment(_dog,delta);else if(index==4)_profile.AdjustEquipmentTexture(_dog,delta);else return;OpenAppearanceMenu();}
 
         private static string OnOff(bool value)=>value?"ON":"OFF";
         private void OpenHudConfiguration(){_menuMode="hud_config";RefreshHudMenu();}
-        private void RefreshHudMenu(){_menu.Update("K9 HUD — GLASS TACTICAL",new[]{"HUD: "+(_profile.HudMode==0?"OFF":_profile.HudMode==1?"COMPACT":"FULL"),"Portrait: "+OnOff(_profile.HudShowPortrait),"State: "+OnOff(_profile.HudShowState),"Health: "+OnOff(_profile.HudShowHealth),"Stamina: "+OnOff(_profile.HudShowStamina),"Distance: "+OnOff(_profile.HudShowDistance),"Current command: "+OnOff(_profile.HudShowCommand),"Behavior: "+OnOff(_profile.HudShowBehavior),"Automatic collapse: "+OnOff(_profile.HudAutoCollapse),"Search progress: "+OnOff(_profile.HudSearchProgress),"Distance units: "+(_profile.HudMetricDistance?"METRIC":"IMPERIAL"),"Food: "+OnOff(_profile.HudShowFood),"Water: "+OnOff(_profile.HudShowWater),"Certifications: "+OnOff(_profile.HudShowCertifications),"Trust: "+OnOff(_profile.HudShowTrust),"Training: "+OnOff(_profile.HudShowTraining),"Injury: "+OnOff(_profile.HudShowInjury),"Voice: "+OnOff(_profile.HudShowVoice),"Move left","Move right","Move up","Move down","Scale: "+_profile.HudScale.ToString("0.00"),"Opacity: "+_profile.HudOpacity.ToString("0.00"),"Preview search: "+OnOff(_hudPreviewSearch),"Preview alert: "+OnOff(_hudPreviewAlert),"Reset HUD position and size","← Back to K9 Profile"});}
-        private void HandleHudMenu(int index){if(index==0)_profile.CycleHudMode();else if(index==1)_profile.ToggleHudOption(1);else if(index>=2&&index<=4)_profile.ToggleHudField(index-2);else if(index>=5&&index<=7)_profile.ToggleHudOption(index-3);else if(index==8)_profile.ToggleHudOption(0);else if(index==9)_profile.ToggleHudOption(5);else if(index==10)_profile.ToggleHudOption(6);else if(index>=11&&index<=17)_profile.ToggleHudField(index-8);else if(index==18)_profile.MoveHud(-.01f,0);else if(index==19)_profile.MoveHud(.01f,0);else if(index==20)_profile.MoveHud(0,-.01f);else if(index==21)_profile.MoveHud(0,.01f);else if(index==24)_hudPreviewSearch=!_hudPreviewSearch;else if(index==25)_hudPreviewAlert=!_hudPreviewAlert;else if(index==26)_profile.ResetHud();else if(index==27){_hudPreviewSearch=false;_hudPreviewAlert=false;_menuMode="profile";RefreshProfileMenu();return;}RefreshHudMenu();}
+        private void RefreshHudMenu(){_menu.Update("K9 HUD — GLASS TACTICAL",new[]{"HUD: "+(_profile.HudMode==0?"OFF":_profile.HudMode==1?"COMPACT":"FULL"),"Portrait: "+OnOff(_profile.HudShowPortrait),"State: "+OnOff(_profile.HudShowState),"Health: "+OnOff(_profile.HudShowHealth),"Stamina: "+OnOff(_profile.HudShowStamina),"Distance: "+OnOff(_profile.HudShowDistance),"Current command: "+OnOff(_profile.HudShowCommand),"Behavior: "+OnOff(_profile.HudShowBehavior),"Automatic collapse: "+OnOff(_profile.HudAutoCollapse),"Search progress: "+OnOff(_profile.HudSearchProgress),"Distance units: "+(_profile.HudMetricDistance?"METRIC":"IMPERIAL"),"Food: "+OnOff(_profile.HudShowFood),"Water: "+OnOff(_profile.HudShowWater),"Certifications: "+OnOff(_profile.HudShowCertifications),"Trust: "+OnOff(_profile.HudShowTrust),"Training: "+OnOff(_profile.HudShowTraining),"Injury: "+OnOff(_profile.HudShowInjury),"Voice: "+OnOff(_profile.HudShowVoice),"Move left","Move right","Move up","Move down","Scale: "+_profile.HudScale.ToString("0.00"),"Opacity: "+_profile.HudOpacity.ToString("0.00"),"Preview search: "+OnOff(_hudPreviewSearch),"Preview alert: "+OnOff(_hudPreviewAlert),"Live HUD drag: "+OnOff(_hudDragMode),"Reset HUD position and size","← Back to K9 Profile"});}
+        private void HandleHudMenu(int index){if(index==0)_profile.CycleHudMode();else if(index==1)_profile.ToggleHudOption(1);else if(index>=2&&index<=4)_profile.ToggleHudField(index-2);else if(index>=5&&index<=7)_profile.ToggleHudOption(index-3);else if(index==8)_profile.ToggleHudOption(0);else if(index==9)_profile.ToggleHudOption(5);else if(index==10)_profile.ToggleHudOption(6);else if(index>=11&&index<=17)_profile.ToggleHudField(index-8);else if(index==18)_profile.MoveHud(-.01f,0);else if(index==19)_profile.MoveHud(.01f,0);else if(index==20)_profile.MoveHud(0,-.01f);else if(index==21)_profile.MoveHud(0,.01f);else if(index==24)_hudPreviewSearch=!_hudPreviewSearch;else if(index==25)_hudPreviewAlert=!_hudPreviewAlert;else if(index==26){_hudDragMode=!_hudDragMode;_editorMouseHeld=false;Game.DisplaySubtitle("~b~HUD drag~s~: hold left mouse and move, or use W/A/S/D. Q/E resizes.",2500);}else if(index==27)_profile.ResetHud();else if(index==28){_hudDragMode=false;_profile.SaveHudLayout();_hudPreviewSearch=false;_hudPreviewAlert=false;_menuMode="profile";RefreshProfileMenu();return;}RefreshHudMenu();}
         private void AdjustHudMenu(int index,int delta){if(index==18||index==19)_profile.MoveHud(delta*.005f,0);else if(index==20||index==21)_profile.MoveHud(0,delta*.005f);else if(index==22)_profile.AdjustHudScale(delta*.05f);else if(index==23)_profile.AdjustHudOpacity(delta*.05f);else return;RefreshHudMenu();}
+
+        private void OpenKennelLocationMenu()
+        {
+            _hudDragMode=false;_kennelDragMode=false;_activeKennel=null;_menuMode="kennel_list";
+            _menu.Open("K9 KENNEL LOCATIONS",_stationKennels.Select(k=>k.Name).Concat(new[]{"← Back to K9 Profile"}));
+        }
+
+        private void HandleKennelList(int index)
+        {
+            if(index<0)return;
+            if(index>=_stationKennels.Count){_menuMode="profile";RefreshProfileMenu();return;}
+            _activeKennel=_stationKennels[index];_kennelEditOriginalPosition=_activeKennel.Position;_kennelEditOriginalHeading=_activeKennel.Heading;
+            if(_activeKennel.Prop==null||!_activeKennel.Prop.Exists())SpawnNearbyKennelProp(_activeKennel);
+            _menuMode="kennel_edit";RefreshKennelEditMenu();
+        }
+
+        private void RefreshKennelEditMenu()
+        {
+            if(_activeKennel==null){OpenKennelLocationMenu();return;}
+            _menu.Update("KENNEL — "+_activeKennel.Name,new[]{
+                "X east/west: "+_activeKennel.Position.X.ToString("0.000"),
+                "Y north/south: "+_activeKennel.Position.Y.ToString("0.000"),
+                "Z up/down: "+_activeKennel.Position.Z.ToString("0.000"),
+                "Heading: "+_activeKennel.Heading.ToString("0.0")+"°",
+                "Live kennel drag: "+OnOff(_kennelDragMode),
+                "Place two metres in front of player",
+                "Snap down to loaded ground",
+                "Save location to AdvancedK9.ini",
+                "Revert unsaved changes",
+                "Reset to built-in default",
+                "← Back to Kennel List"});
+        }
+
+        private void AdjustKennel(int index,int delta)
+        {
+            if(_activeKennel==null||delta==0)return;
+            Vector3 p=_activeKennel.Position;
+            if(index==0)p.X+=delta*.10f;else if(index==1)p.Y+=delta*.10f;else if(index==2)p.Z+=delta*.05f;else if(index==3)_activeKennel.Heading=NormalizeHeading(_activeKennel.Heading+delta*5f);else return;
+            _activeKennel.Position=p;ApplyKennelPreview();RefreshKennelEditMenu();
+        }
+
+        private void HandleKennelEditMenu(int index)
+        {
+            if(_activeKennel==null){OpenKennelLocationMenu();return;}
+            if(index==4){_kennelDragMode=!_kennelDragMode;_editorMouseHeld=false;Game.DisplaySubtitle("~b~Kennel drag~s~: hold left mouse and move, or use W/A/S/D. R/F changes height; Q/E rotates.",3200);}
+            else if(index==5){Ped player=Game.LocalPlayer.Character;_activeKennel.Position=player.Position+HeadingOffset(player.Heading,2f);_activeKennel.Heading=NormalizeHeading(player.Heading+90f);EnsureKennelPreview();ApplyKennelPreview();}
+            else if(index==6){SnapActiveKennelToGround();}
+            else if(index==7){try{_config.SaveKennelLocation(_activeKennel.Key,_activeKennel.Position,_activeKennel.Heading);_kennelEditOriginalPosition=_activeKennel.Position;_kennelEditOriginalHeading=_activeKennel.Heading;Game.DisplayNotification("~g~K9 kennel location saved.~s~~n~"+_activeKennel.Name);}catch{Game.DisplayNotification("~r~Unable to save kennel location.~s~ See RagePluginHook.log.");}}
+            else if(index==8){_activeKennel.Position=_kennelEditOriginalPosition;_activeKennel.Heading=_kennelEditOriginalHeading;ApplyKennelPreview();}
+            else if(index==9){_activeKennel.Position=_activeKennel.DefaultPosition;_activeKennel.Heading=_activeKennel.DefaultHeading;EnsureKennelPreview();SnapActiveKennelToGround();}
+            else if(index==10){_activeKennel.Position=_kennelEditOriginalPosition;_activeKennel.Heading=_kennelEditOriginalHeading;ApplyKennelPreview();_activeKennel=null;_kennelDragMode=false;OpenKennelLocationMenu();return;}
+            RefreshKennelEditMenu();
+        }
+
+        private void EnsureKennelPreview()
+        {
+            if(_activeKennel==null)return;
+            if(_activeKennel.Prop!=null&&_activeKennel.Prop.Exists())return;
+            SpawnNearbyKennelProp(_activeKennel);
+        }
+
+        private void ApplyKennelPreview()
+        {
+            if(_activeKennel==null)return;EnsureKennelPreview();
+            try
+            {
+                if(_activeKennel.Prop!=null&&_activeKennel.Prop.Exists())
+                {
+                    NativeFunction.Natives.FREEZE_ENTITY_POSITION(_activeKennel.Prop,false);_activeKennel.Prop.Position=_activeKennel.Position;_activeKennel.Prop.Heading=_activeKennel.Heading;
+                    NativeFunction.Natives.SET_ENTITY_ROTATION(_activeKennel.Prop,0f,0f,_activeKennel.Heading,2,true);NativeFunction.Natives.FREEZE_ENTITY_POSITION(_activeKennel.Prop,true);
+                }
+                if(_activeKennel.Blip!=null&&_activeKennel.Blip.Exists())_activeKennel.Blip.Position=_activeKennel.Position;
+            }
+            catch(Exception ex){Game.LogTrivial("AdvancedK9 live kennel preview recovered: "+ex.Message);}
+        }
+
+        private void SnapActiveKennelToGround()
+        {
+            if(_activeKennel==null)return;EnsureKennelPreview();
+            try
+            {
+                NativeFunction.Natives.REQUEST_COLLISION_AT_COORD(_activeKennel.Position.X,_activeKennel.Position.Y,_activeKennel.Position.Z);
+                if(_activeKennel.Prop!=null&&_activeKennel.Prop.Exists())
+                {
+                    NativeFunction.Natives.FREEZE_ENTITY_POSITION(_activeKennel.Prop,false);NativeFunction.Natives.PLACE_OBJECT_ON_GROUND_PROPERLY(_activeKennel.Prop);_activeKennel.Position=_activeKennel.Prop.Position;
+                    NativeFunction.Natives.SET_ENTITY_ROTATION(_activeKennel.Prop,0f,0f,_activeKennel.Heading,2,true);NativeFunction.Natives.FREEZE_ENTITY_POSITION(_activeKennel.Prop,true);
+                }
+                ApplyKennelPreview();
+            }
+            catch(Exception ex){Game.LogTrivial("AdvancedK9 kennel ground snap failed: "+ex.Message);}
+        }
+
+        private void HandleLiveMenuEditors()
+        {
+            if(!_menu.Visible)
+            {
+                if(_hudDragMode)_profile.SaveHudLayout();
+                if(_kennelDragMode&&_activeKennel!=null){_activeKennel.Position=_kennelEditOriginalPosition;_activeKennel.Heading=_kennelEditOriginalHeading;ApplyKennelPreview();}
+                _hudDragMode=false;_kennelDragMode=false;_editorMouseHeld=false;return;
+            }
+            if(!_hudDragMode&&!_kennelDragMode){_editorMouseHeld=false;return;}
+            if(Game.GameTime<_nextLiveEditorInput)return;_nextLiveEditorInput=Game.GameTime+30;
+            Point current=Cursor.Position;bool mouse=Game.IsKeyDownRightNow(Keys.LButton);int dx=0,dy=0;
+            if(mouse&&_editorMouseHeld){dx=current.X-_lastEditorMouse.X;dy=current.Y-_lastEditorMouse.Y;}_lastEditorMouse=current;_editorMouseHeld=mouse;
+            if(_hudDragMode&&_menuMode=="hud_config")
+            {
+                float x=dx/(float)Math.Max(1,Game.Resolution.Width),y=dy/(float)Math.Max(1,Game.Resolution.Height);
+                if(Game.IsKeyDownRightNow(Keys.A))x-=.004f;if(Game.IsKeyDownRightNow(Keys.D))x+=.004f;if(Game.IsKeyDownRightNow(Keys.W))y-=.004f;if(Game.IsKeyDownRightNow(Keys.S))y+=.004f;
+                if(x!=0f||y!=0f)_profile.MoveHudPreview(x,y);if(Game.IsKeyDownRightNow(Keys.Q))_profile.AdjustHudScalePreview(-.01f);if(Game.IsKeyDownRightNow(Keys.E))_profile.AdjustHudScalePreview(.01f);
+            }
+            if(_kennelDragMode&&_menuMode=="kennel_edit"&&_activeKennel!=null)
+            {
+                float right=dx*.006f,forward=-dy*.006f;if(Game.IsKeyDownRightNow(Keys.A))right-=.06f;if(Game.IsKeyDownRightNow(Keys.D))right+=.06f;if(Game.IsKeyDownRightNow(Keys.W))forward+=.06f;if(Game.IsKeyDownRightNow(Keys.S))forward-=.06f;
+                Vector3 p=_activeKennel.Position;if(right!=0f)p+=HeadingOffset(Game.LocalPlayer.Character.Heading+90f,right);if(forward!=0f)p+=HeadingOffset(Game.LocalPlayer.Character.Heading,forward);if(Game.IsKeyDownRightNow(Keys.R))p.Z+=.03f;if(Game.IsKeyDownRightNow(Keys.F))p.Z-=.03f;
+                if(Game.IsKeyDownRightNow(Keys.Q))_activeKennel.Heading=NormalizeHeading(_activeKennel.Heading-1f);if(Game.IsKeyDownRightNow(Keys.E))_activeKennel.Heading=NormalizeHeading(_activeKennel.Heading+1f);_activeKennel.Position=p;ApplyKennelPreview();
+            }
+        }
+
+        private static float NormalizeHeading(float heading){heading%=360f;if(heading<0f)heading+=360f;return heading;}
 
         private static string PromptForDogName(int maxLength)
         {
@@ -409,23 +539,23 @@ namespace AdvancedK9
         private void SpawnStationKennels()
         {
             if(_stationKennels.Count==0)_stationKennels.AddRange(new[]{
-                ConfiguredKennel("MissionRow","Downtown / Mission Row Police Station",new Vector3(435.4404f,-974.9838f,30.71601f),84.88242f),
-                ConfiguredKennel("Davis","Davis Police Station",new Vector3(354.2758f,-1591.15f,29.29195f),45.5168f),
-                ConfiguredKennel("Vespucci","Vespucci Police Station",new Vector3(-1082.498f,-802.5654f,19.22887f),10.9947f),
+                ConfiguredKennel("MissionRow","Downtown / Mission Row Police Station",new Vector3(435.4404f,-974.9838f,30.71601f),174.88242f),
+                ConfiguredKennel("Davis","Davis Police Station",new Vector3(354.2758f,-1591.15f,29.29195f),135.5168f),
+                ConfiguredKennel("Vespucci","Vespucci Police Station",new Vector3(-1082.498f,-802.5654f,19.22887f),100.9947f),
                 ConfiguredKennel("RockfordHills","Rockford Hills Police Station",new Vector3(-555.8f,-132.2f,38.2f),115f,true),
-                ConfiguredKennel("Vinewood","Vinewood Police Station",new Vector3(637.631f,-3.024063f,82.78731f),246.6745f),
-                ConfiguredKennel("LaMesa","La Mesa Police Station",new Vector3(840.4388f,-1276.318f,26.44634f),2.712838f),
+                ConfiguredKennel("Vinewood","Vinewood Police Station",new Vector3(637.631f,-3.024063f,82.78731f),336.6745f),
+                ConfiguredKennel("LaMesa","La Mesa Police Station",new Vector3(840.4388f,-1276.318f,26.44634f),92.712838f),
                 ConfiguredKennel("SandyShores","Sandy Shores Sheriff Station",new Vector3(1871.8f,3691.7f,33.7f),210f,true),
-                ConfiguredKennel("Paleto","Paleto Police Station",new Vector3(-445.2472f,6023.268f,31.49012f),314.0662f),
-                ConfiguredKennel("Ranger","Ranger Police Station",new Vector3(370.1926f,793.9409f,187.5991f),166.3364f),
+                ConfiguredKennel("Paleto","Paleto Police Station",new Vector3(-445.2472f,6023.268f,31.49012f),44.0662f),
+                ConfiguredKennel("Ranger","Ranger Police Station",new Vector3(370.1926f,793.9409f,187.5991f),256.3364f),
                 ConfiguredKennel("LSIA","LSIA Field Office",new Vector3(-870.6f,-2417.4f,14.6f),150f,true),
                 ConfiguredKennel("Bolingbroke","Bolingbroke Penitentiary",new Vector3(1848.9f,2604.6f,45.6f),180f,true),
-                ConfiguredKennel("DelPerro","Del Perro Police Station",new Vector3(-1621.023f,-1013.941f,13.15342f),55.20818f),
-                ConfiguredKennel("PortOfLosSantos","Port Of Los Santos Police Station",new Vector3(-343.7605f,-2787.573f,5.000235f),5.843473f),
-                ConfiguredKennel("GreatOceanHighway","Great Ocean Highway Police Station",new Vector3(-1490.288f,4975.141f,63.71766f),94.95189f),
-                ConfiguredKennel("FortZancudo","Fort Zancudo Police Station",new Vector3(-2363.956f,3274.042f,32.99627f),145.3562f),
-                ConfiguredKennel("FIB","FIB Police Station",new Vector3(110.5135f,-759.2312f,45.75479f),331.6973f),
-                ConfiguredKennel("BrookTrail","Brook Trail Police Station",new Vector3(1744.612f,3035.371f,61.8116f),80.94661f)
+                ConfiguredKennel("DelPerro","Del Perro Police Station",new Vector3(-1621.023f,-1013.941f,13.15342f),145.20818f),
+                ConfiguredKennel("PortOfLosSantos","Port Of Los Santos Police Station",new Vector3(-343.7605f,-2787.573f,5.000235f),95.843473f),
+                ConfiguredKennel("GreatOceanHighway","Great Ocean Highway Police Station",new Vector3(-1490.288f,4975.141f,63.71766f),184.95189f),
+                ConfiguredKennel("FortZancudo","Fort Zancudo Police Station",new Vector3(-2363.956f,3274.042f,32.99627f),235.3562f),
+                ConfiguredKennel("FIB","FIB Police Station",new Vector3(110.5135f,-759.2312f,45.75479f),61.6973f),
+                ConfiguredKennel("BrookTrail","Brook Trail Police Station",new Vector3(1744.612f,3035.371f,61.8116f),170.94661f)
             });
             foreach(StationKennel kennel in _stationKennels)if(kennel.Blip==null||!kennel.Blip.Exists())
             {
@@ -439,10 +569,10 @@ namespace AdvancedK9
         {
             Vector3 position;float heading;bool overridden=_config.TryGetKennelLocation(key,out position,out heading);
             if(!overridden){position=defaultPosition;heading=defaultHeading;}
-            // User-measured placements are authoritative. Forced level rotation prevents
-            // the doghouse from tilting; automatic ground correction remains only for
-            // legacy unmodified stations whose previous placement was already approved.
-            return retainGrounding&&!overridden?new StationKennel(name,position,heading):new StationKennel(name,position,heading,false,false,0f,true);
+            // Measured placements retain their X/Y coordinates while nearby collision
+            // allows the doghouse to settle onto the surface before it is forced level.
+            StationKennel kennel=retainGrounding&&!overridden?new StationKennel(key,name,position,heading):new StationKennel(key,name,position,heading,true,true,0f,true);
+            kennel.DefaultPosition=defaultPosition;kennel.DefaultHeading=defaultHeading;return kennel;
         }
 
         private void UpdateNearbyKennelProps()

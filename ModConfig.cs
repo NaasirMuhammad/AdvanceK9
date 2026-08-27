@@ -49,6 +49,7 @@ namespace AdvancedK9
         public bool CompatibilityProtectManagedPeds = true;
         public string PortraitFile = "";
         private readonly Dictionary<string,string> _kennelLocations=new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase);
+        private readonly string _configPath=Path.Combine("Plugins","LSPDFR","AdvancedK9","AdvancedK9.ini");
 
         private static readonly string[] KennelKeys={"MissionRow","Davis","Vespucci","RockfordHills","Vinewood","LaMesa","SandyShores","Paleto","Ranger","LSIA","Bolingbroke","DelPerro","PortOfLosSantos","GreatOceanHighway","FortZancudo","FIB","BrookTrail"};
 
@@ -107,7 +108,23 @@ namespace AdvancedK9
             result.CompatibilityProtectManagedPeds = ini.ReadBoolean("Compatibility", "ProtectRestrainedPeds", result.CompatibilityProtectManagedPeds);
             result.PortraitFile = ini.ReadString("HUD", "PortraitFile", result.PortraitFile);
             foreach(string key in KennelKeys)result._kennelLocations[key]=ini.ReadString("KennelLocations",key,"");
+            result.MigrateMeasuredKennelHeadings();
             return result;
+        }
+
+        private void MigrateMeasuredKennelHeadings()
+        {
+            var headings=new Dictionary<string,float[]>(StringComparer.OrdinalIgnoreCase){
+                {"MissionRow",new[]{84.88242f,174.88242f}},{"Davis",new[]{45.5168f,135.5168f}},{"Vespucci",new[]{10.9947f,100.9947f}},
+                {"Vinewood",new[]{246.6745f,336.6745f}},{"LaMesa",new[]{2.712838f,92.712838f}},{"Paleto",new[]{314.0662f,44.0662f}},
+                {"Ranger",new[]{166.3364f,256.3364f}},{"DelPerro",new[]{55.20818f,145.20818f}},{"PortOfLosSantos",new[]{5.843473f,95.843473f}},
+                {"GreatOceanHighway",new[]{94.95189f,184.95189f}},{"FortZancudo",new[]{145.3562f,235.3562f}},{"FIB",new[]{331.6973f,61.6973f}},{"BrookTrail",new[]{80.94661f,170.94661f}}
+            };
+            foreach(var pair in headings)
+            {
+                Vector3 position;float heading;if(!TryGetKennelLocation(pair.Key,out position,out heading)||Math.Abs(heading-pair.Value[0])>.001f)continue;
+                try{SaveKennelLocation(pair.Key,position,pair.Value[1]);Game.LogTrivial("AdvancedK9 rotated measured kennel default 90 degrees right: "+pair.Key+".");}catch{}
+            }
         }
 
         public bool TryGetKennelLocation(string key,out Vector3 position,out float heading)
@@ -121,6 +138,28 @@ namespace AdvancedK9
                 return false;
             }
             position=new Vector3(x,y,z);heading=h;return true;
+        }
+
+        public void SaveKennelLocation(string key,Vector3 position,float heading)
+        {
+            string value=position.X.ToString("0.######",CultureInfo.InvariantCulture)+","+position.Y.ToString("0.######",CultureInfo.InvariantCulture)+","+position.Z.ToString("0.######",CultureInfo.InvariantCulture)+","+heading.ToString("0.######",CultureInfo.InvariantCulture);
+            try
+            {
+                var lines=File.Exists(_configPath)?new List<string>(File.ReadAllLines(_configPath)):new List<string>();
+                int section=-1,end=lines.Count,keyLine=-1;
+                for(int i=0;i<lines.Count;i++)
+                {
+                    string trimmed=lines[i].Trim();
+                    if(trimmed.Equals("[KennelLocations]",StringComparison.OrdinalIgnoreCase)){section=i;continue;}
+                    if(section>=0&&i>section&&trimmed.StartsWith("[")&&trimmed.EndsWith("]")){end=i;break;}
+                    if(section>=0&&i>section&&trimmed.StartsWith(key+"=",StringComparison.OrdinalIgnoreCase))keyLine=i;
+                }
+                if(section<0){if(lines.Count>0&&lines[lines.Count-1].Length>0)lines.Add("");lines.Add("[KennelLocations]");section=lines.Count-1;end=lines.Count;}
+                if(keyLine>=0)lines[keyLine]=key+"="+value;else lines.Insert(end,key+"="+value);
+                string temporary=_configPath+".tmp";File.WriteAllLines(temporary,lines);File.Copy(temporary,_configPath,true);File.Delete(temporary);
+                _kennelLocations[key]=value;
+            }
+            catch(Exception ex){Game.LogTrivial("AdvancedK9 kennel location save failed for "+key+": "+ex.Message);throw;}
         }
 
         private static float Clamp(float value, float min, float max) => Math.Max(min, Math.Min(max, value));
