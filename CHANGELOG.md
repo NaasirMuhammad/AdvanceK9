@@ -2,6 +2,16 @@
 
 All published AdvancedK9 versions are beta builds.
 
+## 0.22.7-beta
+
+- Restored the San Andreas/Vespucci kennel to its previous horizontal location and applies the corrected ground alignment there.
+- Retained the approved Davis location while lifting the doghouse above the pavement to prevent ground clipping.
+- Moved the FIB kennel away from the wall to the San Andreas Avenue/Elgin side of the building.
+- Moved the Beaver Bush ranger kennel away from the tent and ranger vehicle parking position.
+- Moved the Great Ocean Highway kennel off the dirt travel lane and onto the adjacent station area.
+- Moved the Paleto Bay kennel out of the accessible parking bay.
+- Ground correction is deliberately targeted: Davis receives a 0.12-metre anti-clipping lift and forced level rotation; Vinewood, Brook Trail and restored San Andreas receive precise terrain alignment. Unreported kennels retain their already-correct v0.22.6 placement behavior.
+
 ## 0.22.6-beta
 
 - Moved the kennels reported inside buildings or over landscaping at Davis, Vespucci/San Andreas, Rockford Hills, Vinewood, La Mesa, Sandy Shores, Paleto Bay, Beaver Bush, Bolingbroke, FIB, Del Perro/Docks and Fort Zancudo onto exterior paved or parking areas.

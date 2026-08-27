@@ -94,8 +94,8 @@ namespace AdvancedK9
 
         private sealed class StationKennel
         {
-            public string Name;public Vector3 Position;public float Heading;public bool SnapToGround;public Rage.Object Prop;public Blip Blip;
-            public StationKennel(string name,Vector3 position,float heading,bool snapToGround=true){Name=name;Position=position;Heading=heading;SnapToGround=snapToGround;}
+            public string Name;public Vector3 Position;public float Heading;public bool SnapToGround;public bool PreciseGrounding;public float SurfaceLift;public bool ForceLevel;public Rage.Object Prop;public Blip Blip;
+            public StationKennel(string name,Vector3 position,float heading,bool snapToGround=true,bool preciseGrounding=false,float surfaceLift=0f,bool forceLevel=false){Name=name;Position=position;Heading=heading;SnapToGround=snapToGround;PreciseGrounding=preciseGrounding;SurfaceLift=surfaceLift;ForceLevel=forceLevel;}
         }
 
         public K9Controller(ModConfig config)
@@ -410,21 +410,21 @@ namespace AdvancedK9
         {
             if(_stationKennels.Count==0)_stationKennels.AddRange(new[]{
                 new StationKennel("Downtown / Mission Row Police Station",new Vector3(452.15f,-1011.45f,29.0f),90f),
-                new StationKennel("Davis Sheriff Station",new Vector3(399.2f,-1607.6f,29.3f),270f),
-                new StationKennel("Vespucci Police Station",new Vector3(-1092.5f,-836.8f,19.0f),215f),
+                new StationKennel("Davis Sheriff Station",new Vector3(399.2f,-1607.6f,29.3f),270f,true,true,.12f,true),
+                new StationKennel("Vespucci Police Station",new Vector3(-1113.9f,-851.4f,14.0f),126f,true,true,.05f),
                 new StationKennel("Rockford Hills Police Station",new Vector3(-555.8f,-132.2f,38.2f),115f),
-                new StationKennel("Vinewood Police Station",new Vector3(645.3f,17.8f,82.8f),160f),
+                new StationKennel("Vinewood Police Station",new Vector3(645.3f,17.8f,82.8f),160f,true,true,.08f),
                 new StationKennel("La Mesa Highway Patrol Station",new Vector3(855.2f,-1274.6f,26.4f),180f),
                 new StationKennel("Sandy Shores Sheriff Station",new Vector3(1871.8f,3691.7f,33.7f),210f),
-                new StationKennel("Paleto Bay Sheriff Station",new Vector3(-459.7f,6005.8f,31.3f),45f),
-                new StationKennel("Beaver Bush State Ranger Station",new Vector3(374.4f,789.4f,187.7f),90f),
+                new StationKennel("Paleto Bay Sheriff Station",new Vector3(-474.8f,6028.6f,31.3f),135f),
+                new StationKennel("Beaver Bush State Ranger Station",new Vector3(402.6f,788.8f,187.7f),270f),
                 new StationKennel("LSIA Field Office",new Vector3(-870.6f,-2417.4f,14.6f),150f),
                 new StationKennel("Bolingbroke Penitentiary",new Vector3(1848.9f,2604.6f,45.6f),180f),
-                new StationKennel("FIB Headquarters",new Vector3(116.8f,-743.6f,45.8f),250f),
+                new StationKennel("FIB Headquarters",new Vector3(158.2f,-776.4f,43.6f),250f),
                 new StationKennel("Del Perro Police Station",new Vector3(-1628.7f,-1012.2f,13.1f),140f),
                 new StationKennel("Los Santos Port Police",new Vector3(-338.1f,-2784.2f,5.7f),180f),
-                new StationKennel("Raton Canyon Ranger Office",new Vector3(-1497.4f,4976.5f,63.9f),45f),
-                new StationKennel("Senora Ranger Station",new Vector3(1732.4f,3036.2f,63.7f),270f),
+                new StationKennel("Raton Canyon Ranger Office",new Vector3(-1508.2f,4985.6f,63.2f),45f),
+                new StationKennel("Senora Ranger Station",new Vector3(1732.4f,3036.2f,63.7f),270f,true,true),
                 new StationKennel("Fort Zancudo State Police",new Vector3(-2362.8f,3264.2f,32.8f),60f)
             });
             foreach(StationKennel kennel in _stationKennels)if(kennel.Blip==null||!kennel.Blip.Exists())
@@ -453,15 +453,25 @@ namespace AdvancedK9
             Vector3 configuredPosition=kennel.Position;
             try
             {
-                NativeFunction.Natives.REQUEST_COLLISION_AT_COORD(configuredPosition.X,configuredPosition.Y,configuredPosition.Z);
-                kennel.Prop=new Rage.Object(model,configuredPosition);kennel.Prop.Heading=kennel.Heading;kennel.Prop.IsPersistent=true;
+                int collisionAttempts=kennel.PreciseGrounding?12:1;
+                for(int attempt=0;attempt<collisionAttempts;attempt++){NativeFunction.Natives.REQUEST_COLLISION_AT_COORD(configuredPosition.X,configuredPosition.Y,configuredPosition.Z);if(kennel.PreciseGrounding)GameFiber.Yield();}
+                Vector3 spawnPosition=configuredPosition;
+                if(kennel.PreciseGrounding)try
+                {
+                    float groundZ=0f;
+                    bool foundGround=NativeFunction.Natives.GET_GROUND_Z_FOR_3D_COORD<bool>(configuredPosition.X,configuredPosition.Y,configuredPosition.Z+25f,out groundZ,false);
+                    if(foundGround&&Math.Abs(groundZ-configuredPosition.Z)<=3f)spawnPosition=new Vector3(configuredPosition.X,configuredPosition.Y,groundZ+kennel.SurfaceLift);
+                }
+                catch{}
+                kennel.Prop=new Rage.Object(model,spawnPosition);kennel.Prop.Heading=kennel.Heading;kennel.Prop.IsPersistent=true;
                 if(kennel.SnapToGround)
                 {
                     NativeFunction.Natives.PLACE_OBJECT_ON_GROUND_PROPERLY(kennel.Prop);
                     Vector3 snapped=kennel.Prop.Position;
-                    if(Math.Abs(snapped.Z-configuredPosition.Z)<=2.0f)kennel.Position=snapped;
+                    if(Math.Abs(snapped.Z-configuredPosition.Z)<=3.0f){if(kennel.SurfaceLift>0f)snapped.Z+=kennel.SurfaceLift;kennel.Prop.Position=snapped;kennel.Position=snapped;}
                     else{kennel.Prop.Position=configuredPosition;Game.LogTrivial("AdvancedK9 kennel ground-snap rejected unsafe Z change for "+kennel.Name+".");}
                 }
+                if(kennel.ForceLevel)NativeFunction.Natives.SET_ENTITY_ROTATION(kennel.Prop,0f,0f,kennel.Heading,2,true);
                 NativeFunction.Natives.FREEZE_ENTITY_POSITION(kennel.Prop,true);kennel.Position=kennel.Prop.Position;
                 int interior=NativeFunction.Natives.GET_INTERIOR_FROM_ENTITY<int>(kennel.Prop);
                 if(interior!=0)Game.LogTrivial("AdvancedK9 kennel exterior audit WARNING: "+kennel.Name+" resolved inside interior "+interior+" at "+kennel.Position+".");
