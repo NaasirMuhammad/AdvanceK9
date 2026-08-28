@@ -237,7 +237,11 @@ The dog uses the handler's friendly relationship group and has friendly attacks 
 
 When supported by the detected plugin, AdvancedK9 prioritizes its active traffic-stop vehicle or selected pedestrian, reads exposed inventory/search records, classifies narcotics, explosives and weapons, shares K9 indications, recognizes pursuit suspects and vehicle bailouts, and rejects restrained, surrendered, arrested or transported peds from apprehension. Detailed adapter/version/API diagnostics are written to `RagePluginHook.log`. Tracking and apprehension never require a PR or STP stop.
 
-When no compatible target or record API is exposed, the closest valid ped/vehicle and `AdvancedK9.ini` fallback probability are used. This prevents API changes from stopping the plugin from loading.
+With `UseCdfInventory=true`, the companion bridge reads the exact target's `CommonDataFramework` inventory as the shared source of truth. AdvancedK9 never edits CDF, Policing Redefined, NPCI or NexusMDT files and never creates replacement inventory records. With `ShareWithNexusMDT=true`, a completed sniff publishes only the K9 observation through a compatible public NexusMDT note API. Contraband names remain undisclosed until the officer performs the normal PR/CDF search; NexusMDT's existing search capture then records that same CDF-backed result for report writing.
+
+If NexusMDT does not expose a compatible public incident-note method, the indication remains in the AdvancedK9 incident/RPH log and the bridge reports the unavailable writer. AdvancedK9 deliberately does not invoke an internal/private Nexus store or pretend that the report entry succeeded.
+
+When no compatibility plugin is active, standalone searches use the configured fallback probability. When PR/CDF is active but an exact inventory record is unavailable, AdvancedK9 returns a negative/no-certified-odor result instead of inventing a random hit. This prevents API changes from creating false narcotics, explosives or weapons alerts.
 
 Vehicle searches visit all four exterior corners before the result is determined. For apprehension, aim a taser or firearm directly at the intended suspect and keep that person in your sights while issuing the command; proximity alone never chooses the target.
 

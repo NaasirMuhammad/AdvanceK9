@@ -4,6 +4,14 @@ All published AdvancedK9 versions are beta builds.
 
 ## 0.22.10-beta
 
+- Uses CommonDataFramework's exact ped or vehicle inventory as the shared search source when available.
+- Adds protocol v2 request/response provenance so logs identify `CDF.Items` or the PR search-items fallback.
+- Publishes completed positive and negative K9 indications to a compatible public NexusMDT incident-note API for report writing.
+- Keeps K9 indications observational: AdvancedK9 does not reveal item names, mutate inventories, recover evidence or mark an officer search complete.
+- Leaves regular officer searches to Policing Redefined/CDF, allowing NexusMDT's existing search capture to log the same inventory.
+- Adds safe configuration switches for CDF reads and NexusMDT sharing, defaulting on when the keys are absent from an existing INI.
+- Adds one-time public API-surface diagnostics and explicit success/fallback logging without per-frame reflection or polling.
+- Does not alter or redistribute CommonDataFramework, Policing Redefined, NPCI or NexusMDT files.
 - Replaces the default positions and headings for Vespucci, Del Perro, Port of Los Santos, Davis, La Mesa, Mission Row, FIB, Vinewood, Beaver Bush Ranger, Great Ocean Highway, Fort Zancudo, Paleto Bay, Brook Trail and Sandy Shores with the finalized values exported from the in-game editor.
 - Restores accessible FIB and Brook Trail kennels using the newly supplied locations.
 - Uses the finalized saved Z and heading for all 14 edited doghouses without applying another automatic rotation or ground snap; each prop remains level.

@@ -19,19 +19,19 @@ namespace AdvancedK9
     {
         private readonly Assembly _pr,_cdf,_stp;
         private readonly string _configuredMode;
-        private readonly bool _shareResults;
+        private readonly bool _shareResults,_useCdfInventory,_shareWithNexusMdt;
         private readonly string _bridgePath=Path.Combine("Plugins","LSPDFR","AdvancedK9","CompatibilityBridge.state");
         private readonly string _bridgeRequestPath=Path.Combine("Plugins","LSPDFR","AdvancedK9","CompatibilityBridge.request");
-        private bool _bridgePr,_bridgeCdf,_bridgeStp;
-        private string _bridgePrVersion="",_bridgeCdfVersion="",_bridgeStpVersion="",_bridgeVehicleHandle="",_bridgePedHandle="",_bridgePursuitHandle="",_bridgeVehicleData="",_bridgePedData="",_bridgeQueryHandle="",_bridgeQueryData="";
+        private bool _bridgePr,_bridgeCdf,_bridgeStp,_bridgeNexus,_bridgeQueryAvailable,_bridgeActionSucceeded;
+        private string _bridgePrVersion="",_bridgeCdfVersion="",_bridgeStpVersion="",_bridgeNexusVersion="",_bridgeVehicleHandle="",_bridgePedHandle="",_bridgePursuitHandle="",_bridgeVehicleData="",_bridgePedData="",_bridgeQueryRequestId="",_bridgeQueryHandle="",_bridgeQueryData="",_bridgeQuerySource="",_bridgeActionRequestId="",_bridgeActionSink="",_bridgeActionDetail="";
         private uint _nextDiagnostic;
         public CompatibilityMode Mode{get;private set;}
         public bool IsAvailable=>Mode!=CompatibilityMode.Standalone;
         public string ModeLabel=>Mode==CompatibilityMode.PolicingRedefined?"Policing Redefined / CDF":Mode==CompatibilityMode.StopThePed?"Stop The Ped":"Standalone";
 
-        public PolicingRedefinedBridge(string configuredMode="Auto",bool shareResults=true)
+        public PolicingRedefinedBridge(string configuredMode="Auto",bool shareResults=true,bool useCdfInventory=true,bool shareWithNexusMdt=true)
         {
-            _configuredMode=string.IsNullOrWhiteSpace(configuredMode)?"Auto":configuredMode.Trim();_shareResults=shareResults;
+            _configuredMode=string.IsNullOrWhiteSpace(configuredMode)?"Auto":configuredMode.Trim();_shareResults=shareResults;_useCdfInventory=useCdfInventory;_shareWithNexusMdt=shareWithNexusMdt;
             _pr=Find("PolicingRedefined","Policing Redefined");_cdf=Find("CommonDataFramework");_stp=Find("StopThePed","Stop The Ped","STP");
             RefreshBridgeState();SelectMode();
             if(_pr!=null&&_stp!=null)Game.LogTrivial("AdvancedK9 compatibility WARNING: PR and STP are both loaded. PR mode selected; remove STP to prevent conflicting stop/arrest tasks.");
@@ -39,7 +39,7 @@ namespace AdvancedK9
         }
 
         public void TickDiagnostics(){RefreshBridgeState();SelectMode();if(Game.GameTime>=_nextDiagnostic)LogDiagnostics();}
-        private void LogDiagnostics(){_nextDiagnostic=Game.GameTime+60000;Game.LogTrivial("AdvancedK9 compatibility: configured="+_configuredMode+", active="+ModeLabel+", PR="+DetectedVersion(_pr,_bridgePr,_bridgePrVersion)+", CDF="+DetectedVersion(_cdf,_bridgeCdf,_bridgeCdfVersion)+", STP="+DetectedVersion(_stp,_bridgeStp,_bridgeStpVersion)+", bridge="+BridgeAvailable()+", shareResults="+_shareResults+".");}
+        private void LogDiagnostics(){_nextDiagnostic=Game.GameTime+60000;Game.LogTrivial("AdvancedK9 compatibility: configured="+_configuredMode+", active="+ModeLabel+", PR="+DetectedVersion(_pr,_bridgePr,_bridgePrVersion)+", CDF="+DetectedVersion(_cdf,_bridgeCdf,_bridgeCdfVersion)+", NexusMDT="+(_bridgeNexus?(string.IsNullOrWhiteSpace(_bridgeNexusVersion)?"detected by bridge":_bridgeNexusVersion+" (bridge)"):"not loaded")+", STP="+DetectedVersion(_stp,_bridgeStp,_bridgeStpVersion)+", bridge="+BridgeAvailable()+", CDF inventory="+_useCdfInventory+", Nexus sharing="+_shareWithNexusMdt+".");}
 
         public Vehicle GetActiveVehicle(Ped handler,float radius){var value=FindEntity<Vehicle>(VehicleNames(),handler)??FindWorldVehicle(_bridgeVehicleHandle);if(value!=null&&value.Exists()&&value.DistanceTo(handler)<=Math.Max(radius,35f)){LogUse("active vehicle",value);return value;}return null;}
         public Ped GetActivePed(Ped handler,float radius){var value=FindEntity<Ped>(PedNames(),handler)??FindWorldPed(_bridgePedHandle);if(value!=null&&value.Exists()&&!value.IsDead&&value!=handler&&value.DistanceTo(handler)<=Math.Max(radius,250f)){LogUse("active ped",value);return value;}return null;}
@@ -57,7 +57,9 @@ namespace AdvancedK9
         public CompatibilitySearchResult GetSearchResult(Entity target,DetectionSpecialty requested,bool narcoticsCertified,bool explosivesCertified,bool weaponsCertified)
         {
             if(target==null||!target.Exists()||Mode==CompatibilityMode.Standalone)return null;
-            object record=GetRecord(target);string inventory=Flatten(record,0,new HashSet<object>(ReferenceComparer.Instance));if(string.IsNullOrWhiteSpace(inventory))inventory=GetSearchText(target);if(string.IsNullOrWhiteSpace(inventory)){string handle=target.Handle.ToString();if(handle==_bridgeVehicleHandle)inventory=_bridgeVehicleData;else if(handle==_bridgePedHandle)inventory=_bridgePedData;}if(string.IsNullOrWhiteSpace(inventory))inventory=RequestBridgeRecord(target);
+            string inventory="";
+            if(_useCdfInventory&&_bridgeCdf)inventory=RequestBridgeRecord(target);
+            else{object record=GetRecord(target);inventory=Flatten(record,0,new HashSet<object>(ReferenceComparer.Instance));if(string.IsNullOrWhiteSpace(inventory))inventory=GetSearchText(target);if(string.IsNullOrWhiteSpace(inventory)){string handle=target.Handle.ToString();if(handle==_bridgeVehicleHandle)inventory=_bridgeVehicleData;else if(handle==_bridgePedHandle)inventory=_bridgePedData;}if(string.IsNullOrWhiteSpace(inventory))inventory=RequestBridgeRecord(target);}
             if(string.IsNullOrWhiteSpace(inventory)){Game.LogTrivial("AdvancedK9 compatibility search: no inventory record for entity "+target.Handle+"; random fallback suppressed.");return new CompatibilitySearchResult{Positive=false,Specialty=DetectionSpecialty.General,Source=ModeLabel,Detail="Integration inventory unavailable"};}
             DetectionSpecialty detected=Classify(inventory);bool? positive=detected!=DetectionSpecialty.General;
             bool certified=detected==DetectionSpecialty.Narcotics?narcoticsCertified:detected==DetectionSpecialty.Explosives?explosivesCertified:detected==DetectionSpecialty.Weapons?weaponsCertified:true;
@@ -69,19 +71,42 @@ namespace AdvancedK9
         private string RequestBridgeRecord(Entity target)
         {
             if(!BridgeAvailable()||target==null||!target.Exists())return "";
-            string handle=target.Handle.ToString();try
+            string handle=target.Handle.ToString(),requestId=Guid.NewGuid().ToString("N");try
             {
                 string directory=Path.GetDirectoryName(_bridgeRequestPath);if(!Directory.Exists(directory))Directory.CreateDirectory(directory);
-                File.WriteAllLines(_bridgeRequestPath,new[]{"Handle="+handle,"Type="+(target is Vehicle?"Vehicle":"Ped"),"UtcTicks="+DateTime.UtcNow.Ticks});
+                WriteBridgeRequest(new[]{"Action=InventoryQuery","RequestId="+requestId,"Handle="+handle,"Type="+(target is Vehicle?"Vehicle":"Ped"),"UseCdfInventory="+_useCdfInventory,"UtcTicks="+DateTime.UtcNow.Ticks});
                 uint timeout=Game.GameTime+1800;
-                while(Game.GameTime<timeout){GameFiber.Yield();RefreshBridgeState();if(_bridgeQueryHandle==handle&&!string.IsNullOrWhiteSpace(_bridgeQueryData)){Game.LogTrivial("AdvancedK9 compatibility: bridge returned requested inventory for entity "+handle+".");return _bridgeQueryData;}}
+                while(Game.GameTime<timeout){GameFiber.Yield();RefreshBridgeState();if(_bridgeQueryRequestId==requestId&&_bridgeQueryHandle==handle){if(_bridgeQueryAvailable){Game.LogTrivial("AdvancedK9 compatibility: bridge returned "+_bridgeQuerySource+" inventory for entity "+handle+".");return string.IsNullOrWhiteSpace(_bridgeQueryData)?"CDF inventory: empty":_bridgeQueryData;}break;}}
             }
             catch(Exception ex){Game.LogTrivial("AdvancedK9 compatibility request failed: "+ex.Message);}
             return "";
         }
 
-        public void RecordK9Indication(Entity target,bool positive,DetectionSpecialty specialty)
-        {if(!_shareResults||target==null||!target.Exists()||Mode==CompatibilityMode.Standalone)return;if(TryInvokeAction(new[]{"RecordK9Indication","SetK9Indication","AddK9Indication","SetK9Alert","RecordCanineAlert"},target,positive,specialty.ToString()))Game.LogTrivial("AdvancedK9 compatibility: shared indication with "+ModeLabel+".");else Game.LogTrivial("AdvancedK9 compatibility: no compatible indication writer; local log retained.");}
+        public void RecordK9Indication(Entity target,bool positive,DetectionSpecialty specialty,string k9Name)
+        {
+            if(!_shareResults||target==null||!target.Exists()||Mode==CompatibilityMode.Standalone)return;
+            if(SendBridgeK9Indication(target,positive,specialty,k9Name))return;
+            if(TryInvokeAction(new[]{"RecordK9Indication","SetK9Indication","AddK9Indication","SetK9Alert","RecordCanineAlert"},target,positive,specialty.ToString()))Game.LogTrivial("AdvancedK9 compatibility: shared indication with "+ModeLabel+".");else Game.LogTrivial("AdvancedK9 compatibility: no compatible indication writer; local log retained.");
+        }
+
+        private bool SendBridgeK9Indication(Entity target,bool positive,DetectionSpecialty specialty,string k9Name)
+        {
+            if(!BridgeAvailable())return false;string id=Guid.NewGuid().ToString("N");
+            try
+            {
+                WriteBridgeRequest(new[]{"Action=K9Indication","RequestId="+id,"Handle="+target.Handle,"Type="+(target is Vehicle?"Vehicle":"Ped"),"Positive="+positive,"Specialty="+specialty,"K9Name="+SafeRequestValue(k9Name),"TargetLabel="+(target is Vehicle?"exterior vehicle":"person"),"ShareWithNexusMDT="+_shareWithNexusMdt,"UtcTicks="+DateTime.UtcNow.Ticks});
+                Game.LogTrivial("AdvancedK9 compatibility: queued K9 indication "+id+" for CDF/Nexus bridge; inventory was not changed or disclosed.");return true;
+            }
+            catch(Exception ex){Game.LogTrivial("AdvancedK9 compatibility indication request failed: "+ex.Message);return false;}
+        }
+
+        private void WriteBridgeRequest(IEnumerable<string> lines)
+        {
+            string directory=Path.GetDirectoryName(_bridgeRequestPath);if(!Directory.Exists(directory))Directory.CreateDirectory(directory);string temp=_bridgeRequestPath+".tmp";
+            File.WriteAllLines(temp,lines);File.Copy(temp,_bridgeRequestPath,true);File.Delete(temp);
+        }
+
+        private static string SafeRequestValue(string value)=>string.IsNullOrWhiteSpace(value)?"K9":value.Replace("\r"," ").Replace("\n"," ").Replace("=","-").Trim();
         public void RecordLocatedSuspect(Ped suspect){if(_shareResults&&suspect!=null&&suspect.Exists())TryInvokeAction(new[]{"RecordK9Locate","SetLocatedSuspect","AddLocatedSuspect","RecordCanineLocate"},suspect,true,"Tracking");}
         public void RecordApprehension(Ped suspect){if(_shareResults&&suspect!=null&&suspect.Exists())TryInvokeAction(new[]{"RecordK9Apprehension","SetApprehendedPed","AddApprehendedPed","RecordCanineApprehension"},suspect,true,"Apprehension");}
         public bool TryArrestHandoff(Ped suspect){if(suspect==null||!suspect.Exists()||Mode==CompatibilityMode.Standalone)return false;return TryInvokeAction(new[]{"StartArrest","ArrestPed","SetPedArrested","BeginArrest","OpenPedMenu","OpenContextMenu"},suspect,true,"AdvancedK9 handoff");}
@@ -124,8 +149,8 @@ namespace AdvancedK9
         private static string DetectedVersion(Assembly assembly,bool bridged,string version)=>assembly!=null?VersionOf(assembly):bridged?(string.IsNullOrWhiteSpace(version)?"detected by bridge":version+" (bridge)"):"not loaded";
         private bool BridgeAvailable()=>_bridgePr||_bridgeCdf||_bridgeStp;
         private void SelectMode(){bool pr=_pr!=null||_cdf!=null||_bridgePr||_bridgeCdf,stp=_stp!=null||_bridgeStp;if(_configuredMode.Equals("Standalone",StringComparison.OrdinalIgnoreCase))Mode=CompatibilityMode.Standalone;else if(_configuredMode.Equals("StopThePed",StringComparison.OrdinalIgnoreCase)||_configuredMode.Equals("STP",StringComparison.OrdinalIgnoreCase))Mode=stp?CompatibilityMode.StopThePed:CompatibilityMode.Standalone;else if(_configuredMode.Equals("PolicingRedefined",StringComparison.OrdinalIgnoreCase)||_configuredMode.Equals("PR",StringComparison.OrdinalIgnoreCase))Mode=pr?CompatibilityMode.PolicingRedefined:CompatibilityMode.Standalone;else Mode=pr?CompatibilityMode.PolicingRedefined:stp?CompatibilityMode.StopThePed:CompatibilityMode.Standalone;}
-        private void RefreshBridgeState(){try{if(!File.Exists(_bridgePath)){ClearBridgeState();return;}var map=File.ReadAllLines(_bridgePath).Select(line=>new{line,split=line.IndexOf('=')}).Where(x=>x.split>0).ToDictionary(x=>x.line.Substring(0,x.split),x=>x.line.Substring(x.split+1),StringComparer.OrdinalIgnoreCase);string heartbeat;if(!map.TryGetValue("HeartbeatUtcTicks",out heartbeat)){ClearBridgeState();return;}long ticks;if(!long.TryParse(heartbeat,out ticks)||DateTime.UtcNow-new DateTime(ticks,DateTimeKind.Utc)>TimeSpan.FromSeconds(8)){ClearBridgeState();return;}_bridgePr=ReadBool(map,"PR");_bridgeCdf=ReadBool(map,"CDF");_bridgeStp=ReadBool(map,"STP");_bridgePrVersion=Read(map,"PRVersion");_bridgeCdfVersion=Read(map,"CDFVersion");_bridgeStpVersion=Read(map,"STPVersion");_bridgeVehicleHandle=Read(map,"ActiveVehicleHandle");_bridgePedHandle=Read(map,"ActivePedHandle");_bridgePursuitHandle=Read(map,"PursuitPedHandle");_bridgeVehicleData=Decode(Read(map,"ActiveVehicleData"));_bridgePedData=Decode(Read(map,"ActivePedData"));_bridgeQueryHandle=Read(map,"QueryHandle");_bridgeQueryData=Decode(Read(map,"QueryData"));}catch(Exception ex){ClearBridgeState();Game.LogTrivial("AdvancedK9 bridge state read: "+ex.Message);}}
-        private void ClearBridgeState(){_bridgePr=_bridgeCdf=_bridgeStp=false;_bridgePrVersion=_bridgeCdfVersion=_bridgeStpVersion=_bridgeVehicleHandle=_bridgePedHandle=_bridgePursuitHandle=_bridgeVehicleData=_bridgePedData=_bridgeQueryHandle=_bridgeQueryData="";}
+        private void RefreshBridgeState(){try{if(!File.Exists(_bridgePath)){ClearBridgeState();return;}var map=File.ReadAllLines(_bridgePath).Select(line=>new{line,split=line.IndexOf('=')}).Where(x=>x.split>0).ToDictionary(x=>x.line.Substring(0,x.split),x=>x.line.Substring(x.split+1),StringComparer.OrdinalIgnoreCase);string heartbeat;if(!map.TryGetValue("HeartbeatUtcTicks",out heartbeat)){ClearBridgeState();return;}long ticks;if(!long.TryParse(heartbeat,out ticks)||DateTime.UtcNow-new DateTime(ticks,DateTimeKind.Utc)>TimeSpan.FromSeconds(8)){ClearBridgeState();return;}_bridgePr=ReadBool(map,"PR");_bridgeCdf=ReadBool(map,"CDF");_bridgeNexus=ReadBool(map,"NexusMDT");_bridgeStp=ReadBool(map,"STP");_bridgePrVersion=Read(map,"PRVersion");_bridgeCdfVersion=Read(map,"CDFVersion");_bridgeNexusVersion=Read(map,"NexusMDTVersion");_bridgeStpVersion=Read(map,"STPVersion");_bridgeVehicleHandle=Read(map,"ActiveVehicleHandle");_bridgePedHandle=Read(map,"ActivePedHandle");_bridgePursuitHandle=Read(map,"PursuitPedHandle");_bridgeVehicleData=Decode(Read(map,"ActiveVehicleData"));_bridgePedData=Decode(Read(map,"ActivePedData"));_bridgeQueryRequestId=Read(map,"QueryRequestId");_bridgeQueryHandle=Read(map,"QueryHandle");_bridgeQueryAvailable=ReadBool(map,"QueryAvailable");_bridgeQuerySource=Read(map,"QuerySource");_bridgeQueryData=Decode(Read(map,"QueryData"));_bridgeActionRequestId=Read(map,"ActionRequestId");_bridgeActionSucceeded=ReadBool(map,"ActionSucceeded");_bridgeActionSink=Read(map,"ActionSink");_bridgeActionDetail=Decode(Read(map,"ActionDetail"));}catch(Exception ex){ClearBridgeState();Game.LogTrivial("AdvancedK9 bridge state read: "+ex.Message);}}
+        private void ClearBridgeState(){_bridgePr=_bridgeCdf=_bridgeStp=_bridgeNexus=_bridgeQueryAvailable=_bridgeActionSucceeded=false;_bridgePrVersion=_bridgeCdfVersion=_bridgeStpVersion=_bridgeNexusVersion=_bridgeVehicleHandle=_bridgePedHandle=_bridgePursuitHandle=_bridgeVehicleData=_bridgePedData=_bridgeQueryRequestId=_bridgeQueryHandle=_bridgeQueryData=_bridgeQuerySource=_bridgeActionRequestId=_bridgeActionSink=_bridgeActionDetail="";}
         private static bool ReadBool(IDictionary<string,string> map,string key){bool value;return bool.TryParse(Read(map,key),out value)&&value;}
         private static string Read(IDictionary<string,string> map,string key){string value;return map.TryGetValue(key,out value)?value:"";}
         private static string Decode(string value){try{return string.IsNullOrWhiteSpace(value)?"":Encoding.UTF8.GetString(Convert.FromBase64String(value));}catch{return "";}}

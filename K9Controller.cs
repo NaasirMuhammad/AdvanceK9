@@ -109,7 +109,7 @@ namespace AdvancedK9
         public K9Controller(ModConfig config)
         {
             _config = config;
-            _pr = new PolicingRedefinedBridge(config.CompatibilityMode,config.CompatibilityShareResults);
+            _pr = new PolicingRedefinedBridge(config.CompatibilityMode,config.CompatibilityShareResults,config.CompatibilityUseCdfInventory,config.CompatibilityShareWithNexusMdt);
             _trust = new TrustProfile(config.StartingTrust,config.ShowActionNotifications);
             _profile = new K9Profile(config);
             _seatProfiles = new VehicleSeatProfiles(config.VehicleSeatOffsetX,config.VehicleSeatOffsetY,config.VehicleSeatOffsetZ);
@@ -911,14 +911,14 @@ namespace AdvancedK9
                 Bark(3);
                 _trust.Change(1, "successful detection");
                 _profile.RecordSearch();
-                _pr.RecordK9Indication(target,true,resultSpecialty);
+                _pr.RecordK9Indication(target,true,resultSpecialty,_profile.Name);
                 Game.LogTrivial("AdvancedK9 search result: positive "+SpecialtyLabel(resultSpecialty)+" indication on "+TargetLabel(target)+"; three-bark alert authorized.");
             }
             else
             {
                 SetHudAlert("NEGATIVE — NO "+(specialty==DetectionSpecialty.General?"CERTIFIED ODOR":SpecialtyLabel(specialty).ToUpperInvariant()));
                 Sit();
-                _pr.RecordK9Indication(target,false,specialty);
+                _pr.RecordK9Indication(target,false,specialty,_profile.Name);
                 Game.LogTrivial("AdvancedK9 search result: negative indication on "+TargetLabel(target)+"; K9 remains silent.");
             }
             _hudSearchProgress=100;

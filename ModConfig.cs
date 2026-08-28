@@ -46,6 +46,8 @@ namespace AdvancedK9
         public string CompatibilityMode = "Auto";
         public bool CompatibilityUseActiveTargets = true;
         public bool CompatibilityShareResults = true;
+        public bool CompatibilityUseCdfInventory = true;
+        public bool CompatibilityShareWithNexusMdt = true;
         public bool CompatibilityProtectManagedPeds = true;
         public string PortraitFile = "";
         private readonly Dictionary<string,string> _kennelLocations=new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase);
@@ -105,6 +107,8 @@ namespace AdvancedK9
             result.CompatibilityMode = ini.ReadString("Compatibility", "Mode", result.CompatibilityMode);
             result.CompatibilityUseActiveTargets = ini.ReadBoolean("Compatibility", "UseActiveTargets", result.CompatibilityUseActiveTargets);
             result.CompatibilityShareResults = ini.ReadBoolean("Compatibility", "ShareK9Results", result.CompatibilityShareResults);
+            result.CompatibilityUseCdfInventory = ini.ReadBoolean("Compatibility", "UseCdfInventory", result.CompatibilityUseCdfInventory);
+            result.CompatibilityShareWithNexusMdt = ini.ReadBoolean("Compatibility", "ShareWithNexusMDT", result.CompatibilityShareWithNexusMdt);
             result.CompatibilityProtectManagedPeds = ini.ReadBoolean("Compatibility", "ProtectRestrainedPeds", result.CompatibilityProtectManagedPeds);
             result.PortraitFile = ini.ReadString("HUD", "PortraitFile", result.PortraitFile);
             foreach(string key in KennelKeys)result._kennelLocations[key]=ini.ReadString("KennelLocations",key,"");
