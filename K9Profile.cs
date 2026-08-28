@@ -88,7 +88,7 @@ namespace AdvancedK9
         {
             Name = config.DogName;
             BreedIndex = FindBreed(config.DogBreed);
-            CoatVariation = Clamp(config.CoatVariation, 0, 7);
+            CoatVariation = Clamp(config.CoatVariation, 0, 12);
             VestIndex = Clamp(config.VestStyle, 0, Vests.Length - 1);
             VestTexture = Clamp(config.VestColor, 0, 15);
             CustomModel = config.CustomDogModel;
@@ -104,14 +104,14 @@ namespace AdvancedK9
         }
 
         public void NextBreed() { BreedIndex = (BreedIndex + 1) % Breeds.Length; Save(); }
-        public void NextCoat() { CoatVariation = (CoatVariation + 1) % 8; Save(); }
+        public void NextCoat() { CoatVariation = (CoatVariation + 1) % CoatFallbackCount; Save(); }
         public void NextVest() { VestIndex = (VestIndex + 1) % Vests.Length; Save(); }
         public void NextVestColor() { VestTexture = (VestTexture + 1) % 16; Save(); }
-        public void NextSkin(Ped dog){int count=dog!=null&&dog.Exists()?Rage.Native.NativeFunction.Natives.GET_NUMBER_OF_PED_TEXTURE_VARIATIONS<int>(dog,0,0):8;CoatVariation=(CoatVariation+1)%Math.Max(1,count);Save();Apply(dog);}
+        public void NextSkin(Ped dog){int count=GetCoatCount(dog);CoatVariation=(CoatVariation+1)%count;Save();Apply(dog);}
         public void NextEquipment(Ped dog){int component=dog!=null&&dog.Exists()?GetVestComponent(dog):VestComponent;int count=IsDalmatian?8:(dog!=null&&dog.Exists()?Rage.Native.NativeFunction.Natives.GET_NUMBER_OF_PED_DRAWABLE_VARIATIONS<int>(dog,component):Vests.Length);VestIndex=(VestIndex+1)%Math.Max(1,Math.Min(count,Vests.Length));Save();Apply(dog);}
         public void NextEquipmentTexture(Ped dog){int count=GetVestTextureCount(dog);VestTexture=(VestTexture+1)%Math.Max(1,count);Save();Apply(dog);}
         public void AdjustBreed(int delta){BreedIndex=Wrap(BreedIndex+delta,Breeds.Length);Save();}
-        public void AdjustSkin(Ped dog,int delta){int count=dog!=null&&dog.Exists()?Rage.Native.NativeFunction.Natives.GET_NUMBER_OF_PED_TEXTURE_VARIATIONS<int>(dog,0,0):8;CoatVariation=Wrap(CoatVariation+delta,Math.Max(1,count));Save();Apply(dog);}
+        public void AdjustSkin(Ped dog,int delta){CoatVariation=Wrap(CoatVariation+delta,GetCoatCount(dog));Save();Apply(dog);}
         public void AdjustEquipment(Ped dog,int delta){int component=dog!=null&&dog.Exists()?GetVestComponent(dog):VestComponent;int count=IsDalmatian?8:(dog!=null&&dog.Exists()?Rage.Native.NativeFunction.Natives.GET_NUMBER_OF_PED_DRAWABLE_VARIATIONS<int>(dog,component):Vests.Length);VestIndex=Wrap(VestIndex+delta,Math.Max(1,Math.Min(count,Vests.Length)));Save();Apply(dog);}
         public void AdjustEquipmentTexture(Ped dog,int delta){int count=GetVestTextureCount(dog);VestTexture=Wrap(VestTexture+delta,Math.Max(1,count));Save();Apply(dog);}
         public void PrepareDeployment(){if(Health<=25){Health=100;Stamina=100;Injury="None";Save();}}
@@ -200,7 +200,7 @@ namespace AdvancedK9
                 // Name remains sourced from AdvancedK9.ini so renaming does not
                 // require deleting the persisted appearance profile.
                 if (values.Length > 1 && int.TryParse(values[1], out number)) BreedIndex = Clamp(number, 0, Breeds.Length - 1);
-                if (values.Length > 2 && int.TryParse(values[2], out number)) CoatVariation = Clamp(number, 0, 7);
+                if (values.Length > 2 && int.TryParse(values[2], out number)) CoatVariation = Clamp(number, 0, 12);
                 if (values.Length > 3 && int.TryParse(values[3], out number)) VestIndex = Clamp(number, 0, Vests.Length - 1);
                 if (values.Length > 4 && int.TryParse(values[4], out number)) VestTexture = Clamp(number, 0, 15);
                 if (values.Length < 6)
@@ -245,6 +245,9 @@ namespace AdvancedK9
         }
 
         private bool IsDalmatian => Breed.Equals("Dalmatian", StringComparison.OrdinalIgnoreCase);
+        private bool IsMalinois => Breed.Equals("Belgian Malinois", StringComparison.OrdinalIgnoreCase);
+        private int CoatFallbackCount => IsMalinois ? 13 : 8;
+        private int GetCoatCount(Ped dog){int count=dog!=null&&dog.Exists()?Rage.Native.NativeFunction.Natives.GET_NUMBER_OF_PED_TEXTURE_VARIATIONS<int>(dog,0,0):0;return Math.Max(1,count>0?count:CoatFallbackCount);}
         private int GetVestComponent(Ped dog){if(VestComponent>=0)return VestComponent;return IsDalmatian?5:FindVestComponent(dog);}
         private int GetVestTextureCount(Ped dog){if(dog==null||!dog.Exists())return IsDalmatian?8:16;int component=GetVestComponent(dog);int drawables=Rage.Native.NativeFunction.Natives.GET_NUMBER_OF_PED_DRAWABLE_VARIATIONS<int>(dog,component);int drawable=IsDalmatian?(VestIndex==0&&drawables>1?1:0):(VestIndex==0||drawables<=1?0:Math.Min(VestIndex,drawables-1));return Rage.Native.NativeFunction.Natives.GET_NUMBER_OF_PED_TEXTURE_VARIATIONS<int>(dog,component,drawable);}
 

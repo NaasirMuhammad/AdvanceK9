@@ -2,6 +2,17 @@
 
 All published AdvancedK9 versions are beta builds.
 
+## 0.22.12-beta
+
+- Retains the complete v0.22.11 Glass Tactical HUD, portrait loader, kennel defaults/editor, CDF/Nexus bridge, and progressive training systems.
+- Generates each target's PR search inventory once through a compatible public PR initializer when exposed, then retains that same PR-owned inventory for Rex and the officer search.
+- Uses strict `ItemName`/`DisplayName` extraction from CDF when PR search items have not yet been generated, preventing pre-search drug/firearm false negatives without reintroducing schema/category explosive false positives.
+- Treats unavailable inventory as inconclusive—not as a negative indication—and records neither a positive nor negative K9 result.
+- Refreshes PR's authoritative item list after the officer physically searches, then publishes the discovered-item narrative to the active NexusMDT report.
+- Keeps search, scent and tracking commands available on a longer working leash; apprehension and fetch still release it automatically.
+- Pins the visible leash endpoint to the handler's left hand and the K9 collar while the rope is active.
+- Exposes all 13 Belgian Malinois textures and bundles matching portraits 4–12 in the established `Plugins\\LSPDFR\\AdvancedK9\\Portraits` location.
+
 ## 0.22.11-beta
 
 - Removes the human-skeleton animation from petting; the handler kneels while the K9 remains in a native animal seated idle, preventing body contortion.

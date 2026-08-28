@@ -27,6 +27,7 @@ namespace AdvancedK9.LSPDFRBridge
         private static string _surfaceSignature="";
         private static readonly Dictionary<string,Type[]> TypeCache=new Dictionary<string,Type[]>(StringComparer.OrdinalIgnoreCase);
         private static readonly Dictionary<string,PendingOfficerSearch> PendingOfficerSearches=new Dictionary<string,PendingOfficerSearch>(StringComparer.OrdinalIgnoreCase);
+        private static readonly HashSet<string> InitializedPrSearchInventories=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private static DateTime _nextOfficerSearchReconciliationUtc=DateTime.MinValue;
 
         public override void Initialize()
@@ -119,23 +120,25 @@ namespace AdvancedK9.LSPDFRBridge
 
         private static string GetUnifiedInventory(Assembly cdf,Assembly pr,Entity entity,out string source,out bool available)
         {
-            source="";available=false;object record;
+            source="";available=false;object record;bool prReturned=false;
             // PR owns the generated search-item list shown by the officer search UI. CDF's
             // GetVehicleData/GetPedData returns a database record, not contraband contents;
             // flattening that record can turn empty schema/category names into false odors.
+            if(pr!=null)EnsurePrSearchInventory(pr,entity);
             if(pr!=null&&TryExactInventoryCall(pr,entity,"SearchItemsAPI",entity is Vehicle?"GetVehicleSearchItems":"GetPedSearchItems",out record))
             {
-                available=record!=null;source="PR.SearchItemsAPI";
-                return ExtractSearchItemNames(record);
+                prReturned=record!=null;string names=ExtractSearchItemNames(record);if(!string.IsNullOrWhiteSpace(names)){available=true;source="PR.SearchItemsAPI";return names;}
+                Game.LogTrivial("AdvancedK9 bridge: PR search items are not generated yet; checking strict CDF item names before returning a negative K9 result.");
             }
             // CDF remains the identity/record provider. Only an explicitly named inventory
             // collection is accepted; generic Items and the full record are never scanned.
             if(cdf!=null&&TryExactInventoryCall(cdf,entity,entity is Vehicle?"VehicleDataController":"PedDataController",entity is Vehicle?"GetVehicleData":"GetPedData",out record))
             {
-                object items=ReadInstanceMember(record,"SearchItems")??ReadInstanceMember(record,"VehicleSearchItems")??ReadInstanceMember(record,"PedSearchItems")??ReadInstanceMember(record,"InventoryItems");
-                if(items!=null){available=true;source="CDF explicit search items";return ExtractSearchItemNames(items);}
+                object items=ReadInstanceMember(record,"SearchItems")??ReadInstanceMember(record,"VehicleSearchItems")??ReadInstanceMember(record,"PedSearchItems")??ReadInstanceMember(record,"InventoryItems")??ReadInstanceMember(record,"Items");
+                if(items!=null){available=true;source="CDF strict item-name fields";return ExtractStrictItemNames(items);}
                 source="CDF record has no public search-item collection";return "";
             }
+            if(prReturned){available=false;source="PR.SearchItemsAPI pending/empty";return "";}
             source=cdf!=null?"CDF inventory API unavailable":pr!=null?"PR inventory API unavailable":"No inventory provider";
             return "";
         }
@@ -150,6 +153,19 @@ namespace AdvancedK9.LSPDFRBridge
                 try{result=method.Invoke(null,new[]{argument});Game.LogTrivial("AdvancedK9 bridge: inventory reader "+type.FullName+"."+method.Name+" selected.");return true;}catch(Exception ex){Game.LogTrivial("AdvancedK9 bridge: inventory reader failed: "+Unwrap(ex).Message);}
             }
             return false;
+        }
+
+        private static void EnsurePrSearchInventory(Assembly pr,Entity entity)
+        {
+            if(pr==null||entity==null||!entity.Exists())return;string key=(entity is Vehicle?"Vehicle:":"Ped:")+entity.Handle;if(!InitializedPrSearchInventories.Add(key))return;
+            string subject=entity is Vehicle?"Vehicle":"Ped";
+            foreach(Type type in Types(new[]{pr}).Where(t=>t.Name.IndexOf("SearchItemsAPI",StringComparison.OrdinalIgnoreCase)>=0||(t.FullName??"").IndexOf("SearchItemsAPI",StringComparison.OrdinalIgnoreCase)>=0))
+            foreach(MethodInfo method in type.GetMethods(BindingFlags.Public|BindingFlags.Static).Where(m=>ContainsAny(m.Name,"Generate","Create","Ensure","Initialize","Register","GetOrCreate","Set","Save")&&ContainsAny(m.Name,"Search","Items")))
+            {
+                ParameterInfo[] p=method.GetParameters();object argument;if(p.Length<1||!TryEntityArgument(p[0],entity,out argument))continue;var args=new object[p.Length];args[0]=argument;bool bind=true;for(int i=1;i<p.Length;i++){if(p[i].HasDefaultValue)args[i]=p[i].DefaultValue;else{bind=false;break;}}if(!bind)continue;
+                try{method.Invoke(null,args);Game.LogTrivial("AdvancedK9 bridge: generated and retained "+subject.ToLowerInvariant()+" search inventory once through PR public API "+type.FullName+"."+method.Name+".");return;}catch(Exception ex){Game.LogTrivial("AdvancedK9 bridge: PR public inventory initialization failed: "+Unwrap(ex).Message);}
+            }
+            Game.LogTrivial("AdvancedK9 bridge: no compatible public PR "+subject.ToLowerInvariant()+" inventory initializer was exposed; strict CDF item-name fallback will be used.");
         }
 
         private static bool TryEntityArgument(ParameterInfo parameter,Entity entity,out object value)
@@ -171,6 +187,18 @@ namespace AdvancedK9.LSPDFRBridge
         private static string ExtractSearchItemNames(object value)
         {
             var names=new List<string>();CollectSearchItemNames(value,names,0);return string.Join(" | ",names.Where(n=>!string.IsNullOrWhiteSpace(n)).Distinct(StringComparer.OrdinalIgnoreCase).Take(40));
+        }
+
+        private static string ExtractStrictItemNames(object value)
+        {
+            var names=new List<string>();CollectStrictItemNames(value,names,0);return string.Join(" | ",names.Where(n=>!string.IsNullOrWhiteSpace(n)).Distinct(StringComparer.OrdinalIgnoreCase).Take(40));
+        }
+
+        private static void CollectStrictItemNames(object value,ICollection<string> names,int depth)
+        {
+            if(value==null||depth>3)return;if(value is IEnumerable enumerable&&!(value is string)){int count=0;foreach(object item in enumerable){if(count++>=40)break;CollectStrictItemNames(item,names,depth+1);}return;}
+            foreach(string member in new[]{"ItemName","DisplayName"}){object candidate=ReadInstanceMember(value,member);if(candidate is string&&!string.IsNullOrWhiteSpace((string)candidate)){AddItemName(names,(string)candidate);return;}}
+            object nested=ReadInstanceMember(value,"Item");if(nested!=null&&!ReferenceEquals(nested,value))CollectStrictItemNames(nested,names,depth+1);
         }
 
         private static void CollectSearchItemNames(object value,ICollection<string> names,int depth)
@@ -222,6 +250,7 @@ namespace AdvancedK9.LSPDFRBridge
                 PendingOfficerSearch pending=PendingOfficerSearches[key];if(DateTime.UtcNow>pending.ExpiresUtc){PendingOfficerSearches.Remove(key);continue;}
                 if(!pending.SearchCompleted&&pending.Target!=null&&pending.Target.Exists())pending.SearchCompleted=HasOfficerSearched(pr,pending.Target);
                 if(!pending.SearchCompleted||nexus==null)continue;
+                if(pending.Target!=null&&pending.Target.Exists()){string refreshedSource;bool refreshedAvailable;string refreshed=GetUnifiedInventory(null,pr,pending.Target,out refreshedSource,out refreshedAvailable);if(refreshedAvailable)pending.Items=refreshed;}
                 string itemSummary=string.IsNullOrWhiteSpace(pending.Items)?"No items found.":"Items found: "+pending.Items+".";
                 string match=pending.Positive?" Prior K9 indication: positive "+pending.Specialty.ToLowerInvariant()+".":" Prior K9 indication: negative.";
                 string sink;if(TryAppendNexusIncidentNote(nexus,"AdvancedK9 officer "+pending.TargetType+" search — "+itemSummary+match,out sink))
