@@ -14,6 +14,7 @@ namespace AdvancedK9
     internal sealed class VoiceCommandService : IDisposable
     {
         private readonly string _endpoint, _model, _language, _apiKey; private string _dogName;
+        private readonly bool _showStatusText;
         private readonly HttpClient _client = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
         private WaveInEvent _input;
         private WaveFileWriter _writer;
@@ -30,7 +31,7 @@ namespace AdvancedK9
         public event Action<K9Command> CommandRecognized;
         public event Action<string> StatusChanged;
 
-        public VoiceCommandService(string provider, string model, string language, string directKey, string keyVariable, string dogName)
+        public VoiceCommandService(string provider, string model, string language, string directKey, string keyVariable, string dogName, bool showStatusText)
         {
             // RPH hosts .NET Framework in a process where the system default can still be
             // TLS 1.0. Groq and OpenAI require TLS 1.2 or newer.
@@ -40,6 +41,7 @@ namespace AdvancedK9
             _model = model;
             _language = language;
             _dogName = dogName;
+            _showStatusText = showStatusText;
             _apiKey = string.IsNullOrWhiteSpace(directKey) ? Environment.GetEnvironmentVariable(keyVariable) : directKey.Trim();
             IsAvailable = !string.IsNullOrWhiteSpace(_apiKey);
             Game.LogTrivial(IsAvailable
@@ -63,11 +65,12 @@ namespace AdvancedK9
                     _input.StartRecording();
                 }
                 StatusChanged?.Invoke("Listening");
-                Game.DisplaySubtitle("~b~AI K9 voice: listening…~s~ Release push-to-talk to send.");
+                if (_showStatusText) Game.DisplaySubtitle("~b~AI K9 voice: listening…~s~ Release push-to-talk to send.");
             }
             catch (Exception ex)
             {
                 Game.LogTrivial("AdvancedK9 microphone error: " + ex.Message);
+                _results.Enqueue(VoiceResult.Failure("AdvancedK9 microphone error: " + ex.Message));
                 Cleanup();
             }
         }
@@ -153,8 +156,8 @@ namespace AdvancedK9
             while (_results.TryDequeue(out result))
             {
                 if (!string.IsNullOrWhiteSpace(result.LogText)) Game.LogTrivial(result.LogText);
-                if (!string.IsNullOrWhiteSpace(result.Subtitle)) Game.DisplaySubtitle(result.Subtitle);
-                if (!string.IsNullOrWhiteSpace(result.Notification)) Game.DisplayNotification(result.Notification);
+                if (_showStatusText && !string.IsNullOrWhiteSpace(result.Subtitle)) Game.DisplaySubtitle(result.Subtitle);
+                if ((result.IsError || _showStatusText) && !string.IsNullOrWhiteSpace(result.Notification)) Game.DisplayNotification(result.Notification);
                 if (!string.IsNullOrWhiteSpace(result.StatusText)) StatusChanged?.Invoke(result.StatusText);
                 if (result.HasCommand) CommandRecognized?.Invoke(result.RecognizedCommand);
             }
@@ -183,10 +186,11 @@ namespace AdvancedK9
         {
             public string LogText, Subtitle, Notification, StatusText;
             public bool HasCommand;
+            public bool IsError;
             public K9Command RecognizedCommand;
             public static VoiceResult Log(string log) => new VoiceResult { LogText = log };
             public static VoiceResult Status(string status, string subtitle) => new VoiceResult { StatusText = status, Subtitle = subtitle };
-            public static VoiceResult Failure(string log) => new VoiceResult { LogText = log, StatusText = "Request failed", Notification = "~r~AI voice unavailable.~s~ Keyboard commands remain available." };
+            public static VoiceResult Failure(string log) => new VoiceResult { LogText = log, StatusText = "Request failed", Notification = "~r~AI voice unavailable.~s~ Keyboard commands remain available.", IsError = true };
             public static VoiceResult Command(K9Command command, string text) => new VoiceResult { HasCommand = true, RecognizedCommand = command, StatusText = "Recognized: " + CommandRegistry.All.First(x => x.Command == command).Label, Notification = "~b~AI heard:~s~ “" + text + "”" };
             public static VoiceResult NotRecognized(string text) => new VoiceResult { StatusText = "Not recognized", Notification = "~o~AI command not recognized:~s~ “" + text + "”" };
         }

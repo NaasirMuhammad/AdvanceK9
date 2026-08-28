@@ -2,6 +2,143 @@
 
 All published AdvancedK9 versions are beta builds.
 
+## 0.22.11-beta
+
+- Removes the human-skeleton animation from petting; the handler kneels while the K9 remains in a native animal seated idle, preventing body contortion.
+- Adds selectable circular or square HUD portrait framing, with the approved circular portrait as the default.
+- Removes the artificial HUD safe-zone gap and permits live dragging to the actual screen edges while retaining resolution-aware bounds.
+- Separates handler bond from K9 confidence and persists confidence per profile.
+- Makes elite-bond, high-confidence, properly certified K9s respond immediately and reliably to operational commands.
+- Restricts meaningful hesitation to commands still being learned, poor bond/confidence, exhaustion, hunger, dehydration or injury.
+- Replaces percentage training jumps with persistent requirements of 100, 250, 450, 800 and 1,200 XP for Levels 1–5.
+- Requires 250 XP independently for narcotics, explosives and weapons certifications.
+- Awards 0–10 XP at Levels 1–2, 0–20 XP at Levels 3–4 and 0–30 XP at Level 5, capped by session performance; specialty sessions award up to 20 XP.
+- Randomizes obedience drill order, agility direction/spacing, scent placement, tracking turns/distances and apprehension-suspect placement.
+- Adds instructional command wording and interactive handler prompts throughout academy sessions.
+- Migrates existing percentage progress into the new XP requirements without discarding completed certifications.
+
+## 0.22.10-beta
+
+- Makes the approved compact Glass Tactical concept the exact default/reset HUD layout: smoked-charcoal card, cyan frame, portrait at left, name/status, real health and stamina meters, upper-right paw, divider and compact command/distance/behavior row.
+- Bundles original 256×256 HUD portraits for every built-in dog breed plus separate German Shepherd, Belgian Malinois and Doberman coat choices, including the all-black Malinois.
+- Standardizes every bundled portrait to the same centered tactical-vest composition, smoked background and single cyan Glass Tactical ring used by the approved Malinois design.
+- Resolves portraits through custom profile override, profile name, exact breed/coat/vest/texture, breed/model coat, model, breed and generic fallback, refreshing the cached texture only after an appearance or profile change.
+- Preserves all HUD editing, scaling, opacity, anchoring and per-field visibility controls so the approved design is the starting point rather than a forced layout.
+- Corrects the CDF integration false positive that caused unrelated vehicles to indicate explosives.
+- Reads the actual item names from PR `SearchItemsAPI`, matching the list later displayed by the regular officer vehicle/person search.
+- Stops flattening CDF vehicle/person database records; empty category, permit, schema and metadata properties can no longer become K9 odors.
+- Accepts CDF contents only when the record exposes an explicitly named search/inventory collection.
+- Correctly supplies NexusMDT's active call/report number to `AppendIncidentNote` instead of passing note text as the number.
+- Retains the exact PR item list after a K9 sniff, waits for PR to confirm the officer search, and then appends the discovered items to the active Nexus report.
+- Keeps report reconciliation pending for up to 15 minutes when the report has not been opened yet, with a throttled two-second retry and no guessed report IDs.
+- Links the exact ped or vehicle to the shared PR/CDF record and reads PR's generated search-item list as the authoritative contents exposed by the installed public APIs.
+- Adds protocol v2 request/response provenance so logs identify `CDF.Items` or the PR search-items fallback.
+- Publishes completed positive and negative K9 indications to a compatible public NexusMDT incident-note API for report writing.
+- Keeps K9 indications observational: AdvancedK9 does not reveal item names, mutate inventories, recover evidence or mark an officer search complete.
+- Leaves regular officer searches to Policing Redefined/CDF, allowing NexusMDT's existing search capture to log the same inventory.
+- Adds safe configuration switches for CDF reads and NexusMDT sharing, defaulting on when the keys are absent from an existing INI.
+- Adds one-time public API-surface diagnostics and explicit success/fallback logging without per-frame reflection or polling.
+- Does not alter or redistribute CommonDataFramework, Policing Redefined, NPCI or NexusMDT files.
+- Replaces the default positions and headings for Vespucci, Del Perro, Port of Los Santos, Davis, La Mesa, Mission Row, FIB, Vinewood, Beaver Bush Ranger, Great Ocean Highway, Fort Zancudo, Paleto Bay, Brook Trail and Sandy Shores with the finalized values exported from the in-game editor.
+- Restores accessible FIB and Brook Trail kennels using the newly supplied locations.
+- Uses the finalized saved Z and heading for all 14 edited doghouses without applying another automatic rotation or ground snap; each prop remains level.
+- Leaves Rockford Hills, LSIA and Bolingbroke at their previously approved locations.
+- Adds optional `[KennelLocations]` overrides to `AdvancedK9.ini`. Each station accepts `X,Y,Z,Heading`, allowing users to move kennels while preserving their customized INI during future updates.
+- Adds a live in-game kennel editor with station selection, mouse/WASD dragging, height and heading controls, ground snapping, player-relative placement, reset/revert and explicit INI saving.
+- Adds live HUD dragging while the HUD menu is open: hold the left mouse button or use W/A/S/D to move it, and use Q/E to resize it.
+- Automatically migrates either previously shipped v0.22.10 default set to the finalized placements while leaving genuinely customized positions untouched.
+
+## 0.22.9-beta
+
+- Keeps the compact HUD in `SEARCHING` state for the entire asynchronous four-corner vehicle sweep while continuing to omit the redundant bottom `VEHICLE SEARCH` caption.
+- Removes the legacy vehicle-search start notification and per-corner subtitles below the HUD.
+- Displays both positive and negative vehicle-search outcomes only in the result panel attached above the Glass Tactical card.
+- Makes negative searches completely silent: routine corner checks no longer play the indication animation, and the three-bark alert is authorized only after a confirmed positive result.
+- Adds explicit result diagnostics to the RPH log showing whether a three-bark positive alert was authorized or a silent negative was returned.
+- Simplifies the release archive name to `AdvancedK9-v0.22.9-beta.zip`; its install-ready internal layout is unchanged.
+
+## 0.22.8-beta
+
+- Removed the Brook Trail kennel and its map blip because the location remained unreliable and floating.
+- Removed the FIB kennel and its map blip because the location remained inside or inaccessible around the building.
+- Restored the Great Ocean Highway kennel to the station side of its previous area, then offset it in the opposite direction from the highway toward the left/bottom side of the police-station map symbol.
+- Left every other station kennel unchanged from v0.22.7.
+
+## 0.22.7-beta
+
+- Restored the San Andreas/Vespucci kennel to its previous horizontal location and applies the corrected ground alignment there.
+- Retained the approved Davis location while lifting the doghouse above the pavement to prevent ground clipping.
+- Moved the FIB kennel away from the wall to the San Andreas Avenue/Elgin side of the building.
+- Moved the Beaver Bush ranger kennel away from the tent and ranger vehicle parking position.
+- Moved the Great Ocean Highway kennel off the dirt travel lane and onto the adjacent station area.
+- Moved the Paleto Bay kennel out of the accessible parking bay.
+- Ground correction is deliberately targeted: Davis receives a 0.12-metre anti-clipping lift and forced level rotation; Vinewood, Brook Trail and restored San Andreas receive precise terrain alignment. Unreported kennels retain their already-correct v0.22.6 placement behavior.
+
+## 0.22.6-beta
+
+- Moved the kennels reported inside buildings or over landscaping at Davis, Vespucci/San Andreas, Rockford Hills, Vinewood, La Mesa, Sandy Shores, Paleto Bay, Beaver Bush, Bolingbroke, FIB, Del Perro/Docks and Fort Zancudo onto exterior paved or parking areas.
+- Preserved the confirmed-good horizontal locations for Mission Row, LSIA/Airport, Los Santos Port, Raton Canyon/Great Ocean Highway and Senora/Brook Trail.
+- All doghouses, including those already in good locations, now wait for nearby collision and snap down to the locally loaded ground surface.
+- Kept all K9 kennel map blips available while on duty, but now streams the physical doghouse only when the handler is within 350 metres.
+- Requests local collision before creating a nearby kennel, allowing ground placement to use loaded pavement instead of freezing distant props in midair.
+- Removes distant physical kennel props again to reduce world-object overhead while retaining their map locations.
+
+## 0.22.5-beta
+
+- Moved the Davis station kennel from inside the building to the exterior rear parking lot.
+- Moved the Vinewood station kennel from the underground placement to its exterior parking lot.
+- Disabled automatic ground snapping for these two verified multi-level station locations.
+- Added a two-meter vertical safety limit to every other kennel ground snap and freezes placed doghouses so GTA cannot shift them underground.
+- Preserved the confirmed-good Mission Row kennel without coordinate changes.
+- Audits every spawned kennel against GTA's interior system and records its exterior/interior result in `RagePluginHook.log`.
+- Replaced the human-skeleton vehicle-entry task with a visible Rottweiler jump through the open rear door into the saved calibrated seat, preventing the K9 body from twisting or contorting.
+- Custom/add-on dogs that cannot load the animal jump animation use a brief hidden direct-seat fallback instead of the broken human animation.
+
+## 0.22.4-beta
+
+- Vehicle, area, specialty and building searches now run on a dedicated gameplay fiber so the controller and HUD remain responsive throughout the search.
+- The Glass Tactical HUD now displays `SEARCHING` during the four-corner vehicle sweep instead of retaining the stale `FOLLOWING` snapshot.
+- Removed the redundant bottom `VEHICLE SEARCH` wording from the vehicle-search HUD state.
+- Positive specialty alerts are armed before the indication bark and appear in the amber panel attached above the K9 card.
+- Added a duplicate-search guard so another search cannot begin while one is already active.
+
+## 0.22.3-beta
+
+- Replaced the dead-K9/kenneled-state collision with a recoverable `DOWNED` state.
+- A critically injured K9 keeps its field position and red K9 blip instead of being reported as kenneled.
+- Care & Medical > First Aid now revives and stabilizes a downed K9; veterinary care is still required for full recovery.
+- Recreates a deployed K9 at its last known position as downed if another plugin removes the dead ped before treatment.
+- Added the missing cyan paw indicator to the Glass Tactical HUD.
+- Portrait lookup now checks the explicit override, K9 profile name, ped model, breed and default image in that order.
+- Reduced HUD snapshot work to 20 updates per second, kennel proximity checks to four per second, and scent sampling to a capped 2.5-second pass within 200 meters to reduce intermittent frame hitches.
+
+## 0.22.2-beta
+
+- Replaces the legacy panel with one compact lower-right Glass Tactical card using smoked charcoal, a thin cyan frame, condensed white text, green health status and attached amber K9 alerts.
+- Adds contextual normal, collapsed, search and alert states in the same card area, plus actual distance, profile health/stamina, current command and behavior data.
+- Adds cached custom portraits through `PortraitFile`, followed by model, breed and safe badge fallbacks; missing or invalid images cannot stop the plugin.
+- Adds in-game movement, scaling, opacity, preview/reset, automatic collapse, metric/imperial distance and individual visibility controls for every tracked HUD field.
+- Reorganizes the profile UI into focused Identity & Appearance, HUD & Display, Vehicle Seat, Profile/Health/Certifications and Voice sections while keeping commands grouped and scrollable.
+- Migrates older HUD profiles to the compact lower-right safe-zone default without changing gameplay, training, seating or certification data.
+
+## 0.22.1-beta
+
+- Prevents fabricated specialty alerts when PR/CDF is active but has not supplied an inventory record; the bridge now accepts explicit vehicle/ped record requests by entity handle, waits for the matching response, and maps handgun/firearm text to Weapons instead of using random certification selection.
+- Expands physical station doghouses to seventeen accessible police, sheriff, highway patrol, ranger, port, airport, corrections and state locations; kennels snap to the exterior ground and receive labeled blue dog-icon map blips while on duty.
+- Adds `AdvancedK9.LSPDFRBridge.dll` under `Plugins\LSPDFR` so Policing Redefined and CommonDataFramework are detected inside LSPDFR's AppDomain instead of being incorrectly reported as unloaded by the isolated RPH controller.
+- Shares live PR/CDF active-vehicle, interaction-pedestrian, pursuit-suspect and exposed search-record state with the main controller through a guarded heartbeat snapshot.
+- Adds physical doghouse kennels at nine police and sheriff stations. Normal deployment requires station pickup and normal dismissal requires station return.
+- Replaces `Ped.Dismiss()` with task, seat, leash and combat cleanup followed by hard entity deletion, preventing a released K9 from becoming ambient AI or stealing a cruiser.
+- Makes urination and bowel relief fully automatic during safe idle periods; removes the menu command, verbal phrases, HUD meters and routine bathroom notifications.
+- Makes push-to-talk listening/transcribing text optional and disabled by default; microphone, API and transcription failures always remain visible.
+- Makes routine K9 command/action notifications optional and disabled by default while preserving errors, safety warnings and actual K9 outcomes such as positive/negative detection results.
+- Removes the gardening scenario/prop from petting and uses a prop-free handler interaction.
+- Removes the handler bending/gardening animation from feeding and watering; a real bowl is placed in front of the K9 for the eating/drinking interaction.
+- Adds five HUD designs, five icon treatments, five color themes and five text treatments.
+- Makes state, health, stamina, food, water, certifications, trust, training, injury and voice HUD fields individually optional and persistent.
+- Preserves an existing AdvancedK9.ini during updates. The package now ships AdvancedK9.default.ini, copied to the live filename only on a first installation.
+- Keeps the latest LemonUI RPH package (2.2.0) while removing the direct MouseBehavior setter dependency that caused older runtime DLLs to throw MissingMethodException.
+
 ## 0.22-beta
 
 - Replaces the one-Boolean Policing Redefined probe with automatic `PolicingRedefined`, `StopThePed`, and `Standalone` compatibility modes.
@@ -30,7 +167,7 @@ All published AdvancedK9 versions are beta builds.
 - Reworks tracking cadence into one brief scent acquisition followed by sustained 12–28 meter running segments, with realistic scent confirmation only every 18–28 seconds.
 - Makes track completion non-contact: the K9 clears its task, barks, sits and holds until the handler separately aims at the located suspect and commands Apprehend.
 - Changes vehicle searches to four deliberate alert checkpoints at all four corners; negative sweeps remain silent and positive sweeps bark only after the fourth corner.
-- Adds bladder and bowel needs, automatic critical relief, a manual Bathroom Break command, pee effects and a temporary dog-waste prop.
+- Adds bladder and bowel needs, automatic relief, pee effects and a temporary dog-waste prop.
 - Makes General Search report any narcotics, explosives or weapons specialty for which the dog is certified, without requiring the dedicated specialty command.
 - Reloads `VehicleSeatConfigurations.ini` before every vehicle entry and applies the saved offsets through the same forced live-calibration path, preventing GTA's seat task from restoring defaults.
 - Keeps the active K9 rear door open throughout seat calibration and closes it when the user leaves the calibration menu, unloads the K9 or dismisses the partner.

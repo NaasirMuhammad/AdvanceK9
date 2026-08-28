@@ -1,11 +1,11 @@
-name: Build AdvancedK9 v0.22-beta
+name: Build AdvancedK9 v0.22.11-beta
 # Produces the verified Windows drag-and-drop artifact.
 on:
   workflow_dispatch:
   pull_request:
     branches: [ main ]
   push:
-    branches: [ main, codex/advancedk9-v0.20-academy-progression ]
+    branches: [ main, codex/advancedk9-v0.20-academy-progression, codex/advancedk9-v0.22.1-quiet-hud-care ]
 jobs:
   build:
     runs-on: windows-latest
@@ -21,20 +21,49 @@ jobs:
         run: |
           dotnet restore AdvancedK9.csproj
           dotnet build AdvancedK9.csproj -c Release --no-restore /p:ContinuousIntegrationBuild=true
-      - name: Verify v0.22-beta assembly and compiled systems
+          dotnet restore Bridge/LspdfrApiShim/LspdfrApiShim.csproj
+          dotnet build Bridge/LspdfrApiShim/LspdfrApiShim.csproj -c Release --no-restore /p:ContinuousIntegrationBuild=true
+          dotnet restore AdvancedK9.LSPDFRBridge.csproj
+          dotnet build AdvancedK9.LSPDFRBridge.csproj -c Release --no-restore /p:ContinuousIntegrationBuild=true
+      - name: Verify v0.22.11-beta assembly and compiled systems
         shell: pwsh
         run: |
           $dll = Resolve-Path 'bin/Release/net48/AdvancedK9.dll'
+          $bridge = Resolve-Path 'bin/Release/net48/AdvancedK9.LSPDFRBridge.dll'
           $version = [System.Reflection.AssemblyName]::GetAssemblyName($dll).Version
-          if ($version -ne [Version]'0.22.0.0') { throw "Expected v0.22-beta assembly, got $version" }
+          if ($version -ne [Version]'0.22.11.0') { throw "Expected v0.22.11-beta assembly, got $version" }
+          $bridgeVersion = [System.Reflection.AssemblyName]::GetAssemblyName($bridge).Version
+          if ($bridgeVersion -ne [Version]'0.22.11.0') { throw "Expected v0.22.11-beta bridge assembly, got $bridgeVersion" }
+          $bridgeMetadata = [System.Text.Encoding]::UTF8.GetString([System.IO.File]::ReadAllBytes($bridge))
+          if ($bridgeMetadata -notmatch [regex]::Escape('LSPD First Response')) { throw 'Bridge does not reference the LSPDFR plugin lifecycle assembly.' }
           $stale = '0b4a652673cc9a7237b5473c4c0854a702007da5c32e25042d810f263d8a190c'
           $hash = (Get-FileHash $dll -Algorithm SHA256).Hash.ToLowerInvariant()
           if ($hash -eq $stale) { throw 'Build produced the stale uploaded v1.5 DLL.' }
           dotnet tool install --global ilspycmd
           ilspycmd $dll -o verified-source
           $compiled = Get-ChildItem verified-source -Recurse -File | Get-Content -Raw
-          foreach ($marker in @('VehicleSeatProfiles','VehicleSeatConfigurations.ini','VehicleSeatConfigurationLog.csv','OpenCommandGroup','SEARCH & DETECTION','TRAINING & CERTIFICATIONS','DrawStatusBar','Completed certifications','180000','ApplySeatCalibration','IsDalmatian','GetVestComponent','Loaded saved','GET_WORLD_POSITION_OF_ENTITY_BONE','Live K9 seat','No traffic stop or close-range contact','250f','seat profile loaded','CloseSeatCalibrationDoor','four-corner vehicle sweep','Bathroom Break','SpawnDogWaste','CertifiedGeneralSearchSpecialty','FindVehicleScentSubject','Track subject identified by handler aim','Track complete — person located','CompatibilityMode','Stop The Ped','GetActiveVehicle','GetSearchResult','RecordK9Indication','CaptureScentTrails','BuildRecordedTrailRoute','ReacquireTrail','SearchBuilding','K9Warning','K9DeploymentReport','POLICE K9! SHOW ME YOUR HANDS','TryArrestHandoff','TryRequestService')) {
-            if ($compiled -notmatch [regex]::Escape($marker)) { throw "Missing compiled v0.22-beta marker: $marker" }
+          ilspycmd $bridge -o verified-bridge
+          $bridgeCompiled = Get-ChildItem verified-bridge -Recurse -File | Get-Content -Raw
+          foreach ($marker in @('Initialize', 'HeartbeatUtcTicks', 'ActiveVehicleHandle', 'PursuitPedHandle', 'QueryHandle', 'QueryAvailable', 'QuerySource', 'Protocol=2', 'CompatibilityBridge.request', 'PolicingRedefined', 'GetUnifiedInventory', 'GetPedData', 'GetVehicleData', 'GetPedSearchItems', 'GetVehicleSearchItems', 'GetHasVehicleBeenSearched', 'ExtractSearchItemNames', 'ItemName', 'DisplayName', 'CDF record has no public search-item collection', 'ProcessK9Indication', 'QueueOfficerSearchReconciliation', 'ProcessPendingOfficerSearches', 'ResolveNexusIncidentNumber', 'CurrentReportNumber', 'AppendIncidentNote', 'Items found:', 'NexusMDT', 'NexusApi', 'CaptureSearch', 'Inventory remains undisclosed pending officer search')) {
+            if ($bridgeCompiled -notmatch [regex]::Escape($marker)) { throw "Compiled LSPDFR bridge is missing marker: $marker" }
+          }
+          foreach ($marker in @('SpawnStationKennels', 'UpdateNearbyKennelProps', 'SpawnNearbyKennelProp', 'REQUEST_COLLISION_AT_COORD', 'GET_GROUND_Z_FOR_3D_COORD', 'PreciseGrounding', 'SurfaceLift', 'ForceLevel', 'SET_ENTITY_ROTATION', 'CompatibilityBridge.state', 'random fallback suppressed', 'RequestBridgeRecord', 'SendBridgeK9Indication', 'UseCdfInventory', 'ShareWithNexusMDT', 'inventory was not changed or disclosed', 'IsNonOdorReplicaOrDocument', 'toy gun', 'firearm permit', 'hard-dismiss delete failed')) {
+            if ($compiled -notmatch [regex]::Escape($marker)) { throw "Compiled AdvancedK9 DLL is missing marker: $marker" }
+          }
+          foreach ($marker in @('VehicleSeatProfiles','VehicleSeatConfigurations.ini','VehicleSeatConfigurationLog.csv','OpenCommandGroup','SEARCH & DETECTION','TRAINING & CERTIFICATIONS','GlassTacticalHud','K9 HUD — GLASS TACTICAL','PortraitFile','_coat_','_vest_','_texture_','VestTexture','HudAutoCollapse','HudShowDistance','HudSearchProgress','Completed certifications','180000','ApplySeatCalibration','IsDalmatian','GetVestComponent','GET_WORLD_POSITION_OF_ENTITY_BONE','Live K9 seat','No traffic stop or close-range contact','250f','seat profile loaded','CloseSeatCalibrationDoor','SearchVehiclePerimeter','SpawnDogWaste','CertifiedGeneralSearchSpecialty','FindVehicleScentSubject','Track subject identified by handler aim','Track complete — person located','CompatibilityMode','Stop The Ped','GetActiveVehicle','GetSearchResult','RecordK9Indication','CaptureScentTrails','BuildRecordedTrailRoute','ReacquireTrail','SearchBuilding','K9Warning','K9DeploymentReport','POLICE K9! SHOW ME YOUR HANDS','TryArrestHandoff','TryRequestService','ShowVoiceStatusText','recoverable downed state','Emergency field revival and stabilization','NEEDS FIRST AID','Segoe UI Symbol','AdvancedK9 Search','search already in progress','asynchronous search failed','ground-snap rejected unsafe Z change','FREEZE_ENTITY_POSITION','GET_INTERIOR_FROM_ENTITY','PlayDogVehicleJump','creatures@rottweiler@move','visible animal jump completed','SET_ENTITY_VISIBLE')) {
+            if ($compiled -notmatch [regex]::Escape($marker)) { throw "Missing compiled v0.22.11-beta marker: $marker" }
+          }
+          foreach ($marker in @('TryGetKennelLocation','SaveKennelLocation','MigrateLegacyKennelDefaults','SamePlacement','KennelLocations','MissionRow','BrookTrail','44.77443','60.83065','OpenKennelLocationMenu','Live kennel drag','SnapActiveKennelToGround','HandleLiveMenuEditors','Live HUD drag','SaveHudLayout')) {
+            if ($compiled -notmatch [regex]::Escape($marker)) { throw "Missing compiled configurable-kennel marker: $marker" }
+          }
+          foreach ($marker in @('NEGATIVE — NO ', 'three-bark alert authorized', 'K9 remains silent', 'TASK_PAUSE')) {
+            if ($compiled -notmatch [regex]::Escape($marker)) { throw "Missing compiled contextual-search marker: $marker" }
+          }
+          foreach ($marker in @('Confidence','TrainingRequirement','1200','CalculateTrainingXp','CalculateSpecialtyXp','IsTrainedFor','HudPortraitShape','CircularPortrait','Randomized obedience drill','creatures@rottweiler@amb@world_dog_sitting@base','advanced training profile load')) {
+            if ($compiled -notmatch [regex]::Escape($marker)) { throw "Missing compiled v0.22.11 progression/HUD marker: $marker" }
+          }
+          foreach ($removed in @('K9 four-corner vehicle sweep started', 'Vehicle search~s~ — ', 'POSITIVE "+SpecialtyLabel', 'No "+(specialty==')) {
+            if ($compiled -match [regex]::Escape($removed)) { throw "Legacy vehicle-search notification remains compiled: $removed" }
           }
           "AssemblyVersion=$version`nSHA256=$hash`nBuiltUtc=$([DateTime]::UtcNow.ToString('o'))" | Set-Content build-verification.txt
       - name: Create drag-and-drop package
@@ -44,17 +73,26 @@ jobs:
           $config = "$plugins/LSPDFR/AdvancedK9"
           New-Item -ItemType Directory -Force $config | Out-Null
           Copy-Item 'bin/Release/net48/AdvancedK9.dll' $plugins
+          Copy-Item 'bin/Release/net48/AdvancedK9.LSPDFRBridge.dll' "$plugins/LSPDFR"
           Copy-Item 'bin/Release/net48/LemonUI.RagePluginHook.dll' 'package'
-          Copy-Item 'Config/AdvancedK9.ini','Config/AcademyCourses.json','Config/CompatibilityPresets.json' $config
+          Copy-Item 'Config/AdvancedK9.ini' "$config/AdvancedK9.default.ini"
+          Copy-Item 'Config/AcademyCourses.json','Config/CompatibilityPresets.json' $config
+          Copy-Item 'Config/Portraits' $config -Recurse
+          foreach ($portrait in @('german_shepherd.png','belgian_malinois.png','dalmatian.png','rottweiler.png','husky.png','retriever.png','poodle.png','pug.png','westie.png','doberman.png','cane_corso.png','german_shepherd_coat_1.png','german_shepherd_coat_2.png','german_shepherd_coat_3.png','belgian_malinois_coat_0.png','belgian_malinois_coat_1.png','belgian_malinois_coat_2.png','belgian_malinois_coat_3.png','doberman_coat_1.png','doberman_coat_2.png')) {
+            if (-not (Test-Path "$config/Portraits/$portrait")) { throw "Required K9 portrait missing from package: $portrait" }
+          }
           Copy-Item 'INSTALL.txt','README.md','CHANGELOG.md','build-verification.txt' package
           $forbidden = Get-ChildItem package -Recurse -File | Where-Object { $_.Name -match '^(NAudio|Microsoft\.Win32\.Registry|System\.Security).*\.dll$' }
           if ($forbidden) { throw "Forbidden dependency DLL bundled: $($forbidden.Name -join ', ')" }
           if (-not (Test-Path 'package/Plugins/AdvancedK9.dll')) { throw 'RPH plugin DLL is not in Plugins root.' }
           if (Test-Path 'package/Plugins/LSPDFR/AdvancedK9.dll') { throw 'DLL must not be packaged as an LSPDFR API plugin.' }
+          if (-not (Test-Path 'package/Plugins/LSPDFR/AdvancedK9.LSPDFRBridge.dll')) { throw 'LSPDFR compatibility bridge is missing.' }
           if (-not (Test-Path 'package/LemonUI.RagePluginHook.dll')) { throw 'LemonUI RPH runtime is missing from GTA V root.' }
-          Compress-Archive -Path 'package/*' -DestinationPath 'AdvancedK9-v0.22-beta-DragAndDrop.zip' -Force
+          $thirdParty = Get-ChildItem package -Recurse -File | Where-Object { $_.Name -match '^(CommonDataFramework|PolicingRedefined|NPCI|NexusMDT)\.dll$' }
+          if ($thirdParty) { throw "Third-party mod DLL must not be redistributed: $($thirdParty.Name -join ', ')" }
+          Compress-Archive -Path 'package/*' -DestinationPath 'AdvancedK9-v0.22.11-beta.zip' -Force
       - uses: actions/upload-artifact@v4
         with:
-          name: AdvancedK9-v0.22-beta-DragAndDrop
-          path: AdvancedK9-v0.22-beta-DragAndDrop.zip
+          name: AdvancedK9-v0.22.11-beta
+          path: AdvancedK9-v0.22.11-beta.zip
           if-no-files-found: error
