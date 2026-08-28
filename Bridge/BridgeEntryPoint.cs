@@ -26,6 +26,8 @@ namespace AdvancedK9.LSPDFRBridge
         private static bool _queryAvailable;
         private static string _surfaceSignature="";
         private static readonly Dictionary<string,Type[]> TypeCache=new Dictionary<string,Type[]>(StringComparer.OrdinalIgnoreCase);
+        private static readonly Dictionary<string,PendingOfficerSearch> PendingOfficerSearches=new Dictionary<string,PendingOfficerSearch>(StringComparer.OrdinalIgnoreCase);
+        private static DateTime _nextOfficerSearchReconciliationUtc=DateTime.MinValue;
 
         public override void Initialize()
         {
@@ -62,6 +64,7 @@ namespace AdvancedK9.LSPDFRBridge
             Entity query=FindRequestedEntity(request);
             ProcessInventoryQuery(request,cdf,pr,query);
             ProcessK9Indication(request,nexus,pr,query);
+            ProcessPendingOfficerSearches(pr,nexus);
             var lines=new[]{
                 "Protocol=2",
                 "HeartbeatUtcTicks="+DateTime.UtcNow.Ticks,
@@ -117,16 +120,21 @@ namespace AdvancedK9.LSPDFRBridge
         private static string GetUnifiedInventory(Assembly cdf,Assembly pr,Entity entity,out string source,out bool available)
         {
             source="";available=false;object record;
-            if(cdf!=null&&TryExactInventoryCall(cdf,entity,entity is Vehicle?"VehicleDataController":"PedDataController",entity is Vehicle?"GetVehicleData":"GetPedData",out record))
-            {
-                available=record!=null;source="CDF.Items";
-                object items=ReadInstanceMember(record,"Items")??ReadInstanceMember(record,"listItems");
-                return Flatten(items??record,0,new HashSet<object>(ReferenceComparer.Instance));
-            }
+            // PR owns the generated search-item list shown by the officer search UI. CDF's
+            // GetVehicleData/GetPedData returns a database record, not contraband contents;
+            // flattening that record can turn empty schema/category names into false odors.
             if(pr!=null&&TryExactInventoryCall(pr,entity,"SearchItemsAPI",entity is Vehicle?"GetVehicleSearchItems":"GetPedSearchItems",out record))
             {
                 available=record!=null;source="PR.SearchItemsAPI";
-                return Flatten(record,0,new HashSet<object>(ReferenceComparer.Instance));
+                return ExtractSearchItemNames(record);
+            }
+            // CDF remains the identity/record provider. Only an explicitly named inventory
+            // collection is accepted; generic Items and the full record are never scanned.
+            if(cdf!=null&&TryExactInventoryCall(cdf,entity,entity is Vehicle?"VehicleDataController":"PedDataController",entity is Vehicle?"GetVehicleData":"GetPedData",out record))
+            {
+                object items=ReadInstanceMember(record,"SearchItems")??ReadInstanceMember(record,"VehicleSearchItems")??ReadInstanceMember(record,"PedSearchItems")??ReadInstanceMember(record,"InventoryItems");
+                if(items!=null){available=true;source="CDF explicit search items";return ExtractSearchItemNames(items);}
+                source="CDF record has no public search-item collection";return "";
             }
             source=cdf!=null?"CDF inventory API unavailable":pr!=null?"PR inventory API unavailable":"No inventory provider";
             return "";
@@ -160,6 +168,28 @@ namespace AdvancedK9.LSPDFRBridge
             return null;
         }
 
+        private static string ExtractSearchItemNames(object value)
+        {
+            var names=new List<string>();CollectSearchItemNames(value,names,0);return string.Join(" | ",names.Where(n=>!string.IsNullOrWhiteSpace(n)).Distinct(StringComparer.OrdinalIgnoreCase).Take(40));
+        }
+
+        private static void CollectSearchItemNames(object value,ICollection<string> names,int depth)
+        {
+            if(value==null||depth>2)return;if(value is string){AddItemName(names,(string)value);return;}
+            if(value is IEnumerable enumerable){int count=0;foreach(object item in enumerable){if(count++>=40)break;CollectSearchItemNames(item,names,depth+1);}return;}
+            Type type=value.GetType();
+            bool found=false;foreach(string member in new[]{"ItemName","DisplayName","Name","Label","Text"})
+            {
+                object candidate=ReadInstanceMember(value,member);if(candidate is string&&!string.IsNullOrWhiteSpace((string)candidate)){AddItemName(names,(string)candidate);found=true;break;}
+            }
+            if(!found){object nested=ReadInstanceMember(value,"Item");if(nested!=null&&!ReferenceEquals(nested,value))CollectSearchItemNames(nested,names,depth+1);}
+        }
+
+        private static void AddItemName(ICollection<string> names,string value)
+        {
+            value=(value??"").Trim();if(value.Length>0&&value.Length<=160)names.Add(value);
+        }
+
         private static void ProcessK9Indication(IDictionary<string,string> request,Assembly nexus,Assembly pr,Entity target)
         {
             if(!Read(request,"Action").Equals("K9Indication",StringComparison.OrdinalIgnoreCase))return;
@@ -171,18 +201,78 @@ namespace AdvancedK9.LSPDFRBridge
             string result=positive?"POSITIVE "+specialty.ToUpperInvariant()+" indication":"NEGATIVE indication";
             string narrative="AdvancedK9: K9 "+k9+" completed a "+targetLabel+" sniff — "+result+". Inventory remains undisclosed pending officer search.";
             _actionDetail=narrative;
-            if(ReadBool(request,"ShareWithNexusMDT",true)&&nexus!=null&&TryNexusWriter(nexus,target,positive,specialty,k9,id,narrative,out _actionSink))_actionSucceeded=true;
+            if(target!=null&&target.Exists()&&pr!=null)QueueOfficerSearchReconciliation(pr,target,positive,specialty,k9);
+            if(ReadBool(request,"ShareWithNexusMDT",true)&&nexus!=null&&TryAppendNexusIncidentNote(nexus,narrative,out _actionSink))_actionSucceeded=true;
             else if(pr!=null&&TryNamedWriter(pr,new[]{"RecordK9Indication","SetK9Indication","AddK9Indication","SetK9Alert","RecordCanineAlert"},target,positive,specialty,k9,id,narrative,out _actionSink))_actionSucceeded=true;
             Game.LogTrivial("AdvancedK9 bridge: K9 indication "+(_actionSucceeded?"published to "+_actionSink:"retained locally; no compatible public NexusMDT/PR writer")+". "+narrative);
         }
 
-        private static bool TryNexusWriter(Assembly nexus,Entity target,bool positive,string specialty,string k9,string id,string narrative,out string sink)
+        private static void QueueOfficerSearchReconciliation(Assembly pr,Entity target,bool positive,string specialty,string k9)
         {
-            // CaptureSearch can reveal inventory and is intentionally not invoked for an odor-only indication.
-            sink="";string[] preferred={"RecordK9Indication","AppendIncidentNote"};
-            foreach(string name in preferred)if(TryNamedWriter(nexus,new[]{name},target,positive,specialty,k9,id,narrative,out sink))return true;
+            string source;bool available;string items=GetUnifiedInventory(null,pr,target,out source,out available);if(!available)return;
+            string key=(target is Vehicle?"Vehicle:":"Ped:")+target.Handle;
+            PendingOfficerSearches[key]=new PendingOfficerSearch{Target=target,TargetType=target is Vehicle?"vehicle":"person",Items=items,Positive=positive,Specialty=specialty,K9Name=k9,ExpiresUtc=DateTime.UtcNow.AddMinutes(15)};
+        }
+
+        private static void ProcessPendingOfficerSearches(Assembly pr,Assembly nexus)
+        {
+            if(PendingOfficerSearches.Count==0||DateTime.UtcNow<_nextOfficerSearchReconciliationUtc)return;_nextOfficerSearchReconciliationUtc=DateTime.UtcNow.AddSeconds(2);
+            foreach(string key in PendingOfficerSearches.Keys.ToArray())
+            {
+                PendingOfficerSearch pending=PendingOfficerSearches[key];if(DateTime.UtcNow>pending.ExpiresUtc){PendingOfficerSearches.Remove(key);continue;}
+                if(!pending.SearchCompleted&&pending.Target!=null&&pending.Target.Exists())pending.SearchCompleted=HasOfficerSearched(pr,pending.Target);
+                if(!pending.SearchCompleted||nexus==null)continue;
+                string itemSummary=string.IsNullOrWhiteSpace(pending.Items)?"No items found.":"Items found: "+pending.Items+".";
+                string match=pending.Positive?" Prior K9 indication: positive "+pending.Specialty.ToLowerInvariant()+".":" Prior K9 indication: negative.";
+                string sink;if(TryAppendNexusIncidentNote(nexus,"AdvancedK9 officer "+pending.TargetType+" search — "+itemSummary+match,out sink))
+                {
+                    Game.LogTrivial("AdvancedK9 bridge: reconciled officer search with "+sink+" ("+(string.IsNullOrWhiteSpace(pending.Items)?0:pending.Items.Split('|').Length)+" item entries).");PendingOfficerSearches.Remove(key);
+                }
+            }
+        }
+
+        private static bool HasOfficerSearched(Assembly pr,Entity target)
+        {
+            if(pr==null)return false;string methodName=target is Vehicle?"GetHasVehicleBeenSearched":"GetHasPedBeenSearched";
+            foreach(Type type in Types(new[]{pr}))foreach(MethodInfo method in type.GetMethods(BindingFlags.Public|BindingFlags.Static).Where(m=>m.Name.Equals(methodName,StringComparison.OrdinalIgnoreCase)&&m.ReturnType==typeof(bool)))
+            {
+                ParameterInfo[] p=method.GetParameters();object argument;if(p.Length!=1||!TryEntityArgument(p[0],target,out argument))continue;
+                try{return (bool)method.Invoke(null,new[]{argument});}catch{}
+            }
             return false;
         }
+
+        private static bool TryAppendNexusIncidentNote(Assembly nexus,string narrative,out string sink)
+        {
+            sink="";string number=ResolveNexusIncidentNumber(nexus);if(string.IsNullOrWhiteSpace(number)){sink="NexusMDT active report unavailable";return false;}
+            foreach(Type type in Types(new[]{nexus}).Where(t=>(t.FullName??"").IndexOf("NexusMDT.Api",StringComparison.OrdinalIgnoreCase)>=0||t.Name.Equals("DispatchBridge",StringComparison.OrdinalIgnoreCase)))
+            foreach(MethodInfo method in type.GetMethods(BindingFlags.Public|BindingFlags.Static|BindingFlags.Instance).Where(m=>m.Name.Equals("AppendIncidentNote",StringComparison.OrdinalIgnoreCase)))
+            {
+                object instance=null;if(!method.IsStatic&&!TryGetPublicSingleton(type,out instance))continue;ParameterInfo[] p=method.GetParameters();if(p.Length!=2||p.Any(x=>x.ParameterType!=typeof(string)))continue;
+                object[] args=new object[2];for(int i=0;i<2;i++)args[i]=(p[i].Name??"").IndexOf("number",StringComparison.OrdinalIgnoreCase)>=0?number:narrative;
+                try{method.Invoke(instance,args);sink=type.FullName+"."+method.Name+" report "+number;return true;}catch(Exception ex){Game.LogTrivial("AdvancedK9 bridge: Nexus incident-note writer failed: "+Unwrap(ex).Message);}
+            }
+            sink="NexusMDT public AppendIncidentNote unavailable";return false;
+        }
+
+        private static string ResolveNexusIncidentNumber(Assembly nexus)
+        {
+            if(nexus==null)return "";string[] names={"GetCurrentIncidentNumber","GetActiveIncidentNumber","GetCurrentReportNumber","GetActiveReportNumber","GetCurrentCallNumber","GetActiveCallNumber","CurrentIncidentNumber","ActiveIncidentNumber","CurrentReportNumber","ActiveReportNumber","CurrentCallNumber","ActiveCallNumber"};
+            foreach(Type type in Types(new[]{nexus}).Where(t=>(t.FullName??"").IndexOf("NexusMDT.Api",StringComparison.OrdinalIgnoreCase)>=0||t.Name.Equals("DispatchBridge",StringComparison.OrdinalIgnoreCase)||t.Name.Equals("NexusApi",StringComparison.OrdinalIgnoreCase)))
+            {
+                foreach(PropertyInfo property in type.GetProperties(BindingFlags.Public|BindingFlags.Static).Where(p=>names.Any(n=>p.Name.Equals(n,StringComparison.OrdinalIgnoreCase))&&p.PropertyType==typeof(string)))try{string value=property.GetValue(null,null) as string;if(IsPlausibleIncidentNumber(value))return value;}catch{}
+                foreach(MethodInfo method in type.GetMethods(BindingFlags.Public|BindingFlags.Static).Where(m=>names.Any(n=>m.Name.Equals(n,StringComparison.OrdinalIgnoreCase))&&m.ReturnType==typeof(string)&&m.GetParameters().Length==0))try{string value=method.Invoke(null,null) as string;if(IsPlausibleIncidentNumber(value))return value;}catch{}
+                foreach(PropertyInfo property in type.GetProperties(BindingFlags.Public|BindingFlags.Static).Where(p=>ContainsAny(p.Name,"CurrentCall","ActiveCall","CurrentIncident","ActiveIncident")))try{string value=ReadNumberFromObject(property.GetValue(null,null));if(IsPlausibleIncidentNumber(value))return value;}catch{}
+            }
+            return "";
+        }
+
+        private static string ReadNumberFromObject(object value)
+        {
+            if(value==null)return "";foreach(string name in new[]{"Number","ReportNumber","IncidentNumber","CallNumber"}){object candidate=ReadInstanceMember(value,name);if(candidate!=null)return Convert.ToString(candidate);}return "";
+        }
+
+        private static bool IsPlausibleIncidentNumber(string value)=>!string.IsNullOrWhiteSpace(value)&&value.Length<=80&&value.IndexOf("AdvancedK9",StringComparison.OrdinalIgnoreCase)<0;
 
         private static bool TryNamedWriter(Assembly assembly,IEnumerable<string> names,Entity target,bool positive,string specialty,string k9,string id,string narrative,out string sink)
         {
@@ -233,6 +323,11 @@ namespace AdvancedK9.LSPDFRBridge
         {
             Game.LogTrivial("AdvancedK9 bridge inventory integration: CDF="+(cdf!=null)+", PR="+(pr!=null)+", NexusMDT="+(nexus!=null)+"; AdvancedK9 never modifies third-party inventory files or records.");
             foreach(Assembly assembly in new[]{cdf,pr,nexus}.Where(a=>a!=null))foreach(Type type in Types(new[]{assembly}))foreach(MethodInfo method in type.GetMethods(BindingFlags.Public|BindingFlags.Static|BindingFlags.Instance).Where(m=>ContainsAny(m.Name,"GetPedData","GetVehicleData","GetPedSearchItems","GetVehicleSearchItems","AppendIncidentNote","CaptureSearch","RecordK9Indication")))Game.LogTrivial("AdvancedK9 bridge API surface: "+type.FullName+"."+method.Name+"("+string.Join(",",method.GetParameters().Select(p=>p.ParameterType.Name+" "+p.Name))+ ").");
+        }
+
+        private sealed class PendingOfficerSearch
+        {
+            public Entity Target;public string TargetType,Items,Specialty,K9Name;public bool Positive,SearchCompleted;public DateTime ExpiresUtc;
         }
 
         private static T FindEntity<T>(IEnumerable<Assembly> assemblies,IEnumerable<string> names) where T:Entity

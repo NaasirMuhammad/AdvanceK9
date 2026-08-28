@@ -4,7 +4,19 @@ All published AdvancedK9 versions are beta builds.
 
 ## 0.22.10-beta
 
-- Uses CommonDataFramework's exact ped or vehicle inventory as the shared search source when available.
+- Makes the approved compact Glass Tactical concept the exact default/reset HUD layout: smoked-charcoal card, cyan frame, portrait at left, name/status, real health and stamina meters, upper-right paw, divider and compact command/distance/behavior row.
+- Bundles original 256×256 HUD portraits for every built-in dog breed plus separate German Shepherd, Belgian Malinois and Doberman coat choices, including the all-black Malinois.
+- Standardizes every bundled portrait to the same centered tactical-vest composition, smoked background and single cyan Glass Tactical ring used by the approved Malinois design.
+- Resolves portraits through custom profile override, profile name, exact breed/coat/vest/texture, breed/model coat, model, breed and generic fallback, refreshing the cached texture only after an appearance or profile change.
+- Preserves all HUD editing, scaling, opacity, anchoring and per-field visibility controls so the approved design is the starting point rather than a forced layout.
+- Corrects the CDF integration false positive that caused unrelated vehicles to indicate explosives.
+- Reads the actual item names from PR `SearchItemsAPI`, matching the list later displayed by the regular officer vehicle/person search.
+- Stops flattening CDF vehicle/person database records; empty category, permit, schema and metadata properties can no longer become K9 odors.
+- Accepts CDF contents only when the record exposes an explicitly named search/inventory collection.
+- Correctly supplies NexusMDT's active call/report number to `AppendIncidentNote` instead of passing note text as the number.
+- Retains the exact PR item list after a K9 sniff, waits for PR to confirm the officer search, and then appends the discovered items to the active Nexus report.
+- Keeps report reconciliation pending for up to 15 minutes when the report has not been opened yet, with a throttled two-second retry and no guessed report IDs.
+- Links the exact ped or vehicle to the shared PR/CDF record and reads PR's generated search-item list as the authoritative contents exposed by the installed public APIs.
 - Adds protocol v2 request/response provenance so logs identify `CDF.Items` or the PR search-items fallback.
 - Publishes completed positive and negative K9 indications to a compatible public NexusMDT incident-note API for report writing.
 - Keeps K9 indications observational: AdvancedK9 does not reveal item names, mutate inventories, recover evidence or mark an officer search complete.

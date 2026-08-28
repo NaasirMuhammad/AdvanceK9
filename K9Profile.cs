@@ -142,7 +142,7 @@ namespace AdvancedK9
         public void AdjustHudScalePreview(float delta){HudScale=Math.Max(.55f,Math.Min(1.35f,HudScale+delta));}
         public void SaveHudLayout(){Save();}
         public void AdjustHudOpacity(float delta){HudOpacity=Math.Max(.35f,Math.Min(1f,HudOpacity+delta));Save();}
-        public void ResetHud(){HudX=.975f;HudY=.955f;HudScale=.85f;HudOpacity=.90f;Save();}
+        public void ResetHud(){HudX=.975f;HudY=.955f;HudScale=.85f;HudOpacity=.90f;HudDesign=0;HudIconSet=0;HudColorTheme=0;HudTextStyle=0;HudMode=1;HudShowPortrait=true;HudShowState=true;HudShowHealth=true;HudShowStamina=true;HudShowDistance=true;HudShowCommand=true;HudShowBehavior=true;HudAutoCollapse=true;HudSearchProgress=true;HudShowFood=false;HudShowWater=false;HudShowCertifications=false;HudShowTrust=false;HudShowTraining=false;HudShowInjury=false;HudShowVoice=false;Save();}
         public void ToggleHudOption(int option){switch(option){case 0:HudAutoCollapse=!HudAutoCollapse;break;case 1:HudShowPortrait=!HudShowPortrait;break;case 2:HudShowDistance=!HudShowDistance;break;case 3:HudShowCommand=!HudShowCommand;break;case 4:HudShowBehavior=!HudShowBehavior;break;case 5:HudSearchProgress=!HudSearchProgress;break;case 6:HudMetricDistance=!HudMetricDistance;break;}Save();}
         public void AdjustHudDesign(int delta){HudDesign=Wrap(HudDesign+delta,5);Save();}
         public void AdjustHudIcons(int delta){HudIconSet=Wrap(HudIconSet+delta,5);Save();}

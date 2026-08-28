@@ -11,7 +11,7 @@ namespace AdvancedK9
         {
             public bool Visible,Collapsed,ShowPortrait,ShowState,ShowHealth,ShowStamina,ShowDistance,ShowCommand,ShowBehavior,ShowSearchProgress;
             public float X,Y,Scale,Opacity,Distance;
-            public int Health,Stamina,SearchProgress;
+            public int Health,Stamina,SearchProgress,Coat,Vest,VestTexture;
             public string Name,State,Command,Behavior,SearchLabel,Alert,PortraitFile,Breed,Model,AppearanceKey;
             public bool Metric;
         }
@@ -40,10 +40,13 @@ namespace AdvancedK9
                 string root=Path.Combine("Plugins","LSPDFR","AdvancedK9","Portraits");
                 string configured=ResolvePortraitPath(value.PortraitFile);
                 string profile=Path.Combine(root,SafeName(value.Name)+".png");
+                string exact=Path.Combine(root,SafeName(value.Breed)+"_coat_"+value.Coat+"_vest_"+value.Vest+"_texture_"+value.VestTexture+".png");
+                string breedCoat=Path.Combine(root,SafeName(value.Breed)+"_coat_"+value.Coat+".png");
+                string modelCoat=Path.Combine(root,SafeName(value.Model)+"_coat_"+value.Coat+".png");
                 string model=Path.Combine(root,SafeName(value.Model)+".png");
                 string breed=Path.Combine(root,SafeName(value.Breed)+".png");
                 string fallback=Path.Combine(root,"default.png");
-                string selected=File.Exists(configured)?configured:File.Exists(profile)?profile:File.Exists(model)?model:File.Exists(breed)?breed:File.Exists(fallback)?fallback:null;
+                string selected=File.Exists(configured)?configured:File.Exists(profile)?profile:File.Exists(exact)?exact:File.Exists(breedCoat)?breedCoat:File.Exists(modelCoat)?modelCoat:File.Exists(model)?model:File.Exists(breed)?breed:File.Exists(fallback)?fallback:null;
                 if(selected!=null){_portrait=Game.CreateTextureFromFile(selected);Game.LogTrivial("AdvancedK9 HUD portrait cached: "+selected);}
                 else Game.LogTrivial("AdvancedK9 HUD portrait fallback: no custom/model/breed image; using breed badge.");
             }
@@ -66,8 +69,8 @@ namespace AdvancedK9
                 Size resolution=Game.Resolution;
                 float scale=Math.Max(.55f,Math.Min(1.35f,s.Scale));
                 if(s.Collapsed)scale*=.70f;
-                float width=(s.Collapsed?205f:330f)*scale;
-                float height=(s.Collapsed?38f:126f)*scale;
+                float width=(s.Collapsed?205f:320f)*scale;
+                float height=(s.Collapsed?38f:174f)*scale;
                 float cx=Math.Max(width/2+12,Math.Min(resolution.Width-width/2-12,s.X*resolution.Width));
                 float cy=Math.Max(height/2+12,Math.Min(resolution.Height-height/2-12,s.Y*resolution.Height));
                 var box=new RectangleF(cx-width,cy-height,width,height);
@@ -75,7 +78,7 @@ namespace AdvancedK9
                 DrawGlass(args.Graphics,box,alpha);
                 if(s.Collapsed){DrawText(args.Graphics,"K9 "+Upper(s.Name)+"  •  "+Upper(s.State),box.X+13*scale,box.Y+10*scale,17*scale,Color.White);return;}
 
-                float portrait=72f*scale;
+                float portrait=80f*scale;
                 float left=box.X+12f*scale;
                 if(s.ShowPortrait)
                 {
@@ -89,10 +92,10 @@ namespace AdvancedK9
                     }
                     left+=portrait+12f*scale;
                 }
-                DrawText(args.Graphics,"K9 "+Upper(s.Name),left,box.Y+10f*scale,20f*scale,Color.White);
-                if(s.ShowState)DrawText(args.Graphics,Upper(s.State),box.Right-91f*scale,box.Y+12f*scale,14f*scale,StateColor(s.State));
-                DrawText(args.Graphics,"🐾",box.Right-31f*scale,box.Bottom-30f*scale,20f*scale,Color.FromArgb(255,35,214,235),"Segoe UI Symbol");
-                float row=box.Y+42f*scale;
+                DrawText(args.Graphics,"K9 "+Upper(s.Name),left,box.Y+13f*scale,20f*scale,Color.White);
+                if(s.ShowState)DrawText(args.Graphics,Upper(s.State),left,box.Y+38f*scale,14f*scale,StateColor(s.State));
+                DrawText(args.Graphics,"🐾",box.Right-34f*scale,box.Y+17f*scale,20f*scale,Color.FromArgb(255,35,214,235),"Segoe UI Symbol");
+                float row=box.Y+67f*scale;
                 if(s.ShowHealth){DrawMeter(args.Graphics,"HEALTH",s.Health,left,row,box.Right-left-12f*scale,Color.FromArgb(255,58,210,118),scale);row+=25f*scale;}
                 if(s.ShowStamina){DrawMeter(args.Graphics,"STAMINA",s.Stamina,left,row,box.Right-left-12f*scale,Color.FromArgb(255,35,214,235),scale);row+=25f*scale;}
                 if(!s.ShowHealth&&!s.ShowStamina)row+=12f*scale;
@@ -100,11 +103,12 @@ namespace AdvancedK9
                 if(s.ShowCommand&&!string.IsNullOrWhiteSpace(s.Command))bottom=Upper(s.Command);
                 if(s.ShowDistance){float value=s.Metric?s.Distance:s.Distance*3.28084f;bottom=Join(bottom,value.ToString("0.0")+(s.Metric?" m":" ft"));}
                 if(s.ShowBehavior)bottom=Join(bottom,Upper(s.Behavior));
-                DrawText(args.Graphics,bottom,left,box.Bottom-24f*scale,14f*scale,Color.FromArgb(255,208,231,236));
+                args.Graphics.DrawRectangle(new RectangleF(box.X+12f*scale,box.Bottom-43f*scale,box.Width-24f*scale,1f),Color.FromArgb(110,80,125,137));
+                DrawText(args.Graphics,bottom,box.X+13f*scale,box.Bottom-24f*scale,14f*scale,Color.FromArgb(255,208,231,236));
                 if(!string.IsNullOrWhiteSpace(s.SearchLabel))
                 {
                     string search=Upper(s.SearchLabel)+(s.ShowSearchProgress?"  "+Math.Max(0,Math.Min(100,s.SearchProgress))+"%":"");
-                    DrawText(args.Graphics,search,left,box.Bottom-45f*scale,14f*scale,Color.FromArgb(255,45,225,240));
+                    DrawText(args.Graphics,search,left,box.Bottom-64f*scale,14f*scale,Color.FromArgb(255,45,225,240));
                 }
                 if(!string.IsNullOrWhiteSpace(s.Alert))
                 {

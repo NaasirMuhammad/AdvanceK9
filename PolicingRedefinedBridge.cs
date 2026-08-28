@@ -76,7 +76,7 @@ namespace AdvancedK9
                 string directory=Path.GetDirectoryName(_bridgeRequestPath);if(!Directory.Exists(directory))Directory.CreateDirectory(directory);
                 WriteBridgeRequest(new[]{"Action=InventoryQuery","RequestId="+requestId,"Handle="+handle,"Type="+(target is Vehicle?"Vehicle":"Ped"),"UseCdfInventory="+_useCdfInventory,"UtcTicks="+DateTime.UtcNow.Ticks});
                 uint timeout=Game.GameTime+1800;
-                while(Game.GameTime<timeout){GameFiber.Yield();RefreshBridgeState();if(_bridgeQueryRequestId==requestId&&_bridgeQueryHandle==handle){if(_bridgeQueryAvailable){Game.LogTrivial("AdvancedK9 compatibility: bridge returned "+_bridgeQuerySource+" inventory for entity "+handle+".");return string.IsNullOrWhiteSpace(_bridgeQueryData)?"CDF inventory: empty":_bridgeQueryData;}break;}}
+                while(Game.GameTime<timeout){GameFiber.Yield();RefreshBridgeState();if(_bridgeQueryRequestId==requestId&&_bridgeQueryHandle==handle){if(_bridgeQueryAvailable){Game.LogTrivial("AdvancedK9 compatibility: bridge returned "+_bridgeQuerySource+" inventory for entity "+handle+".");return string.IsNullOrWhiteSpace(_bridgeQueryData)?"Search inventory: empty":_bridgeQueryData;}Game.LogTrivial("AdvancedK9 compatibility: "+_bridgeQuerySource+" for entity "+handle+"; false-positive fallback suppressed.");break;}}
             }
             catch(Exception ex){Game.LogTrivial("AdvancedK9 compatibility request failed: "+ex.Message);}
             return "";
@@ -140,7 +140,18 @@ namespace AdvancedK9
         private static IEnumerable<PropertyInfo> Properties(Type t){try{return t.GetProperties(BindingFlags.Public|BindingFlags.Static);}catch{return Array.Empty<PropertyInfo>();}}
         private static string[] VehicleNames()=>new[]{"GetActiveStopVehicle","GetCurrentStopVehicle","GetTrafficStopVehicle","GetPulloverVehicle","ActiveStopVehicle","CurrentStopVehicle","TrafficStopVehicle","PulloverVehicle","ContextVehicle","SelectedVehicle"};
         private static string[] PedNames()=>new[]{"GetActiveInteractionPed","GetCurrentStopPed","GetStoppedPed","GetSelectedPed","ActiveInteractionPed","CurrentStopPed","StoppedPed","ContextPed","SelectedPed"};
-        private static DetectionSpecialty Classify(string text){string t=(text??"").ToLowerInvariant();if(ContainsAny(t,"explosive","bomb","ied","dynamite","c4","detonator","grenade"))return DetectionSpecialty.Explosives;if(ContainsAny(t,"firearm","weapon","pistol","rifle","shotgun","smg","revolver","ammo","ammunition","gun"))return DetectionSpecialty.Weapons;if(ContainsAny(t,"narcotic","drug","cocaine","heroin","fentanyl","meth","marijuana","cannabis","ecstasy","lsd","crack","opioid"))return DetectionSpecialty.Narcotics;return DetectionSpecialty.General;}
+        private static DetectionSpecialty Classify(string text)
+        {
+            foreach(string raw in (text??"").Split(new[]{'|'},StringSplitOptions.RemoveEmptyEntries))
+            {
+                string item=raw.Trim().ToLowerInvariant();if(string.IsNullOrWhiteSpace(item)||IsNonOdorReplicaOrDocument(item))continue;
+                if(ContainsAny(item,"explosive","pipe bomb","bomb components","ied","dynamite","c4","detonator","grenade"))return DetectionSpecialty.Explosives;
+                if(ContainsAny(item,"firearm","pistol","rifle","shotgun","smg","revolver","handgun","ammunition","ammo","gun"))return DetectionSpecialty.Weapons;
+                if(ContainsAny(item,"narcotic","cocaine","heroin","fentanyl","methamphetamine","crystal meth","marijuana","cannabis","ecstasy","lsd","crack cocaine","opioid"))return DetectionSpecialty.Narcotics;
+            }
+            return DetectionSpecialty.General;
+        }
+        private static bool IsNonOdorReplicaOrDocument(string item)=>ContainsAny(item,"toy gun","toy pistol","toy rifle","water gun","airsoft","paintball","replica firearm","fake gun","firearm permit","weapon permit","gun license","explosives manual","bomb disposal manual");
         private static string Flatten(object value,int depth,HashSet<object> visited){if(value==null||depth>3)return "";Type type=value.GetType();if(type.IsPrimitive||value is string||value is decimal||type.IsEnum)return Convert.ToString(value);if(!type.IsValueType&&!visited.Add(value))return "";var sb=new StringBuilder();if(value is IEnumerable enumerable){int count=0;foreach(var item in enumerable){if(count++>=40)break;sb.Append(' ').Append(Flatten(item,depth+1,visited));}return sb.ToString();}foreach(var property in type.GetProperties(BindingFlags.Public|BindingFlags.Instance).Where(p=>p.CanRead&&p.GetIndexParameters().Length==0).Take(40)){try{sb.Append(' ').Append(property.Name).Append('=').Append(Flatten(property.GetValue(value,null),depth+1,visited));}catch{}}return sb.ToString();}
         private static string TrimDetail(string value){value=(value??"").Trim();return value.Length<=180?value:value.Substring(0,180);}
         private static bool ContainsAny(string value,params string[] terms)=>terms.Any(term=>value.IndexOf(term,StringComparison.OrdinalIgnoreCase)>=0);
