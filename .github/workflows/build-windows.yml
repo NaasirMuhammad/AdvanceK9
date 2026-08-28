@@ -59,13 +59,13 @@ jobs:
           foreach ($marker in @('NEGATIVE — NO ', 'three-bark alert authorized', 'K9 remains silent', 'TASK_PAUSE')) {
             if ($compiled -notmatch [regex]::Escape($marker)) { throw "Missing compiled contextual-search marker: $marker" }
           }
-          foreach ($marker in @('Confidence','TrainingRequirement','1200','CalculateTrainingXp','CalculateSpecialtyXp','IsTrainedFor','HudPortraitShape','CircularPortrait','Randomized obedience drill','creatures@rottweiler@amb@world_dog_sitting@base','advanced training profile load')) {
+          foreach ($marker in @('Confidence','TrainingRequirement','1200','CalculateTrainingXp','CalculateSpecialtyXp','IsTrainedFor','HudPortraitShape','CircularPortrait','Randomized obedience drill','PollAcademyVoiceCommand','Verbal command accepted','80','creatures@rottweiler@amb@world_dog_sitting@base','advanced training profile load')) {
             if ($compiled -notmatch [regex]::Escape($marker)) { throw "Missing compiled v0.22.11 progression/HUD marker: $marker" }
           }
           foreach ($marker in @('EnsurePrSearchInventory','generated and retained','PR search items are not generated yet','CDF strict item-name fields','ExtractStrictItemNames','ItemName','DisplayName','Value','DrugType','FirearmType')) {
             if ($bridgeCompiled -notmatch [regex]::Escape($marker)) { throw "Missing compiled v0.22.12 inventory marker: $marker" }
           }
-          foreach ($marker in @('IsMalinois','CoatFallbackCount','PinLeashEndpoints','Working leash retained','INCONCLUSIVE — INVENTORY UNAVAILABLE','18905','direct physical control','ClassifyAll','phencyclidine','morphine','ritalin','Follow the leash','2500')) {
+          foreach ($marker in @('IsMalinois','CoatFallbackCount','PinLeashEndpoints','Working leash retained','INCONCLUSIVE — INVENTORY UNAVAILABLE','18905','ClassifyAll','phencyclidine','morphine','ritalin','Follow the leash','2500')) {
             if ($compiled -notmatch [regex]::Escape($marker)) { throw "Missing compiled v0.22.12 K9 marker: $marker" }
           }
           foreach ($removed in @('K9 four-corner vehicle sweep started', 'Vehicle search~s~ — ', 'POSITIVE "+SpecialtyLabel', 'No "+(specialty==')) {

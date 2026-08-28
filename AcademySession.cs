@@ -11,8 +11,9 @@ namespace AdvancedK9
         private readonly Ped _dog;
         private readonly string _name;
         private readonly Random _random = new Random();
+        private readonly Func<K9Command?> _pollVoiceCommand;
 
-        public AcademySession(Ped dog, string name) { _dog = dog; _name = name; }
+        public AcademySession(Ped dog, string name, Func<K9Command?> pollVoiceCommand) { _dog = dog; _name = name; _pollVoiceCommand = pollVoiceCommand; }
 
         public int Run(int level, Action sit, Action down, Action follow)
         {
@@ -41,7 +42,8 @@ namespace AdvancedK9
         private int SpecialtyDetectionCourse(DetectionSpecialty specialty,Action sit)
         {
             string title=specialty==DetectionSpecialty.Narcotics?"NARCOTICS ODOR LINEUP":specialty==DetectionSpecialty.Explosives?"BOMB-SAFE STANDOFF LINEUP":"FIREARM ODOR LINEUP";
-            if(!WaitForHandler(title,"Press ~y~Y~s~ to present the specialty scent article"))return 0;
+            K9Command search=specialty==DetectionSpecialty.Narcotics?K9Command.SearchNarcotics:specialty==DetectionSpecialty.Explosives?K9Command.SearchExplosives:K9Command.SearchWeapons;
+            if(!WaitForHandler(title,"Give the displayed search command, or press ~y~Y~s~",search))return 0;
             var stations=new List<Rage.Object>();Rage.Object source=null;var score=0;
             try
             {
@@ -76,25 +78,25 @@ namespace AdvancedK9
         private int ObedienceCourse(Action sit, Action down, Action follow)
         {
             var score=0;var drills=new List<Func<bool>>{
-                ()=>CommandExercise("SIT — VERBAL MARKER",sit,"Use the clear command: “"+_name+", sit.” Then press ~y~Y~s~."),
-                ()=>CommandExercise("DOWN — VERBAL MARKER",down,"Use the clear command: “"+_name+", down.” Then press ~y~Y~s~."),
-                ()=>CommandExercise("POSITION CHANGE",sit,"Ask for sit from the current position, then press ~y~Y~s~."),
+                ()=>CommandExercise("SIT — VERBAL MARKER",sit,K9Command.Sit,"Use the clear command: “"+_name+", sit,” or press ~y~Y~s~."),
+                ()=>CommandExercise("DOWN — VERBAL MARKER",down,K9Command.LieDown,"Use the clear command: “"+_name+", down,” or press ~y~Y~s~."),
+                ()=>CommandExercise("POSITION CHANGE",sit,K9Command.Sit,"Ask for sit from the current position, or press ~y~Y~s~."),
                 ()=>PlaceStayExercise(sit),()=>RecallExercise(follow)};
             Shuffle(drills);for(int i=0;i<drills.Count;i++){Game.DisplaySubtitle("~b~Randomized obedience drill "+(i+1)+"/5",900);if(drills[i]())score+=20;}
             return score;
         }
 
         private bool CommandExercise(string title, Action action)
-        {return CommandExercise(title,action,"Say the displayed command, then press ~y~Y~s~ to issue it");}
-        private bool CommandExercise(string title, Action action,string instruction)
+        {return CommandExercise(title,action,K9Command.Sit,"Say the displayed command, or press ~y~Y~s~ to issue it");}
+        private bool CommandExercise(string title, Action action,K9Command expected,string instruction)
         {
-            if (!WaitForHandler(title,instruction)) return false;
+            if (!WaitForHandler(title,instruction,expected)) return false;
             try { action(); GameFiber.Wait(2200); return DogReady(); } catch { return false; }
         }
 
         private bool PlaceStayExercise(Action sit)
         {
-            if (!WaitForHandler("4/5 PLACE AND STAY", "Press ~y~Y~s~ to send the K9 to place")) return false;
+            if (!WaitForHandler("4/5 PLACE AND STAY", "Command STAY, or press ~y~Y~s~ to send the K9 to place",K9Command.Stay)) return false;
             try
             {
                 var handler = Game.LocalPlayer.Character;
@@ -114,7 +116,7 @@ namespace AdvancedK9
 
         private bool RecallExercise(Action follow)
         {
-            if (!WaitForHandler("5/5 DISTANCE RECALL", "Create distance, then press ~y~Y~s~ to recall")) return false;
+            if (!WaitForHandler("5/5 DISTANCE RECALL", "Create distance and command RECALL, or press ~y~Y~s~",K9Command.Recall,K9Command.WhistleRecall,K9Command.Follow)) return false;
             try
             {
                 var handler = Game.LocalPlayer.Character;
@@ -152,7 +154,7 @@ namespace AdvancedK9
 
         private int DetectionCourse(Action sit)
         {
-            if (!WaitForHandler("DETECTION CERTIFICATION", "Press ~y~Y~s~ to start the blind five-station scent lineup")) return 0;
+            if (!WaitForHandler("DETECTION CERTIFICATION", "Command SEARCH, or press ~y~Y~s~ to start the blind lineup",K9Command.SearchArea)) return 0;
             var props = new List<Rage.Object>();
             var score = 0;
             try
@@ -185,7 +187,7 @@ namespace AdvancedK9
 
         private int TrackingCourse(Action sit)
         {
-            if (!WaitForHandler("TRACKING CERTIFICATION", "Press ~y~Y~s~ to present the scent article")) return 0;
+            if (!WaitForHandler("TRACKING CERTIFICATION", "Command TRACK, or press ~y~Y~s~ to present the scent article",K9Command.Track)) return 0;
             var props = new List<Rage.Object>();
             var score = 0;
             try
@@ -219,20 +221,20 @@ namespace AdvancedK9
                 suspect=new Ped(model,handler.GetOffsetPosition(new Vector3(_random.Next(-5,6),16f+_random.Next(0,9),0f)),handler.Heading+180f);model.Dismiss();
                 suspect.IsPersistent = true; NativeFunction.Natives.SET_ENTITY_INVINCIBLE(suspect, true); suspect.BlockPermanentEvents = true;
                 if (WaitForAimedTarget(suspect, "1/5 THREAT IDENTIFICATION")) score += 20;
-                if (WaitForHandler("2/5 CONTROLLED DEPLOYMENT", "Aim at the training suspect and press ~y~Y~s~ to send the K9") && Game.LocalPlayer.GetFreeAimingTarget() == suspect)
+                if (WaitForHandler("2/5 CONTROLLED DEPLOYMENT", "Aim and command APPREHEND, or press ~y~Y~s~",K9Command.Apprehend) && Game.LocalPlayer.GetFreeAimingTarget() == suspect)
                 {
                     NativeFunction.Natives.TASK_COMBAT_PED(_dog, suspect, 0, 16); GameFiber.Wait(2500); score += DogReady() ? 20 : 0;
                     _dog.Tasks.ClearImmediately(); suspect.Tasks.ClearImmediately();
                 }
-                if (WaitForHandler("3/5 EMERGENCY RECALL", "Press ~y~Y~s~ to recall before contact resumes"))
+                if (WaitForHandler("3/5 EMERGENCY RECALL", "Command RECALL, or press ~y~Y~s~ before contact resumes",K9Command.Recall,K9Command.Release,K9Command.Follow))
                 {
                     follow(); var end=Game.GameTime+6000; while(DogReady()&&_dog.DistanceTo(handler)>3f&&Game.GameTime<end)GameFiber.Yield(); if(_dog.DistanceTo(handler)<=4f)score+=20;
                 }
-                if (WaitForHandler("4/5 SUSPECT GUARD", "Press ~y~Y~s~ to place the K9 on a controlled guard"))
+                if (WaitForHandler("4/5 SUSPECT GUARD", "Command GUARD, or press ~y~Y~s~",K9Command.Guard))
                 {
                     Navigate(suspect.GetOffsetPosition(new Vector3(0f,-2f,0f)),suspect.Heading, false,6000); sit(); NativeFunction.Natives.TASK_HANDS_UP(suspect,-1,handler,-1,true); if(_dog.DistanceTo(suspect)<4f)score+=20;
                 }
-                if (WaitForHandler("5/5 FINAL RELEASE", "Press ~y~Y~s~ to end the deployment and return to heel"))
+                if (WaitForHandler("5/5 FINAL RELEASE", "Command RELEASE or HEEL, or press ~y~Y~s~",K9Command.Release,K9Command.Heel,K9Command.Follow))
                 {
                     follow(); var end=Game.GameTime+6000; while(DogReady()&&_dog.DistanceTo(handler)>3f&&Game.GameTime<end)GameFiber.Yield(); if(_dog.DistanceTo(handler)<=4f)score+=20;
                 }
@@ -268,7 +270,7 @@ namespace AdvancedK9
 
         private void PlaySniff(){if(!DogReady())return;_dog.Tasks.PlayAnimation("creatures@rottweiler@indication@","indicate_low",4f,AnimationFlags.None).WaitForCompletion(650);}
 
-        private bool WaitForHandler(string title, string instruction)
+        private bool WaitForHandler(string title, string instruction, params K9Command[] acceptedVoiceCommands)
         {
             if (!DogReady()) return false;
             Game.DisplayNotification("~b~" + title + "~s~~n~" + instruction);
@@ -277,6 +279,8 @@ namespace AdvancedK9
             {
                 Game.DisplaySubtitle(instruction + "  ~c~(" + Math.Max(0, (int)((end - Game.GameTime) / 1000)) + "s)", 200);
                 if (Game.IsKeyDown(Keys.Y)) { GameFiber.Wait(300); return true; }
+                K9Command? spoken=_pollVoiceCommand==null?(K9Command?)null:_pollVoiceCommand();
+                if(spoken.HasValue&&Array.IndexOf(acceptedVoiceCommands,spoken.Value)>=0){Game.DisplaySubtitle("~g~Verbal command accepted:~s~ "+spoken.Value,900);GameFiber.Wait(250);return true;}
                 GameFiber.Yield();
             }
             return false;
