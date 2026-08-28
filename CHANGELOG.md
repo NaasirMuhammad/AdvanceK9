@@ -4,6 +4,8 @@ All published AdvancedK9 versions are beta builds.
 
 ## 0.22.12-beta
 
+- Services push-to-talk and recognized-command queues during interactive academy prompts, allowing the displayed SIT, DOWN, STAY, RECALL, SEARCH, TRACK, APPREHEND, GUARD and RELEASE commands to advance training without also pressing Y.
+- Guarantees healthy, trained Elite Bond teams an immediate response from 80 confidence upward; a Level 5 handler at 100 trust and 83 confidence no longer rolls random hesitation.
 - Decodes PR 1.0.0.5's generated `SearchItem.Value` field so Rex reads the populated inventory that the officer search later displays instead of reporting it unavailable.
 - Preserves PR's structured `DrugType`/weapon metadata, covering catalog descriptions that do not name their odor directly (including burnt-spoon heroin, blotter-paper LSD, morphine, Adderall and Ritalin entries).
 - Recognizes PCP/phencyclidine as a narcotics odor.
