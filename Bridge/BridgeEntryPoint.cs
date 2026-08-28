@@ -27,6 +27,7 @@ namespace AdvancedK9.LSPDFRBridge
         private static string _surfaceSignature="";
         private static readonly Dictionary<string,Type[]> TypeCache=new Dictionary<string,Type[]>(StringComparer.OrdinalIgnoreCase);
         private static readonly Dictionary<string,PendingOfficerSearch> PendingOfficerSearches=new Dictionary<string,PendingOfficerSearch>(StringComparer.OrdinalIgnoreCase);
+        private static readonly HashSet<string> InitializedPrSearchInventories=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private static DateTime _nextOfficerSearchReconciliationUtc=DateTime.MinValue;
 
         public override void Initialize()
@@ -123,6 +124,7 @@ namespace AdvancedK9.LSPDFRBridge
             // PR owns the generated search-item list shown by the officer search UI. CDF's
             // GetVehicleData/GetPedData returns a database record, not contraband contents;
             // flattening that record can turn empty schema/category names into false odors.
+            if(pr!=null)EnsurePrSearchInventory(pr,entity);
             if(pr!=null&&TryExactInventoryCall(pr,entity,"SearchItemsAPI",entity is Vehicle?"GetVehicleSearchItems":"GetPedSearchItems",out record))
             {
                 prReturned=record!=null;string names=ExtractSearchItemNames(record);if(!string.IsNullOrWhiteSpace(names)){available=true;source="PR.SearchItemsAPI";return names;}
@@ -136,7 +138,7 @@ namespace AdvancedK9.LSPDFRBridge
                 if(items!=null){available=true;source="CDF strict item-name fields";return ExtractStrictItemNames(items);}
                 source="CDF record has no public search-item collection";return "";
             }
-            if(prReturned){available=true;source="PR.SearchItemsAPI pending/empty";return "";}
+            if(prReturned){available=false;source="PR.SearchItemsAPI pending/empty";return "";}
             source=cdf!=null?"CDF inventory API unavailable":pr!=null?"PR inventory API unavailable":"No inventory provider";
             return "";
         }
@@ -151,6 +153,19 @@ namespace AdvancedK9.LSPDFRBridge
                 try{result=method.Invoke(null,new[]{argument});Game.LogTrivial("AdvancedK9 bridge: inventory reader "+type.FullName+"."+method.Name+" selected.");return true;}catch(Exception ex){Game.LogTrivial("AdvancedK9 bridge: inventory reader failed: "+Unwrap(ex).Message);}
             }
             return false;
+        }
+
+        private static void EnsurePrSearchInventory(Assembly pr,Entity entity)
+        {
+            if(pr==null||entity==null||!entity.Exists())return;string key=(entity is Vehicle?"Vehicle:":"Ped:")+entity.Handle;if(!InitializedPrSearchInventories.Add(key))return;
+            string subject=entity is Vehicle?"Vehicle":"Ped";
+            foreach(Type type in Types(new[]{pr}).Where(t=>t.Name.IndexOf("SearchItemsAPI",StringComparison.OrdinalIgnoreCase)>=0||(t.FullName??"").IndexOf("SearchItemsAPI",StringComparison.OrdinalIgnoreCase)>=0))
+            foreach(MethodInfo method in type.GetMethods(BindingFlags.Public|BindingFlags.Static).Where(m=>ContainsAny(m.Name,"Generate","Create","Ensure","Initialize","Register","GetOrCreate","Set","Save")&&ContainsAny(m.Name,"Search","Items")))
+            {
+                ParameterInfo[] p=method.GetParameters();object argument;if(p.Length<1||!TryEntityArgument(p[0],entity,out argument))continue;var args=new object[p.Length];args[0]=argument;bool bind=true;for(int i=1;i<p.Length;i++){if(p[i].HasDefaultValue)args[i]=p[i].DefaultValue;else{bind=false;break;}}if(!bind)continue;
+                try{method.Invoke(null,args);Game.LogTrivial("AdvancedK9 bridge: generated and retained "+subject.ToLowerInvariant()+" search inventory once through PR public API "+type.FullName+"."+method.Name+".");return;}catch(Exception ex){Game.LogTrivial("AdvancedK9 bridge: PR public inventory initialization failed: "+Unwrap(ex).Message);}
+            }
+            Game.LogTrivial("AdvancedK9 bridge: no compatible public PR "+subject.ToLowerInvariant()+" inventory initializer was exposed; strict CDF item-name fallback will be used.");
         }
 
         private static bool TryEntityArgument(ParameterInfo parameter,Entity entity,out object value)

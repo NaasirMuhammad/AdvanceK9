@@ -11,7 +11,7 @@ using Rage.Native;
 namespace AdvancedK9
 {
     internal enum CompatibilityMode { Standalone, PolicingRedefined, StopThePed }
-    internal sealed class CompatibilitySearchResult { public bool Positive; public DetectionSpecialty Specialty; public string Source; public string Detail; }
+    internal sealed class CompatibilitySearchResult { public bool Positive; public bool Inconclusive; public DetectionSpecialty Specialty; public string Source; public string Detail; }
 
     // Optional PR/CDF and Stop The Ped adapter. No external assembly is referenced,
     // so AdvancedK9 remains loadable when either integration is absent or updated.
@@ -60,7 +60,8 @@ namespace AdvancedK9
             string inventory="";
             if(_useCdfInventory&&_bridgeCdf)inventory=RequestBridgeRecord(target);
             else{object record=GetRecord(target);inventory=Flatten(record,0,new HashSet<object>(ReferenceComparer.Instance));if(string.IsNullOrWhiteSpace(inventory))inventory=GetSearchText(target);if(string.IsNullOrWhiteSpace(inventory)){string handle=target.Handle.ToString();if(handle==_bridgeVehicleHandle)inventory=_bridgeVehicleData;else if(handle==_bridgePedHandle)inventory=_bridgePedData;}if(string.IsNullOrWhiteSpace(inventory))inventory=RequestBridgeRecord(target);}
-            if(string.IsNullOrWhiteSpace(inventory)){Game.LogTrivial("AdvancedK9 compatibility search: no inventory record for entity "+target.Handle+"; random fallback suppressed.");return new CompatibilitySearchResult{Positive=false,Specialty=DetectionSpecialty.General,Source=ModeLabel,Detail="Integration inventory unavailable"};}
+            if(string.IsNullOrWhiteSpace(inventory)){Game.LogTrivial("AdvancedK9 compatibility search: inventory unavailable for entity "+target.Handle+"; result is inconclusive and random/negative fallbacks are suppressed.");return new CompatibilitySearchResult{Positive=false,Inconclusive=true,Specialty=DetectionSpecialty.General,Source=ModeLabel,Detail="Integration inventory unavailable"};}
+            if(inventory=="[AdvancedK9:EMPTY_INVENTORY]")inventory="";
             DetectionSpecialty detected=Classify(inventory);bool? positive=detected!=DetectionSpecialty.General;
             bool certified=detected==DetectionSpecialty.Narcotics?narcoticsCertified:detected==DetectionSpecialty.Explosives?explosivesCertified:detected==DetectionSpecialty.Weapons?weaponsCertified:true;
             bool matches=requested==DetectionSpecialty.General||detected==DetectionSpecialty.General||requested==detected;
@@ -76,7 +77,7 @@ namespace AdvancedK9
                 string directory=Path.GetDirectoryName(_bridgeRequestPath);if(!Directory.Exists(directory))Directory.CreateDirectory(directory);
                 WriteBridgeRequest(new[]{"Action=InventoryQuery","RequestId="+requestId,"Handle="+handle,"Type="+(target is Vehicle?"Vehicle":"Ped"),"UseCdfInventory="+_useCdfInventory,"UtcTicks="+DateTime.UtcNow.Ticks});
                 uint timeout=Game.GameTime+1800;
-                while(Game.GameTime<timeout){GameFiber.Yield();RefreshBridgeState();if(_bridgeQueryRequestId==requestId&&_bridgeQueryHandle==handle){if(_bridgeQueryAvailable){Game.LogTrivial("AdvancedK9 compatibility: bridge returned "+_bridgeQuerySource+" inventory for entity "+handle+".");return string.IsNullOrWhiteSpace(_bridgeQueryData)?"Search inventory: empty":_bridgeQueryData;}Game.LogTrivial("AdvancedK9 compatibility: "+_bridgeQuerySource+" for entity "+handle+"; false-positive fallback suppressed.");break;}}
+                while(Game.GameTime<timeout){GameFiber.Yield();RefreshBridgeState();if(_bridgeQueryRequestId==requestId&&_bridgeQueryHandle==handle){if(_bridgeQueryAvailable){Game.LogTrivial("AdvancedK9 compatibility: bridge returned "+_bridgeQuerySource+" inventory for entity "+handle+".");return string.IsNullOrWhiteSpace(_bridgeQueryData)?"[AdvancedK9:EMPTY_INVENTORY]":_bridgeQueryData;}Game.LogTrivial("AdvancedK9 compatibility: "+_bridgeQuerySource+" for entity "+handle+"; result is inconclusive.");break;}}
             }
             catch(Exception ex){Game.LogTrivial("AdvancedK9 compatibility request failed: "+ex.Message);}
             return "";
