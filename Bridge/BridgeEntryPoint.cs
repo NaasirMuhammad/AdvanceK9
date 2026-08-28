@@ -212,6 +212,14 @@ namespace AdvancedK9.LSPDFRBridge
             {
                 object candidate=ReadInstanceMember(value,member);if(candidate is string&&!string.IsNullOrWhiteSpace((string)candidate)){AddItemName(names,(string)candidate);found=true;break;}
             }
+            // Preserve PR's structured odor metadata as well as its display text.
+            // This identifies "burnt spoon" (Heroin) and "blotter paper" (LSD)
+            // without guessing solely from their presentation wording.
+            foreach(string member in new[]{"DrugType","FirearmType","WeaponType","ExplosiveType","ItemType","Category"})
+            {
+                object candidate=ReadInstanceMember(value,member);if(candidate!=null)AddItemName(names,Convert.ToString(candidate));
+            }
+            if(ContainsAny(type.Name,"Drug","Firearm","Weapon","Explosive"))AddItemName(names,type.Name);
             if(!found){object nested=ReadInstanceMember(value,"Item");if(nested!=null&&!ReferenceEquals(nested,value))CollectSearchItemNames(nested,names,depth+1);}
         }
 

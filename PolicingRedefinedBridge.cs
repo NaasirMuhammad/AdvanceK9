@@ -150,7 +150,7 @@ namespace AdvancedK9
                 string item=raw.Trim().ToLowerInvariant();if(string.IsNullOrWhiteSpace(item)||IsNonOdorReplicaOrDocument(item))continue;
                 if(ContainsAny(item,"explosive","pipe bomb","bomb component","ied","improvised explosive","dynamite","c4","detonator","blasting cap","grenade","molotov","sticky bomb","proximity mine","firework","rocket","rpg","launcher"))result.Add(DetectionSpecialty.Explosives);
                 if(ContainsAny(item,"firearm","pistol","rifle","shotgun","smg","revolver","handgun","ammunition","ammo","gun","weapon_","machine gun","minigun","musket","sniper","carbine","switchblade","machete","dagger","knife","brass knuckle","nightstick","baton","stun gun","taser"))result.Add(DetectionSpecialty.Weapons);
-                if(ContainsAny(item,"narcotic","controlled substance","cocaine","heroin","fentanyl","methamphetamine","crystal meth","meth ","marijuana","cannabis","ecstasy","mdma","lsd","acid tabs","crack cocaine","opioid","opiate","pcp","phencyclidine","ketamine","oxycodone","hydrocodone","vicodin","percocet","xanax","alprazolam","amphetamine","prescription pills","illegal pills"))result.Add(DetectionSpecialty.Narcotics);
+                if(ContainsAny(item,"narcotic","controlled substance","drug","cocaine","heroin","fentanyl","methamphetamine","crystal meth","meth ","marijuana","cannabis","ecstasy","mdma","lsd","acid tabs","blotter paper","crack cocaine","opioid","opiate","pcp","phencyclidine","ketamine","morphine","oxycodone","hydrocodone","vicodin","percocet","xanax","alprazolam","amphetamine","adderall","ritalin","prescription pills","illegal pills","stimulant pills"))result.Add(DetectionSpecialty.Narcotics);
             }
             return result;
         }
