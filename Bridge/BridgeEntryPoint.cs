@@ -119,23 +119,24 @@ namespace AdvancedK9.LSPDFRBridge
 
         private static string GetUnifiedInventory(Assembly cdf,Assembly pr,Entity entity,out string source,out bool available)
         {
-            source="";available=false;object record;
+            source="";available=false;object record;bool prReturned=false;
             // PR owns the generated search-item list shown by the officer search UI. CDF's
             // GetVehicleData/GetPedData returns a database record, not contraband contents;
             // flattening that record can turn empty schema/category names into false odors.
             if(pr!=null&&TryExactInventoryCall(pr,entity,"SearchItemsAPI",entity is Vehicle?"GetVehicleSearchItems":"GetPedSearchItems",out record))
             {
-                available=record!=null;source="PR.SearchItemsAPI";
-                return ExtractSearchItemNames(record);
+                prReturned=record!=null;string names=ExtractSearchItemNames(record);if(!string.IsNullOrWhiteSpace(names)){available=true;source="PR.SearchItemsAPI";return names;}
+                Game.LogTrivial("AdvancedK9 bridge: PR search items are not generated yet; checking strict CDF item names before returning a negative K9 result.");
             }
             // CDF remains the identity/record provider. Only an explicitly named inventory
             // collection is accepted; generic Items and the full record are never scanned.
             if(cdf!=null&&TryExactInventoryCall(cdf,entity,entity is Vehicle?"VehicleDataController":"PedDataController",entity is Vehicle?"GetVehicleData":"GetPedData",out record))
             {
-                object items=ReadInstanceMember(record,"SearchItems")??ReadInstanceMember(record,"VehicleSearchItems")??ReadInstanceMember(record,"PedSearchItems")??ReadInstanceMember(record,"InventoryItems");
-                if(items!=null){available=true;source="CDF explicit search items";return ExtractSearchItemNames(items);}
+                object items=ReadInstanceMember(record,"SearchItems")??ReadInstanceMember(record,"VehicleSearchItems")??ReadInstanceMember(record,"PedSearchItems")??ReadInstanceMember(record,"InventoryItems")??ReadInstanceMember(record,"Items");
+                if(items!=null){available=true;source="CDF strict item-name fields";return ExtractStrictItemNames(items);}
                 source="CDF record has no public search-item collection";return "";
             }
+            if(prReturned){available=true;source="PR.SearchItemsAPI pending/empty";return "";}
             source=cdf!=null?"CDF inventory API unavailable":pr!=null?"PR inventory API unavailable":"No inventory provider";
             return "";
         }
@@ -171,6 +172,18 @@ namespace AdvancedK9.LSPDFRBridge
         private static string ExtractSearchItemNames(object value)
         {
             var names=new List<string>();CollectSearchItemNames(value,names,0);return string.Join(" | ",names.Where(n=>!string.IsNullOrWhiteSpace(n)).Distinct(StringComparer.OrdinalIgnoreCase).Take(40));
+        }
+
+        private static string ExtractStrictItemNames(object value)
+        {
+            var names=new List<string>();CollectStrictItemNames(value,names,0);return string.Join(" | ",names.Where(n=>!string.IsNullOrWhiteSpace(n)).Distinct(StringComparer.OrdinalIgnoreCase).Take(40));
+        }
+
+        private static void CollectStrictItemNames(object value,ICollection<string> names,int depth)
+        {
+            if(value==null||depth>3)return;if(value is IEnumerable enumerable&&!(value is string)){int count=0;foreach(object item in enumerable){if(count++>=40)break;CollectStrictItemNames(item,names,depth+1);}return;}
+            foreach(string member in new[]{"ItemName","DisplayName"}){object candidate=ReadInstanceMember(value,member);if(candidate is string&&!string.IsNullOrWhiteSpace((string)candidate)){AddItemName(names,(string)candidate);return;}}
+            object nested=ReadInstanceMember(value,"Item");if(nested!=null&&!ReferenceEquals(nested,value))CollectStrictItemNames(nested,names,depth+1);
         }
 
         private static void CollectSearchItemNames(object value,ICollection<string> names,int depth)
@@ -222,6 +235,7 @@ namespace AdvancedK9.LSPDFRBridge
                 PendingOfficerSearch pending=PendingOfficerSearches[key];if(DateTime.UtcNow>pending.ExpiresUtc){PendingOfficerSearches.Remove(key);continue;}
                 if(!pending.SearchCompleted&&pending.Target!=null&&pending.Target.Exists())pending.SearchCompleted=HasOfficerSearched(pr,pending.Target);
                 if(!pending.SearchCompleted||nexus==null)continue;
+                if(pending.Target!=null&&pending.Target.Exists()){string refreshedSource;bool refreshedAvailable;string refreshed=GetUnifiedInventory(null,pr,pending.Target,out refreshedSource,out refreshedAvailable);if(refreshedAvailable)pending.Items=refreshed;}
                 string itemSummary=string.IsNullOrWhiteSpace(pending.Items)?"No items found.":"Items found: "+pending.Items+".";
                 string match=pending.Positive?" Prior K9 indication: positive "+pending.Specialty.ToLowerInvariant()+".":" Prior K9 indication: negative.";
                 string sink;if(TryAppendNexusIncidentNote(nexus,"AdvancedK9 officer "+pending.TargetType+" search — "+itemSummary+match,out sink))
