@@ -8,14 +8,16 @@ namespace AdvancedK9
     internal sealed class TrustProfile
     {
         private readonly string _path = Path.Combine("Plugins", "LSPDFR", "AdvancedK9", "trust.dat");
+        private readonly bool _showNotifications;
         public int Level { get; private set; }
         public string Rank => Level >= 90 ? "Elite Bond" : Level >= 70 ? "Trusted" : Level >= 45 ? "Partner" : Level >= 25 ? "Developing" : "New Team";
         public float ObedienceChance => 0.55f + (Level * 0.0045f);
         public int ResponseDelay => Math.Max(100, 850 - (Level * 7));
         public float DetectionReliability => 0.60f + (Level * 0.004f);
 
-        public TrustProfile(int startingTrust)
+        public TrustProfile(int startingTrust, bool showNotifications)
         {
+            _showNotifications = showNotifications;
             Level = Clamp(startingTrust);
             try
             {
@@ -31,7 +33,7 @@ namespace AdvancedK9
             var old = Level;
             Level = Clamp(Level + amount);
             Save();
-            if (Level != old)
+            if (Level != old && _showNotifications)
                 Game.DisplayNotification("~b~K9 trust " + (amount > 0 ? "+" : "") + (Level - old) + "~s~ (" + reason + ")~n~" + Level + "/100 — " + Rank);
         }
 

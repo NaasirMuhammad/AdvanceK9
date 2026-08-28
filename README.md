@@ -1,6 +1,12 @@
-# Advanced K9 v0.22-beta for LSPDFR
+# Advanced K9 v0.22.11-beta for LSPDFR
 
-AdvancedK9 v0.22-beta is a persistent LSPDFR/RAGE Plugin Hook police-dog partner with push-to-talk voice control, per-dog progression, health and a compact EUP-style LemonUI command/profile interface. All published builds are beta builds while gameplay and model compatibility continue to be tested.
+AdvancedK9 v0.22.11-beta is a persistent LSPDFR/RAGE Plugin Hook police-dog partner with push-to-talk voice control, per-dog progression, user-positioned exterior station kennels and a compact Glass Tactical HUD with silent negative vehicle searches and attached result alerts. All published builds are beta builds while gameplay and model compatibility continue to be tested.
+
+## Glass Tactical HUD
+
+The default HUD is one compact lower-right card. Open the kennel/profile menu, then choose **HUD & Display** to move it to any screen edge, resize it, adjust opacity, choose a circular or square portrait frame, preview searches and alerts, switch distance units, reset its position, or independently hide any displayed field. Inactive, kenneled and vehicle-secured states can collapse automatically.
+
+The release includes original 256×256 portraits for every built-in breed plus separate German Shepherd, Belgian Malinois and Doberman coat choices. Portraits are cached and never loaded every frame. Selection follows custom `PortraitFile`, profile name, exact breed/coat/vest/texture, coat, model, breed, then the generic fallback. For a replacement or add-on dog, set `PortraitFile=` to a PNG such as `Plugins\LSPDFR\AdvancedK9\Portraits\Rex.png`, or use a filename such as `german_shepherd_coat_1_vest_2_texture_0.png`. Missing or invalid images cannot stop the plugin.
 
 AdvancedK9 runs as an RPH plugin and starts its controller directly. It avoids a reflection-based LSPDFR duty gate because RPH plugins run in isolated AppDomains. Instead, it follows LSPDFR's own duty-state messages from the active RAGEPluginHook log. GTA's native cop flag is diagnostic only because LSPDFR may set it while the player is still off duty. While off duty, the K9, HUD, menus, shortcuts and voice capture remain disabled. Going off duty closes the UI, stops voice capture and dismisses the active dog.
 
@@ -19,19 +25,20 @@ The compiled release includes AdvancedK9, its configuration, and the MIT-license
 - Automatic operational leash release when search, tracking, fetch or apprehension is deployed
 - Pedestrian and four-corner vehicle odor searches; silent sit means clear, sit plus repeated bark after the completed sweep means positive
 - General searches identify narcotics, explosives or weapons whenever the deployed dog holds the corresponding specialty certification
-- Bladder and bowel needs, automatic relief, manual bathroom-break commands, urine effects and temporary dog-waste props
+- Automatic natural bladder and bowel relief during safe idle periods, with urine effects and temporary dog-waste props
+- Physical ground-snapped doghouse kennels at seventeen accessible police, sheriff, highway patrol, ranger, port, airport, corrections and state locations, with labeled blue dog-icon map blips and required pickup/return
 - Track a nearby suspect or missing person for up to two minutes
 - Non-lethal apprehension with automatic recall, a configurable health floor and hands-up surrender
 - Fetch minigame
-- Dedicated off-street K9 training ground with five persistent gated levels; every level must reach 100% before the next unlocks
+- Dedicated off-street K9 academy with persistent 100/250/450/800/1,200 XP level requirements, randomized scenarios and instructional handler prompts
 - Certification-specific OB, AGI, DET, TRK and APP courses with five scored exercises per level
-- Independent optional narcotics (NAR), explosives/bomb (BOMB), and weapons/firearm (WPN) detection specialties, each with its own 0–100 progress and five-station academy setup
+- Independent optional narcotics (NAR), explosives/bomb (BOMB), and weapons/firearm (WPN) detection specialties, each requiring 250 XP
 - Separate field and voice commands for narcotics, explosives and weapons searches; a dog may hold any combination or all specialty certifications
 - Weapon-aim target identification before apprehension, with officer rejection and automatic non-lethal recall
 - Push-to-talk voice recognition using OpenAI or Groq transcription; the microphone opens only while `V` is held
 - Persistent command and profile menus that remain open until explicitly closed
 - Runtime command registry shared by menu and voice recognition, with multiple natural verbal alternatives for every action
-- Movable, scalable compact/expanded K9 status HUD
+- Fully optional K9 status HUD with five designs, icon sets, color themes and text styles plus individual data toggles
 - Per-dog XP, certifications, health, injuries, stamina, trust and statistics
 - Optional runtime bridge to Policing Redefined/Common Data Framework search records
 - Persistent 0–100 handler trust with obedience, response-time, detection and deployment effects
@@ -69,7 +76,7 @@ The build copies the RAGE Plugin Hook entry-point assembly `AdvancedK9.dll` to `
 
 ## Controls
 
-- `Left Ctrl + K`: deploy/dismiss
+- `Left Ctrl + K`: pick up/return K9 while standing at a station doghouse
 - `Left Ctrl + J`: command menu, then `0`–`9`
 - `Left Ctrl + C`: dog camera
 - `Left Ctrl + L`: leash
@@ -122,7 +129,6 @@ Hold `V`, begin with the configured dog name or `K9`, and then say one of the ph
 | Pet | pet the dog; praise the dog; reward him; reward her; show affection; good dog; pet |
 | Feed / treat | give the dog a treat; give a treat; reward with a treat; give food; feed the dog; treat; feed |
 | Give water | give the dog water; give water; water the dog; get a drink; drink water; water break; hydrate; drink |
-| Bathroom break | bathroom break; go potty; go pee; go poop; relieve yourself; do your business; potty; pee; poop |
 | Rest | rest the dog; take a rest; sleep; rest |
 | Inspect | inspect the dog; check the dog; check status; check injury; check health; medical check; inspect |
 | First aid | give first aid; apply first aid; provide treatment; field treatment; treat the injury; treat injury; first aid |
@@ -178,6 +184,10 @@ Model=whisper-large-v3-turbo
 Language=en
 ApiKey=gsk_your_key_here
 ApiKeyEnvironmentVariable=GROQ_API_KEY
+
+[Notifications]
+ShowVoiceStatusText=false
+ShowActionNotifications=false
 ```
 
 Do not add quotes around the key. Save the INI and restart RAGE Plugin Hook because voice configuration is loaded when the plugin starts. The key is never displayed or logged. If `ApiKey` is blank, the configured environment variable is used as an optional fallback.
@@ -193,19 +203,49 @@ ApiKeyEnvironmentVariable=OPENAI_API_KEY
 
 AI voice requires internet access and may incur provider charges. Audio is sent only while push-to-talk is held. `ContinuousListening` is retained as a legacy setting but is intentionally ignored. Set `Enabled=false` for keyboard-only play; all commands remain accessible through `Left Ctrl + J`.
 
+Holding V is silent by default. Voice errors remain visible even when status text is disabled. Routine command acknowledgement popups are also disabled by default; K9 search/detection results, failures and safety warnings remain visible.
+
+Updates preserve the live AdvancedK9.ini. The release package supplies AdvancedK9.default.ini and copies it to the live name only when no user configuration exists.
+
+## Custom kennel locations
+
+Station doghouses can be repositioned in the preserved `AdvancedK9.ini`. Under `[KennelLocations]`, each entry uses `X,Y,Z,Heading`:
+
+```ini
+[KennelLocations]
+Davis=354.2758,-1591.15,29.29195,45.5168
+Vinewood=637.631,-3.024063,82.78731,246.6745
+```
+
+Stand where the doghouse should be placed, record the GTA coordinates and heading, then replace that station's four values. Invalid entries are ignored safely and reported in `RagePluginHook.log`.
+
+The same locations can be edited visually from **K9 Profile → Kennel Location Editor**. Select a station, place its doghouse near the player if needed, then hold the left mouse button and move the mouse—or use W/A/S/D—to drag it across the ground. R/F raises or lowers it and Q/E rotates it. Ground snap, revert, reset and save controls are available in the same menu. Changes are written only when **Save location to AdvancedK9.ini** is selected.
+
+Saved kennel positions are authoritative: AdvancedK9 reuses the exact X/Y/Z and heading on the next session instead of automatically rotating or ground-snapping them again.
+
+Inside **HUD & Display**, enable **Live HUD drag** to move the Glass Tactical card while viewing it. Hold the left mouse button and move the mouse, or use W/A/S/D; Q/E resizes the card. Leaving the menu saves the HUD layout.
+
 ## Trust and handler safety
 
-Trust persists in `Plugins\LSPDFR\AdvancedK9\trust.dat`. Petting, feeding, successful searches/tracks, controlled apprehensions and academy work raise it. Low trust causes slower responses, hesitation and less reliable indications; safe apprehension is locked below 25. At high trust the dog responds quickly and reliably.
+Handler bond persists in `Plugins\LSPDFR\AdvancedK9\trust.dat`, while confidence persists with the individual K9 profile. Petting, feeding and safe teamwork build bond; successful progressive training builds confidence. An Elite Bond, confident, properly certified and physically fit K9 responds immediately and reliably. Hesitation is reserved for commands still being learned, weak bond/confidence, exhaustion, hunger, dehydration or injury. Safe apprehension remains locked below 25 bond.
+
+Academy Levels 1–5 require 100, 250, 450, 800 and 1,200 XP respectively. Sessions award 0–10 XP at Levels 1–2, 0–20 XP at Levels 3–4 and 0–30 XP at Level 5, limited by exercise performance. Narcotics, explosives and weapons certifications each require 250 XP. Drill order, layouts, scent placement, trails and tactical suspect positions vary between sessions, and prompts teach the handler the corresponding verbal command and handling sequence.
 
 The dog uses the handler's friendly relationship group and has friendly attacks disabled. A continuous safety interlock also checks for any invalid combat state involving the handler, clears it immediately and recalls the dog. Trust never overrides this protection.
 
 ## Compatibility and search semantics
 
-`Compatibility.Mode=Auto` selects Policing Redefined/CommonDataFramework first, Stop The Ped second, and standalone fallback otherwise. Never run Policing Redefined and Stop The Ped together. No external compatibility assembly is a hard dependency.
+`Compatibility.Mode=Auto` selects Policing Redefined/CommonDataFramework first, Stop The Ped second, and standalone fallback otherwise. Never run Policing Redefined and Stop The Ped together. `Plugins\LSPDFR\AdvancedK9.LSPDFRBridge.dll` runs inside LSPDFR's AppDomain and publishes a guarded heartbeat snapshot to the isolated RPH controller, allowing PR/CDF detection and live target/search-state sharing without making either external plugin a hard dependency.
 
 When supported by the detected plugin, AdvancedK9 prioritizes its active traffic-stop vehicle or selected pedestrian, reads exposed inventory/search records, classifies narcotics, explosives and weapons, shares K9 indications, recognizes pursuit suspects and vehicle bailouts, and rejects restrained, surrendered, arrested or transported peds from apprehension. Detailed adapter/version/API diagnostics are written to `RagePluginHook.log`. Tracking and apprehension never require a PR or STP stop.
 
-When no compatible target or record API is exposed, the closest valid ped/vehicle and `AdvancedK9.ini` fallback probability are used. This prevents API changes from stopping the plugin from loading.
+With `UseCdfInventory=true`, the companion bridge links the exact target to the shared PR/CDF record. In the current public APIs, PR's `SearchItemsAPI` owns the generated item list shown during the officer search, while CDF supplies the underlying person/vehicle record. AdvancedK9 classifies only populated item-name fields returned by `GetPedSearchItems` or `GetVehicleSearchItems`; it never scans CDF schema, category or permit metadata. AdvancedK9 never edits CDF, Policing Redefined, NPCI or NexusMDT files and never creates replacement inventory records. With `ShareWithNexusMDT=true`, a completed sniff publishes only the K9 observation through a compatible public NexusMDT note API. Contraband names remain undisclosed until the officer performs the normal PR/CDF search; NexusMDT's existing search capture then records that same shared result for report writing.
+
+If NexusMDT does not expose a compatible public incident-note method, the indication remains in the AdvancedK9 incident/RPH log and the bridge reports the unavailable writer. AdvancedK9 deliberately does not invoke an internal/private Nexus store or pretend that the report entry succeeded.
+
+After a K9 sniff, AdvancedK9 retains the authoritative PR item-name list for up to 15 minutes without publishing it. Once PR's public searched-state API confirms that the officer completed the regular search, the bridge resolves NexusMDT's active call/report number and appends the discovered items to that report. If no active Nexus report number is publicly available yet, the reconciliation remains pending and retries every two seconds; it never writes item names under a guessed report number. This adds report narrative only and does not manufacture, bind or recover evidence.
+
+When no compatibility plugin is active, standalone searches use the configured fallback probability. When PR/CDF is active but an exact inventory record is unavailable, AdvancedK9 returns a negative/no-certified-odor result instead of inventing a random hit. This prevents API changes from creating false narcotics, explosives or weapons alerts.
 
 Vehicle searches visit all four exterior corners before the result is determined. For apprehension, aim a taser or firearm directly at the intended suspect and keep that person in your sights while issuing the command; proximity alone never chooses the target.
 

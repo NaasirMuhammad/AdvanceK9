@@ -43,7 +43,6 @@ namespace AdvancedK9
             D(K9Command.Pet,"Pet",true,"pet the dog","praise the dog","reward him","reward her","show affection","good dog","pet"),
             D(K9Command.Feed,"Treat / Feed",true,"give the dog a treat","give a treat","reward with a treat","give food","feed the dog","treat","feed"),
             D(K9Command.Drink,"Give Water",true,"give the dog water","give water","water the dog","get a drink","drink water","water break","hydrate","drink"),
-            D(K9Command.Bathroom,"Bathroom Break",true,"bathroom break","go potty","go pee","go poop","relieve yourself","do your business","potty","pee","poop"),
             D(K9Command.Rest,"Rest K9",true,"rest the dog","take a rest","sleep","rest"),
             D(K9Command.Inspect,"Inspect K9",true,"inspect the dog","check the dog","check status","check injury","check health","medical check","inspect"),
             D(K9Command.FirstAid,"Field First Aid",true,"give first aid","apply first aid","provide treatment","field treatment","treat the injury","treat injury","first aid"),
