@@ -4,6 +4,11 @@ All published AdvancedK9 versions are beta builds.
 
 ## 0.22.12-beta
 
+- Decodes PR 1.0.0.5's generated `SearchItem.Value` field so Rex reads the populated inventory that the officer search later displays instead of reporting it unavailable.
+- Recognizes PCP/phencyclidine as a narcotics odor.
+- Classifies multiple odors in the same PR inventory and expands matching across PR/GTA drugs, firearms, ammunition, melee weapons, launchers, explosives and explosive components while excluding replicas, permits and manuals.
+- Keeps every normal field command callable while a leash exists, releases apprehension/fetch based on the rope itself, and stops rapid follow-task restarts that could leave the K9 stationary beside the handler.
+- Advances leashed scent tracking in short handler-relative lead steps and retains the current trail point until the handler walks forward.
 - Retains the complete v0.22.11 Glass Tactical HUD, portrait loader, kennel defaults/editor, CDF/Nexus bridge, and progressive training systems.
 - Generates each target's PR search inventory once through a compatible public PR initializer when exposed, then retains that same PR-owned inventory for Rex and the officer search.
 - Uses strict `ItemName`/`DisplayName` extraction from CDF when PR search items have not yet been generated, preventing pre-search drug/firearm false negatives without reintroducing schema/category explosive false positives.

@@ -62,10 +62,11 @@ namespace AdvancedK9
             else{object record=GetRecord(target);inventory=Flatten(record,0,new HashSet<object>(ReferenceComparer.Instance));if(string.IsNullOrWhiteSpace(inventory))inventory=GetSearchText(target);if(string.IsNullOrWhiteSpace(inventory)){string handle=target.Handle.ToString();if(handle==_bridgeVehicleHandle)inventory=_bridgeVehicleData;else if(handle==_bridgePedHandle)inventory=_bridgePedData;}if(string.IsNullOrWhiteSpace(inventory))inventory=RequestBridgeRecord(target);}
             if(string.IsNullOrWhiteSpace(inventory)){Game.LogTrivial("AdvancedK9 compatibility search: inventory unavailable for entity "+target.Handle+"; result is inconclusive and random/negative fallbacks are suppressed.");return new CompatibilitySearchResult{Positive=false,Inconclusive=true,Specialty=DetectionSpecialty.General,Source=ModeLabel,Detail="Integration inventory unavailable"};}
             if(inventory=="[AdvancedK9:EMPTY_INVENTORY]")inventory="";
-            DetectionSpecialty detected=Classify(inventory);bool? positive=detected!=DetectionSpecialty.General;
-            bool certified=detected==DetectionSpecialty.Narcotics?narcoticsCertified:detected==DetectionSpecialty.Explosives?explosivesCertified:detected==DetectionSpecialty.Weapons?weaponsCertified:true;
-            bool matches=requested==DetectionSpecialty.General||detected==DetectionSpecialty.General||requested==detected;
-            var result=new CompatibilitySearchResult{Positive=positive.Value&&certified&&matches,Specialty=detected,Source=ModeLabel,Detail=TrimDetail(inventory)};
+            var odors=ClassifyAll(inventory);DetectionSpecialty detected=requested!=DetectionSpecialty.General&&odors.Contains(requested)?requested:
+                odors.FirstOrDefault(s=>s==DetectionSpecialty.Narcotics&&narcoticsCertified||s==DetectionSpecialty.Explosives&&explosivesCertified||s==DetectionSpecialty.Weapons&&weaponsCertified);
+            bool certified=detected==DetectionSpecialty.Narcotics?narcoticsCertified:detected==DetectionSpecialty.Explosives?explosivesCertified:detected==DetectionSpecialty.Weapons?weaponsCertified:false;
+            bool matches=requested==DetectionSpecialty.General||odors.Contains(requested);
+            var result=new CompatibilitySearchResult{Positive=detected!=DetectionSpecialty.General&&certified&&matches,Specialty=detected,Source=ModeLabel,Detail=TrimDetail(inventory)};
             Game.LogTrivial("AdvancedK9 compatibility search: source="+result.Source+", entity="+target.Handle+", requested="+requested+", detected="+detected+", certified="+certified+", positive="+result.Positive+".");return result;
         }
 
@@ -141,18 +142,19 @@ namespace AdvancedK9
         private static IEnumerable<PropertyInfo> Properties(Type t){try{return t.GetProperties(BindingFlags.Public|BindingFlags.Static);}catch{return Array.Empty<PropertyInfo>();}}
         private static string[] VehicleNames()=>new[]{"GetActiveStopVehicle","GetCurrentStopVehicle","GetTrafficStopVehicle","GetPulloverVehicle","ActiveStopVehicle","CurrentStopVehicle","TrafficStopVehicle","PulloverVehicle","ContextVehicle","SelectedVehicle"};
         private static string[] PedNames()=>new[]{"GetActiveInteractionPed","GetCurrentStopPed","GetStoppedPed","GetSelectedPed","ActiveInteractionPed","CurrentStopPed","StoppedPed","ContextPed","SelectedPed"};
-        private static DetectionSpecialty Classify(string text)
+        private static HashSet<DetectionSpecialty> ClassifyAll(string text)
         {
+            var result=new HashSet<DetectionSpecialty>();
             foreach(string raw in (text??"").Split(new[]{'|'},StringSplitOptions.RemoveEmptyEntries))
             {
                 string item=raw.Trim().ToLowerInvariant();if(string.IsNullOrWhiteSpace(item)||IsNonOdorReplicaOrDocument(item))continue;
-                if(ContainsAny(item,"explosive","pipe bomb","bomb components","ied","dynamite","c4","detonator","grenade"))return DetectionSpecialty.Explosives;
-                if(ContainsAny(item,"firearm","pistol","rifle","shotgun","smg","revolver","handgun","ammunition","ammo","gun"))return DetectionSpecialty.Weapons;
-                if(ContainsAny(item,"narcotic","cocaine","heroin","fentanyl","methamphetamine","crystal meth","marijuana","cannabis","ecstasy","lsd","crack cocaine","opioid"))return DetectionSpecialty.Narcotics;
+                if(ContainsAny(item,"explosive","pipe bomb","bomb component","ied","improvised explosive","dynamite","c4","detonator","blasting cap","grenade","molotov","sticky bomb","proximity mine","firework","rocket","rpg","launcher"))result.Add(DetectionSpecialty.Explosives);
+                if(ContainsAny(item,"firearm","pistol","rifle","shotgun","smg","revolver","handgun","ammunition","ammo","gun","weapon_","machine gun","minigun","musket","sniper","carbine","switchblade","machete","dagger","knife","brass knuckle","nightstick","baton","stun gun","taser"))result.Add(DetectionSpecialty.Weapons);
+                if(ContainsAny(item,"narcotic","controlled substance","cocaine","heroin","fentanyl","methamphetamine","crystal meth","meth ","marijuana","cannabis","ecstasy","mdma","lsd","acid tabs","crack cocaine","opioid","opiate","pcp","phencyclidine","ketamine","oxycodone","hydrocodone","vicodin","percocet","xanax","alprazolam","amphetamine","prescription pills","illegal pills"))result.Add(DetectionSpecialty.Narcotics);
             }
-            return DetectionSpecialty.General;
+            return result;
         }
-        private static bool IsNonOdorReplicaOrDocument(string item)=>ContainsAny(item,"toy gun","toy pistol","toy rifle","water gun","airsoft","paintball","replica firearm","fake gun","firearm permit","weapon permit","gun license","explosives manual","bomb disposal manual");
+        private static bool IsNonOdorReplicaOrDocument(string item)=>ContainsAny(item,"toy gun","toy pistol","toy rifle","water gun","airsoft","paintball","replica firearm","replica weapon","fake gun","prop gun","firearm permit","weapon permit","gun license","concealed carry permit","explosives manual","bomb disposal manual","fireworks permit","prescription receipt","empty holster");
         private static string Flatten(object value,int depth,HashSet<object> visited){if(value==null||depth>3)return "";Type type=value.GetType();if(type.IsPrimitive||value is string||value is decimal||type.IsEnum)return Convert.ToString(value);if(!type.IsValueType&&!visited.Add(value))return "";var sb=new StringBuilder();if(value is IEnumerable enumerable){int count=0;foreach(var item in enumerable){if(count++>=40)break;sb.Append(' ').Append(Flatten(item,depth+1,visited));}return sb.ToString();}foreach(var property in type.GetProperties(BindingFlags.Public|BindingFlags.Instance).Where(p=>p.CanRead&&p.GetIndexParameters().Length==0).Take(40)){try{sb.Append(' ').Append(property.Name).Append('=').Append(Flatten(property.GetValue(value,null),depth+1,visited));}catch{}}return sb.ToString();}
         private static string TrimDetail(string value){value=(value??"").Trim();return value.Length<=180?value:value.Substring(0,180);}
         private static bool ContainsAny(string value,params string[] terms)=>terms.Any(term=>value.IndexOf(term,StringComparison.OrdinalIgnoreCase)>=0);

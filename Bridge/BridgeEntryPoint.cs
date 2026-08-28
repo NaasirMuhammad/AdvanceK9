@@ -206,7 +206,9 @@ namespace AdvancedK9.LSPDFRBridge
             if(value==null||depth>2)return;if(value is string){AddItemName(names,(string)value);return;}
             if(value is IEnumerable enumerable){int count=0;foreach(object item in enumerable){if(count++>=40)break;CollectSearchItemNames(item,names,depth+1);}return;}
             Type type=value.GetType();
-            bool found=false;foreach(string member in new[]{"ItemName","DisplayName","Name","Label","Text"})
+            // PR 1.0.0.5 exposes each generated SearchItem's description in the
+            // public Value field. Keep the aliases for compatible PR releases.
+            bool found=false;foreach(string member in new[]{"Value","ItemName","DisplayName","Name","Label","Text"})
             {
                 object candidate=ReadInstanceMember(value,member);if(candidate is string&&!string.IsNullOrWhiteSpace((string)candidate)){AddItemName(names,(string)candidate);found=true;break;}
             }
