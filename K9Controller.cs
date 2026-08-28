@@ -450,9 +450,9 @@ namespace AdvancedK9
             try
             {
                 _hudCommand=CommandLabel(command);
-                if(_state==K9State.Leashed&&(command==K9Command.Apprehend||command==K9Command.Fetch)){DeleteLeashRope();_state=K9State.Following;ActionNotification("~b~Leash automatically released for K9 deployment.");}
+                if(_leashRope>=0&&(command==K9Command.Apprehend||command==K9Command.Fetch)){DeleteLeashRope();_state=K9State.Following;ActionNotification("~b~Leash automatically released for K9 deployment.");}
                 _workingLeashed=_leashRope>=0&&(command==K9Command.SearchArea||command==K9Command.SearchBuilding||command==K9Command.SearchVehicle||command==K9Command.SearchNarcotics||command==K9Command.SearchExplosives||command==K9Command.SearchWeapons||command==K9Command.Track||command==K9Command.FindTrail);
-                if(_state==K9State.Leashed&&(command==K9Command.Training||command==K9Command.TrainNarcotics||command==K9Command.TrainExplosives||command==K9Command.TrainWeapons)){Game.DisplayNotification("~y~Remove the leash before traveling to the academy.");return;}
+                if(_leashRope>=0&&(command==K9Command.Training||command==K9Command.TrainNarcotics||command==K9Command.TrainExplosives||command==K9Command.TrainWeapons)){Game.DisplayNotification("~y~Remove the leash before traveling to the academy.");return;}
                 if(_profile.Health<=25 && command!=K9Command.Inspect && command!=K9Command.FirstAid && command!=K9Command.SpawnDismiss){Game.DisplayNotification("~r~K9 REMOVED FROM SERVICE~s~~n~Serious injury requires veterinary treatment. Earned certifications remain saved.");return;}
                 if (RequiresTrustCheck(command) && !TrustAllowsCommand(command)) return;
                 switch (command)
@@ -524,6 +524,9 @@ namespace AdvancedK9
                 Game.DisplayNotification("~y~K9 trust is too low for safe apprehension training.~s~~n~Pet, feed and train together first.");
                 return false;
             }
+            // A handler holding the leash has direct physical control. Routine
+            // leashed field commands must not be discarded by random hesitation.
+            if(_leashRope>=0)return true;
             bool trained=_profile.IsTrainedFor(command);bool fit=_profile.Health>=70&&_profile.Stamina>=35&&_profile.Food>=20&&_profile.Water>=20;
             if(trained&&fit&&_trust.Level>=90&&_profile.Confidence>=85)return true;
             int delay=trained?Math.Max(80,_trust.ResponseDelay/2):_trust.ResponseDelay+250;GameFiber.Wait(delay);
@@ -1070,10 +1073,10 @@ namespace AdvancedK9
                         _trailLost=true;_dog.Tasks.Clear();Sit();Game.DisplayNotification("~o~K9 lost the recorded scent trail.~s~~n~Move to the last-known area and command REACQUIRE TRAIL.");K9IncidentLog.Write(_profile.Name,"Track","Trail lost",_dog.Position);return;
                     }
                 }
-                var destination=routeIndex<route.Count?route[routeIndex++]:target.Position;
+                var destination=routeIndex<route.Count?route[routeIndex]:target.Position;
                 float dx = destination.X - _dog.Position.X, dy = destination.Y - _dog.Position.Y;
                 float distance = (float)Math.Sqrt(dx * dx + dy * dy);
-                float step = Math.Min(28f, Math.Max(12f, distance - 2f));
+                float step = _workingLeashed?Math.Min(4.5f,Math.Max(1.5f,distance-1f)):Math.Min(28f, Math.Max(12f, distance - 2f));
                 float inv = distance > .01f ? 1f / distance : 0f;
                 float scentJitter = (float)(_random.NextDouble() * 1.4 - .7);
                 var waypoint = new Vector3(_dog.Position.X + dx * inv * step - dy * inv * scentJitter,
@@ -1086,7 +1089,18 @@ namespace AdvancedK9
                     GameFiber.Wait(150);
                     nextScentCheck=Game.GameTime+(uint)_random.Next(18000,28001);
                 }
-                _dog.Tasks.FollowNavigationMeshToPosition(waypoint,target.Heading,rain>.35f?2.8f:4.2f).WaitForCompletion(8500);
+                if(_workingLeashed)
+                {
+                    var handler=Game.LocalPlayer.Character;float hx=destination.X-handler.Position.X,hy=destination.Y-handler.Position.Y;float hd=(float)Math.Sqrt(hx*hx+hy*hy);if(hd>4.5f){float hi=4.5f/hd;waypoint=new Vector3(handler.Position.X+hx*hi,handler.Position.Y+hy*hi,destination.Z);}
+                    _dog.Tasks.FollowNavigationMeshToPosition(waypoint,target.Heading,rain>.35f?2.2f:3.0f).WaitForCompletion(2400);
+                    if(_dog.DistanceTo(destination)<5f&&routeIndex<route.Count)routeIndex++;
+                    else Game.DisplaySubtitle("~b~Follow the leash~s~ — "+_profile.Name+" is holding the scent line.",900);
+                }
+                else
+                {
+                    _dog.Tasks.FollowNavigationMeshToPosition(waypoint,target.Heading,rain>.35f?2.8f:4.2f).WaitForCompletion(8500);
+                    if(routeIndex<route.Count)routeIndex++;
+                }
                 _activeTrackDistance+=previous.DistanceTo(_dog.Position);previous=_dog.Position;
                 _profile.UseStamina(1);
                 GameFiber.Yield();
@@ -1236,7 +1250,9 @@ namespace AdvancedK9
             var collar=NativeFunction.Natives.GET_PED_BONE_COORDS<Vector3>(_dog,39317,0f,.03f,0f);
             NativeFunction.Natives.ROPE_LOAD_TEXTURES();GameFiber.Wait(100);
             _leashRope=NativeFunction.Natives.ADD_ROPE<int>(hand.X,hand.Y,hand.Z,0f,0f,0f,6.5f,4,6.5f,.35f,0f,false,false,true,1f,false,0);
-            if(_leashRope>=0){NativeFunction.Natives.ATTACH_ENTITIES_TO_ROPE(_leashRope,handler,_dog,hand.X,hand.Y,hand.Z,collar.X,collar.Y,collar.Z,6.0f,false,false,0,0);PinLeashEndpoints();}
+            // Keep a visual hand-to-collar leash without entity-to-entity rope
+            // physics, which can freeze animal navigation tasks.
+            if(_leashRope>=0)PinLeashEndpoints();
         }
 
         private void PinLeashEndpoints(){if(_leashRope<0||!DogEntityExists())return;try{var handler=Game.LocalPlayer.Character;var hand=NativeFunction.Natives.GET_PED_BONE_COORDS<Vector3>(handler,18905,-.04f,.02f,0f);var collar=NativeFunction.Natives.GET_PED_BONE_COORDS<Vector3>(_dog,39317,0f,.03f,0f);NativeFunction.Natives.PIN_ROPE_VERTEX(_leashRope,0,hand.X,hand.Y,hand.Z);int vertices=NativeFunction.Natives.GET_ROPE_VERTEX_COUNT<int>(_leashRope);if(vertices>1)NativeFunction.Natives.PIN_ROPE_VERTEX(_leashRope,vertices-1,collar.X,collar.Y,collar.Z);}catch{}}
@@ -1284,7 +1300,9 @@ namespace AdvancedK9
             if (_state == K9State.Leashed)
             {
                 var officer = Game.LocalPlayer.Character;
-                if(Game.GameTime>=_nextLeashFollow){_nextLeashFollow=Game.GameTime+900;if(_dog.DistanceTo(officer)>1.05f)NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(_dog,officer,-.55f,-.85f,0f,1.9f,-1,1.15f,true);}
+                // Do not restart the follow task every few frames: repeated task
+                // replacement prevented the animal from ever beginning its stride.
+                if(Game.GameTime>=_nextLeashFollow&&_dog.DistanceTo(officer)>2.25f){_nextLeashFollow=Game.GameTime+2500;NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(_dog,officer,-.55f,-.85f,0f,2.2f,-1,1.15f,true);}
                 if(_dog.DistanceTo(officer)>3.2f)_dog.Tasks.FollowNavigationMeshToPosition(officer.GetOffsetPosition(new Vector3(-.55f,-.85f,0f)),officer.Heading,2.4f);
             }
             if(_leashRope>=0)PinLeashEndpoints();
