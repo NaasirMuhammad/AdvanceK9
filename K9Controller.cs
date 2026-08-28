@@ -244,6 +244,14 @@ namespace AdvancedK9
             _pushToTalkHeld = down;
         }
 
+        private K9Command? PollAcademyVoiceCommand()
+        {
+            HandlePushToTalk();
+            _voice?.Tick();
+            K9Command command;
+            return _voiceQueue.TryDequeue(out command)?command:(K9Command?)null;
+        }
+
         private void DrainVoice(bool dogExists)
         {
             K9Command command;
@@ -528,7 +536,7 @@ namespace AdvancedK9
             // leashed field commands must not be discarded by random hesitation.
             if(_leashRope>=0)return true;
             bool trained=_profile.IsTrainedFor(command);bool fit=_profile.Health>=70&&_profile.Stamina>=35&&_profile.Food>=20&&_profile.Water>=20;
-            if(trained&&fit&&_trust.Level>=90&&_profile.Confidence>=85)return true;
+            if(trained&&fit&&_trust.Level>=90&&_profile.Confidence>=80)return true;
             int delay=trained?Math.Max(80,_trust.ResponseDelay/2):_trust.ResponseDelay+250;GameFiber.Wait(delay);
             double bond=(_trust.Level/100.0*.55)+(_profile.Confidence/100.0*.35)+(trained?.10:0);
             double condition=Math.Max(.35,Math.Min(1.0,(_profile.Health/100.0)*(.65+.35*_profile.Stamina/100.0)*_profile.NeedsFactor));
@@ -1363,7 +1371,7 @@ namespace AdvancedK9
                 handler.Position=academyGround;handler.Heading=60f;_dog.Position=handler.GetOffsetPosition(new Vector3(-1.5f,-2f,0f));_dog.Heading=handler.Heading;
                 NativeFunction.Natives.DO_SCREEN_FADE_IN(700);GameFiber.Wait(800);
                 Game.DisplayNotification("~b~Arrived at the Advanced K9 training ground.~s~~n~Level "+level+"/5 — "+_profile.CurrentTrainingName+"~n~XP "+_profile.TrainingLevelProgress+"/"+_profile.CurrentTrainingRequirement+" • Confidence "+_profile.Confidence+"/100");
-                var academy=new AcademySession(_dog,_profile.Name);
+                var academy=new AcademySession(_dog,_profile.Name,PollAcademyVoiceCommand);
                 int performance=academy.Run(level,Sit,LieDown,Follow),xp=CalculateTrainingXp(level,performance);
                 bool completed=_profile.ApplyTrainingProgress(level,xp);
                 _trust.Change(xp>0?Math.Max(1,xp/10):0,"academy training");
@@ -1388,7 +1396,7 @@ namespace AdvancedK9
                 handler.Position=new Vector3(-1018.4f,-3003.1f,13.95f);handler.Heading=60f;_dog.Position=handler.GetOffsetPosition(new Vector3(-1.5f,-2f,0f));_dog.Heading=handler.Heading;
                 NativeFunction.Natives.DO_SCREEN_FADE_IN(700);GameFiber.Wait(800);
                 Game.DisplayNotification("~b~Specialty academy:~s~ "+SpecialtyLabel(specialty)+" detection • "+_profile.SpecialtyProgress(specialty)+"/250 XP.");
-                var academy=new AcademySession(_dog,_profile.Name);int performance=academy.RunSpecialty(specialty,Sit,Follow);int xp=CalculateSpecialtyXp(performance);
+                var academy=new AcademySession(_dog,_profile.Name,PollAcademyVoiceCommand);int performance=academy.RunSpecialty(specialty,Sit,Follow);int xp=CalculateSpecialtyXp(performance);
                 bool completed=_profile.ApplySpecialtyProgress(specialty,xp);_trust.Change(xp>0?Math.Max(1,xp/12):0,"specialty detection training");
                 if(completed)Game.DisplayNotification("~g~"+SpecialtyLabel(specialty).ToUpperInvariant()+" DETECTION CERTIFIED — 250 XP~s~~n~Other detection specialties remain independently trainable.");
                 else Game.DisplayNotification("~b~Specialty saved:~s~ +"+xp+" XP from "+performance+"% performance~n~"+SpecialtyLabel(specialty)+" "+_profile.SpecialtyProgress(specialty)+"/250 XP.");
