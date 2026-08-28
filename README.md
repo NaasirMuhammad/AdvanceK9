@@ -1,10 +1,10 @@
-# Advanced K9 v0.22.10-beta for LSPDFR
+# Advanced K9 v0.22.11-beta for LSPDFR
 
-AdvancedK9 v0.22.10-beta is a persistent LSPDFR/RAGE Plugin Hook police-dog partner with push-to-talk voice control, per-dog progression, user-positioned exterior station kennels and a compact Glass Tactical HUD with silent negative vehicle searches and attached result alerts. All published builds are beta builds while gameplay and model compatibility continue to be tested.
+AdvancedK9 v0.22.11-beta is a persistent LSPDFR/RAGE Plugin Hook police-dog partner with push-to-talk voice control, per-dog progression, user-positioned exterior station kennels and a compact Glass Tactical HUD with silent negative vehicle searches and attached result alerts. All published builds are beta builds while gameplay and model compatibility continue to be tested.
 
 ## Glass Tactical HUD
 
-The default HUD is one compact lower-right card. Open the kennel/profile menu, then choose **HUD & Display** to move or resize it, adjust opacity, preview searches and alerts, switch distance units, reset its position, or independently hide any displayed field. Inactive, kenneled and vehicle-secured states can collapse automatically.
+The default HUD is one compact lower-right card. Open the kennel/profile menu, then choose **HUD & Display** to move it to any screen edge, resize it, adjust opacity, choose a circular or square portrait frame, preview searches and alerts, switch distance units, reset its position, or independently hide any displayed field. Inactive, kenneled and vehicle-secured states can collapse automatically.
 
 The release includes original 256×256 portraits for every built-in breed plus separate German Shepherd, Belgian Malinois and Doberman coat choices. Portraits are cached and never loaded every frame. Selection follows custom `PortraitFile`, profile name, exact breed/coat/vest/texture, coat, model, breed, then the generic fallback. For a replacement or add-on dog, set `PortraitFile=` to a PNG such as `Plugins\LSPDFR\AdvancedK9\Portraits\Rex.png`, or use a filename such as `german_shepherd_coat_1_vest_2_texture_0.png`. Missing or invalid images cannot stop the plugin.
 
@@ -30,9 +30,9 @@ The compiled release includes AdvancedK9, its configuration, and the MIT-license
 - Track a nearby suspect or missing person for up to two minutes
 - Non-lethal apprehension with automatic recall, a configurable health floor and hands-up surrender
 - Fetch minigame
-- Dedicated off-street K9 training ground with five persistent gated levels; every level must reach 100% before the next unlocks
+- Dedicated off-street K9 academy with persistent 100/250/450/800/1,200 XP level requirements, randomized scenarios and instructional handler prompts
 - Certification-specific OB, AGI, DET, TRK and APP courses with five scored exercises per level
-- Independent optional narcotics (NAR), explosives/bomb (BOMB), and weapons/firearm (WPN) detection specialties, each with its own 0–100 progress and five-station academy setup
+- Independent optional narcotics (NAR), explosives/bomb (BOMB), and weapons/firearm (WPN) detection specialties, each requiring 250 XP
 - Separate field and voice commands for narcotics, explosives and weapons searches; a dog may hold any combination or all specialty certifications
 - Weapon-aim target identification before apprehension, with officer rejection and automatic non-lethal recall
 - Push-to-talk voice recognition using OpenAI or Groq transcription; the microphone opens only while `V` is held
@@ -227,7 +227,9 @@ Inside **HUD & Display**, enable **Live HUD drag** to move the Glass Tactical ca
 
 ## Trust and handler safety
 
-Trust persists in `Plugins\LSPDFR\AdvancedK9\trust.dat`. Petting, feeding, successful searches/tracks, controlled apprehensions and academy work raise it. Low trust causes slower responses, hesitation and less reliable indications; safe apprehension is locked below 25. At high trust the dog responds quickly and reliably.
+Handler bond persists in `Plugins\LSPDFR\AdvancedK9\trust.dat`, while confidence persists with the individual K9 profile. Petting, feeding and safe teamwork build bond; successful progressive training builds confidence. An Elite Bond, confident, properly certified and physically fit K9 responds immediately and reliably. Hesitation is reserved for commands still being learned, weak bond/confidence, exhaustion, hunger, dehydration or injury. Safe apprehension remains locked below 25 bond.
+
+Academy Levels 1–5 require 100, 250, 450, 800 and 1,200 XP respectively. Sessions award 0–10 XP at Levels 1–2, 0–20 XP at Levels 3–4 and 0–30 XP at Level 5, limited by exercise performance. Narcotics, explosives and weapons certifications each require 250 XP. Drill order, layouts, scent placement, trails and tactical suspect positions vary between sessions, and prompts teach the handler the corresponding verbal command and handling sequence.
 
 The dog uses the handler's friendly relationship group and has friendly attacks disabled. A continuous safety interlock also checks for any invalid combat state involving the handler, clears it immediately and recalls the dog. Trust never overrides this protection.
 

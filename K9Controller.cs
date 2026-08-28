@@ -302,8 +302,8 @@ namespace AdvancedK9
 
         private static string OnOff(bool value)=>value?"ON":"OFF";
         private void OpenHudConfiguration(){_menuMode="hud_config";RefreshHudMenu();}
-        private void RefreshHudMenu(){_menu.Update("K9 HUD — GLASS TACTICAL",new[]{"HUD: "+(_profile.HudMode==0?"OFF":_profile.HudMode==1?"COMPACT":"FULL"),"Portrait: "+OnOff(_profile.HudShowPortrait),"State: "+OnOff(_profile.HudShowState),"Health: "+OnOff(_profile.HudShowHealth),"Stamina: "+OnOff(_profile.HudShowStamina),"Distance: "+OnOff(_profile.HudShowDistance),"Current command: "+OnOff(_profile.HudShowCommand),"Behavior: "+OnOff(_profile.HudShowBehavior),"Automatic collapse: "+OnOff(_profile.HudAutoCollapse),"Search progress: "+OnOff(_profile.HudSearchProgress),"Distance units: "+(_profile.HudMetricDistance?"METRIC":"IMPERIAL"),"Food: "+OnOff(_profile.HudShowFood),"Water: "+OnOff(_profile.HudShowWater),"Certifications: "+OnOff(_profile.HudShowCertifications),"Trust: "+OnOff(_profile.HudShowTrust),"Training: "+OnOff(_profile.HudShowTraining),"Injury: "+OnOff(_profile.HudShowInjury),"Voice: "+OnOff(_profile.HudShowVoice),"Move left","Move right","Move up","Move down","Scale: "+_profile.HudScale.ToString("0.00"),"Opacity: "+_profile.HudOpacity.ToString("0.00"),"Preview search: "+OnOff(_hudPreviewSearch),"Preview alert: "+OnOff(_hudPreviewAlert),"Live HUD drag: "+OnOff(_hudDragMode),"Reset HUD position and size","← Back to K9 Profile"});}
-        private void HandleHudMenu(int index){if(index==0)_profile.CycleHudMode();else if(index==1)_profile.ToggleHudOption(1);else if(index>=2&&index<=4)_profile.ToggleHudField(index-2);else if(index>=5&&index<=7)_profile.ToggleHudOption(index-3);else if(index==8)_profile.ToggleHudOption(0);else if(index==9)_profile.ToggleHudOption(5);else if(index==10)_profile.ToggleHudOption(6);else if(index>=11&&index<=17)_profile.ToggleHudField(index-8);else if(index==18)_profile.MoveHud(-.01f,0);else if(index==19)_profile.MoveHud(.01f,0);else if(index==20)_profile.MoveHud(0,-.01f);else if(index==21)_profile.MoveHud(0,.01f);else if(index==24)_hudPreviewSearch=!_hudPreviewSearch;else if(index==25)_hudPreviewAlert=!_hudPreviewAlert;else if(index==26){_hudDragMode=!_hudDragMode;_editorMouseHeld=false;Game.DisplaySubtitle("~b~HUD drag~s~: hold left mouse and move, or use W/A/S/D. Q/E resizes.",2500);}else if(index==27)_profile.ResetHud();else if(index==28){_hudDragMode=false;_profile.SaveHudLayout();_hudPreviewSearch=false;_hudPreviewAlert=false;_menuMode="profile";RefreshProfileMenu();return;}RefreshHudMenu();}
+        private void RefreshHudMenu(){_menu.Update("K9 HUD — GLASS TACTICAL",new[]{"HUD: "+(_profile.HudMode==0?"OFF":_profile.HudMode==1?"COMPACT":"FULL"),"Portrait: "+OnOff(_profile.HudShowPortrait),"State: "+OnOff(_profile.HudShowState),"Health: "+OnOff(_profile.HudShowHealth),"Stamina: "+OnOff(_profile.HudShowStamina),"Distance: "+OnOff(_profile.HudShowDistance),"Current command: "+OnOff(_profile.HudShowCommand),"Behavior: "+OnOff(_profile.HudShowBehavior),"Automatic collapse: "+OnOff(_profile.HudAutoCollapse),"Search progress: "+OnOff(_profile.HudSearchProgress),"Distance units: "+(_profile.HudMetricDistance?"METRIC":"IMPERIAL"),"Food: "+OnOff(_profile.HudShowFood),"Water: "+OnOff(_profile.HudShowWater),"Certifications: "+OnOff(_profile.HudShowCertifications),"Trust: "+OnOff(_profile.HudShowTrust),"Training: "+OnOff(_profile.HudShowTraining),"Injury: "+OnOff(_profile.HudShowInjury),"Voice: "+OnOff(_profile.HudShowVoice),"Move left","Move right","Move up","Move down","Scale: "+_profile.HudScale.ToString("0.00"),"Opacity: "+_profile.HudOpacity.ToString("0.00"),"Preview search: "+OnOff(_hudPreviewSearch),"Preview alert: "+OnOff(_hudPreviewAlert),"Portrait frame: "+(_profile.HudPortraitShape==0?"CIRCLE":"SQUARE"),"Live HUD drag: "+OnOff(_hudDragMode),"Reset HUD position and size","← Back to K9 Profile"});}
+        private void HandleHudMenu(int index){if(index==0)_profile.CycleHudMode();else if(index==1)_profile.ToggleHudOption(1);else if(index>=2&&index<=4)_profile.ToggleHudField(index-2);else if(index>=5&&index<=7)_profile.ToggleHudOption(index-3);else if(index==8)_profile.ToggleHudOption(0);else if(index==9)_profile.ToggleHudOption(5);else if(index==10)_profile.ToggleHudOption(6);else if(index>=11&&index<=17)_profile.ToggleHudField(index-8);else if(index==18)_profile.MoveHud(-.01f,0);else if(index==19)_profile.MoveHud(.01f,0);else if(index==20)_profile.MoveHud(0,-.01f);else if(index==21)_profile.MoveHud(0,.01f);else if(index==24)_hudPreviewSearch=!_hudPreviewSearch;else if(index==25)_hudPreviewAlert=!_hudPreviewAlert;else if(index==26)_profile.TogglePortraitShape();else if(index==27){_hudDragMode=!_hudDragMode;_editorMouseHeld=false;Game.DisplaySubtitle("~b~HUD drag~s~: hold left mouse and move, or use W/A/S/D. Q/E resizes.",2500);}else if(index==28)_profile.ResetHud();else if(index==29){_hudDragMode=false;_profile.SaveHudLayout();_hudPreviewSearch=false;_hudPreviewAlert=false;_menuMode="profile";RefreshProfileMenu();return;}RefreshHudMenu();}
         private void AdjustHudMenu(int index,int delta){if(index==18||index==19)_profile.MoveHud(delta*.005f,0);else if(index==20||index==21)_profile.MoveHud(0,delta*.005f);else if(index==22)_profile.AdjustHudScale(delta*.05f);else if(index==23)_profile.AdjustHudOpacity(delta*.05f);else return;RefreshHudMenu();}
 
         private void OpenKennelLocationMenu()
@@ -512,8 +512,7 @@ namespace AdvancedK9
 
         private bool RequiresTrustCheck(K9Command command)
         {
-            return command == K9Command.Sit || command == K9Command.LieDown || command == K9Command.SearchArea || command==K9Command.SearchBuilding || command == K9Command.SearchVehicle || command==K9Command.SearchNarcotics || command==K9Command.SearchExplosives || command==K9Command.SearchWeapons ||
-                   command == K9Command.Track || command==K9Command.FindTrail || command == K9Command.Fetch;
+            return command==K9Command.Follow||command==K9Command.Heel||command==K9Command.Sit||command==K9Command.LieDown||command==K9Command.Stay||command==K9Command.Recall||command==K9Command.SearchArea||command==K9Command.SearchBuilding||command==K9Command.SearchVehicle||command==K9Command.SearchNarcotics||command==K9Command.SearchExplosives||command==K9Command.SearchWeapons||command==K9Command.Track||command==K9Command.FindTrail||command==K9Command.Fetch||command==K9Command.Apprehend;
         }
 
         private bool TrustAllowsCommand(K9Command command)
@@ -523,9 +522,13 @@ namespace AdvancedK9
                 Game.DisplayNotification("~y~K9 trust is too low for safe apprehension training.~s~~n~Pet, feed and train together first.");
                 return false;
             }
-            GameFiber.Wait(_trust.ResponseDelay);
-            double condition=Math.Max(.25,Math.Min(1.0,(_profile.Health/100.0)*(.55+.45*_profile.Stamina/100.0)*_profile.NeedsFactor)); if (_random.NextDouble() <= _trust.ObedienceChance*condition) return true;
-            Game.DisplayNotification("~o~" + _profile.Name + " hesitated.~s~ Trust " + _trust.Level + "/100 — " + _trust.Rank);
+            bool trained=_profile.IsTrainedFor(command);bool fit=_profile.Health>=70&&_profile.Stamina>=35&&_profile.Food>=20&&_profile.Water>=20;
+            if(trained&&fit&&_trust.Level>=90&&_profile.Confidence>=85)return true;
+            int delay=trained?Math.Max(80,_trust.ResponseDelay/2):_trust.ResponseDelay+250;GameFiber.Wait(delay);
+            double bond=(_trust.Level/100.0*.55)+(_profile.Confidence/100.0*.35)+(trained?.10:0);
+            double condition=Math.Max(.35,Math.Min(1.0,(_profile.Health/100.0)*(.65+.35*_profile.Stamina/100.0)*_profile.NeedsFactor));
+            double chance=Math.Max(.25,Math.Min(trained?.99:.88,bond*condition));if(_random.NextDouble()<=chance)return true;
+            Game.DisplayNotification("~o~"+_profile.Name+" hesitated.~s~ Bond "+_trust.Level+"/100 • Confidence "+_profile.Confidence+"/100"+(trained?"":"~n~This command is still being learned in training."));
             if (DogExists()) NativeFunction.Natives.TASK_TURN_PED_TO_FACE_ENTITY(_dog, Game.LocalPlayer.Character, 900);
             return false;
         }
@@ -770,7 +773,7 @@ namespace AdvancedK9
 
         private void ReleaseVehicleSeat(){CloseSeatCalibrationDoor();if(_dog!=null&&_dog.Exists()){if(_dogSeatAttached)NativeFunction.Natives.DETACH_ENTITY(_dog,true,true);NativeFunction.Natives.SET_ENTITY_COLLISION(_dog,true,true);NativeFunction.Natives.SET_ENTITY_INVINCIBLE(_dog,false);}_dogSeatAttached=false;_dogVehicle=null;}
 
-        private void Inspect(){Game.DisplayNotification("~b~K9 "+_profile.Name+" — FIELD INSPECTION~s~~n~Health: "+_profile.Health+"%  Stamina: "+_profile.Stamina+"%~n~Food: "+_profile.Food+"%  Water: "+_profile.Water+"%~n~Training: Level "+_profile.TrainingLevel+"/5 "+_profile.TrainingLevelProgress+"%~n~~g~Completed certifications:~s~ "+Certifications());Game.DisplayNotification("~b~DUTY EQUIPMENT~s~~n~Meals "+_profile.FoodMeals+"  Water "+_profile.WaterBottles+"  First aid "+_profile.FirstAidKits+"~n~Scent bags "+_profile.ScentBags+"  Treats "+_profile.Treats+"~n~~b~Integration:~s~ "+_pr.ModeLabel);}
+        private void Inspect(){Game.DisplayNotification("~b~K9 "+_profile.Name+" — FIELD INSPECTION~s~~n~Health: "+_profile.Health+"%  Stamina: "+_profile.Stamina+"%~n~Bond: "+_trust.Level+"/100 ("+_trust.Rank+")  Confidence: "+_profile.Confidence+"/100~n~Training: Level "+_profile.TrainingLevel+"/5 • "+_profile.TrainingLevelProgress+"/"+_profile.CurrentTrainingRequirement+" XP~n~~g~Completed certifications:~s~ "+Certifications());Game.DisplayNotification("~b~DUTY EQUIPMENT~s~~n~Meals "+_profile.FoodMeals+"  Water "+_profile.WaterBottles+"  First aid "+_profile.FirstAidKits+"~n~Scent bags "+_profile.ScentBags+"  Treats "+_profile.Treats+"~n~~b~Integration:~s~ "+_pr.ModeLabel);}
         private string Certifications(){string s="";if(_profile.ObedienceCertified)s+="OB ";if(_profile.AgilityCertified)s+="AGI ";if(_profile.DetectionCertified)s+="DET ";if(_profile.NarcoticsCertified)s+="NAR ";if(_profile.ExplosivesCertified)s+="BOMB ";if(_profile.WeaponsCertified)s+="WPN ";if(_profile.TrackingCertified)s+="TRK ";if(_profile.ApprehensionCertified)s+="APP ";return s.Length==0?"In training":s.Trim();}
         private void FirstAid(){if(!DogEntityExists()){Game.DisplayNotification("~y~No deployed K9 is available for treatment.");return;}if(!_downed&&_profile.Health>=95){Game.DisplayNotification("~g~No field treatment required.");return;}if(!_profile.UseFirstAid()){Game.DisplayNotification("~r~No first-aid kits. Restock at the patrol vehicle.");return;}if(_dog.IsDead)NativeFunction.Natives.RESURRECT_PED(_dog);_dog.IsInvincible=false;int restored=Math.Max(35,_profile.Health);_profile.SetInjury("Serious — stabilized; veterinary treatment required",restored);_dog.Health=Math.Max(1,(int)(_dog.MaxHealth*restored/100f));_downed=false;_state=K9State.Injured;if(_blip!=null&&_blip.Exists()){_blip.Color=Color.DodgerBlue;_blip.Name="K9 "+_profile.Name;}Sit();GameFiber.Wait(1800);_profile.ChangeTrust(2);K9IncidentLog.Write(_profile.Name,"Medical","Emergency field revival and stabilization",_dog.Position);Game.LogTrivial("AdvancedK9: downed K9 revived by field first aid at "+_dog.Position+".");Game.DisplayNotification("~g~K9 stabilized and revived.~s~~n~Return to the veterinarian before resuming duty.");}
 
@@ -1185,8 +1188,10 @@ namespace AdvancedK9
             Sit();
             var handler=Game.LocalPlayer.Character;NativeFunction.Natives.TASK_TURN_PED_TO_FACE_ENTITY(handler,_dog,900);NativeFunction.Natives.TASK_TURN_PED_TO_FACE_ENTITY(_dog,handler,900);GameFiber.Wait(900);
             handler.Tasks.PlayAnimation("amb@medic@standing@kneel@base","base",4f,AnimationFlags.Loop);
-            _dog.Tasks.PlayAnimation("creatures@rottweiler@tricks@","petting_franklin",4f,AnimationFlags.Loop);GameFiber.Wait(4200);
-            handler.Tasks.Clear();Sit();
+            // Never play a human-authored petting clip on an animal skeleton.
+            // The K9 remains in its native seated idle while the handler kneels.
+            PlayDogAnimation("creatures@rottweiler@amb@world_dog_sitting@base","base",4200,1);
+            handler.Tasks.ClearImmediately();Sit();
             ActionNotification("~b~" + _profile.Name + "~s~ enjoyed that.");
             _trust.Change(2, "handler bonding");
             _profile.ChangeTrust(2);_profile.Recover(3);
@@ -1294,7 +1299,7 @@ namespace AdvancedK9
             string alert=_hudPreviewAlert?"NARCOTICS":Game.GameTime<_hudAlertUntil?_hudAlert:"";
             float distance=DogEntityExists()?_dog.DistanceTo(Game.LocalPlayer.Character):0f;
             string displayState=_downed?"DOWNED":_deployed?(hudSearching?"SEARCHING":_state.ToString()):"KENNELED";
-            _hud.Update(new GlassTacticalHud.Snapshot{Visible=_profile.HudMode!=0,Collapsed=collapsed,ShowPortrait=_profile.HudShowPortrait,ShowState=_profile.HudShowState,ShowHealth=_profile.HudShowHealth,ShowStamina=_profile.HudShowStamina,ShowDistance=_profile.HudShowDistance&&DogEntityExists(),ShowCommand=_profile.HudShowCommand,ShowBehavior=_profile.HudShowBehavior,ShowSearchProgress=_profile.HudSearchProgress,X=_profile.HudX,Y=_profile.HudY,Scale=_profile.HudScale,Opacity=_profile.HudOpacity,Distance=distance,Health=_profile.Health,Stamina=_profile.Stamina,SearchProgress=searchProgress,Coat=_profile.CoatVariation,Vest=_profile.VestIndex,VestTexture=_profile.VestTexture,Name=_profile.Name,State=displayState,Command=_hudCommand,Behavior=hudSearching?"SEARCHING":HudBehavior(),SearchLabel=search,Alert=alert,PortraitFile=_profile.PortraitFile,Breed=_profile.Breed,Model=_profile.ModelName,AppearanceKey=_profile.CoatVariation+":"+_profile.VestIndex+":"+_profile.VestTexture,Metric=_profile.HudMetricDistance});
+            _hud.Update(new GlassTacticalHud.Snapshot{Visible=_profile.HudMode!=0,Collapsed=collapsed,ShowPortrait=_profile.HudShowPortrait,CircularPortrait=_profile.HudPortraitShape==0,ShowState=_profile.HudShowState,ShowHealth=_profile.HudShowHealth,ShowStamina=_profile.HudShowStamina,ShowDistance=_profile.HudShowDistance&&DogEntityExists(),ShowCommand=_profile.HudShowCommand,ShowBehavior=_profile.HudShowBehavior,ShowSearchProgress=_profile.HudSearchProgress,X=_profile.HudX,Y=_profile.HudY,Scale=_profile.HudScale,Opacity=_profile.HudOpacity,Distance=distance,Health=_profile.Health,Stamina=_profile.Stamina,SearchProgress=searchProgress,Coat=_profile.CoatVariation,Vest=_profile.VestIndex,VestTexture=_profile.VestTexture,Name=_profile.Name,State=displayState,Command=_hudCommand,Behavior=hudSearching?"SEARCHING":HudBehavior(),SearchLabel=search,Alert=alert,PortraitFile=_profile.PortraitFile,Breed=_profile.Breed,Model=_profile.ModelName,AppearanceKey=_profile.CoatVariation+":"+_profile.VestIndex+":"+_profile.VestTexture,Metric=_profile.HudMetricDistance});
             if(_camera.Active&&DogExists()){float d=_dog.DistanceTo(Game.LocalPlayer.Character);NativeFunction.Natives.DRAW_RECT(.5f,.91f,.52f,.09f,0,0,0,180);DrawText("K9 CAM  GPS "+_dog.Position.X.ToString("0")+","+_dog.Position.Y.ToString("0")+"  HDG "+HeadingCardinal(_dog.Heading)+"  HANDLER "+d.ToString("0.0")+"m",.25f,.875f,.31f);DrawText("STATE "+_state+"  HP "+_profile.Health+"  STA "+_profile.Stamina+"  H2O "+_profile.Water,.25f,.91f,.27f);}
         }
         private string HudBehavior(){if(_downed)return "NEEDS FIRST AID";if(!_deployed)return "INACTIVE";switch(_state){case K9State.Following:return "FOLLOWING";case K9State.Heeling:return "AT HEEL";case K9State.Searching:return "SEARCHING";case K9State.Tracking:return "TRACKING";case K9State.Apprehending:return "DEPLOYED";case K9State.InVehicle:return "SECURED";case K9State.Leashed:return "LEASHED";default:return _state.ToString().ToUpperInvariant();}}
@@ -1331,13 +1336,13 @@ namespace AdvancedK9
                 var academyGround=new Vector3(-1018.4f,-3003.1f,13.95f);
                 handler.Position=academyGround;handler.Heading=60f;_dog.Position=handler.GetOffsetPosition(new Vector3(-1.5f,-2f,0f));_dog.Heading=handler.Heading;
                 NativeFunction.Natives.DO_SCREEN_FADE_IN(700);GameFiber.Wait(800);
-                Game.DisplayNotification("~b~Arrived at the Advanced K9 training ground.~s~~n~Level "+level+"/5 — "+_profile.CurrentTrainingName+" ("+_profile.TrainingLevelProgress+"%)");
+                Game.DisplayNotification("~b~Arrived at the Advanced K9 training ground.~s~~n~Level "+level+"/5 — "+_profile.CurrentTrainingName+"~n~XP "+_profile.TrainingLevelProgress+"/"+_profile.CurrentTrainingRequirement+" • Confidence "+_profile.Confidence+"/100");
                 var academy=new AcademySession(_dog,_profile.Name);
-                int points=academy.Run(level,Sit,LieDown,Follow);
-                bool completed=_profile.ApplyTrainingProgress(level,points);
-                _trust.Change(Math.Max(1,points/20),"academy training");
-                if(completed)Game.DisplayNotification("~g~LEVEL "+level+" CERTIFICATION COMPLETE — 100%~s~~n~"+(level<5?"Level "+_profile.TrainingLevel+" is now unlocked.":"All K9 certifications completed."));
-                else Game.DisplayNotification("~b~Training saved:~s~ Level "+_profile.TrainingLevel+" — "+_profile.TrainingLevelProgress+"%");
+                int performance=academy.Run(level,Sit,LieDown,Follow),xp=CalculateTrainingXp(level,performance);
+                bool completed=_profile.ApplyTrainingProgress(level,xp);
+                _trust.Change(xp>0?Math.Max(1,xp/10):0,"academy training");
+                if(completed)Game.DisplayNotification("~g~LEVEL "+level+" CERTIFICATION COMPLETE~s~~n~"+(level<5?"Level "+_profile.TrainingLevel+" is now unlocked.":"All K9 certifications completed."));
+                else Game.DisplayNotification("~b~Training saved:~s~ +"+xp+" XP from "+performance+"% performance~n~Level "+_profile.TrainingLevel+": "+_profile.TrainingLevelProgress+"/"+_profile.CurrentTrainingRequirement+" XP");
             }
             finally
             {
@@ -1356,14 +1361,17 @@ namespace AdvancedK9
                 _state=K9State.Academy;NativeFunction.Natives.DO_SCREEN_FADE_OUT(500);GameFiber.Wait(650);
                 handler.Position=new Vector3(-1018.4f,-3003.1f,13.95f);handler.Heading=60f;_dog.Position=handler.GetOffsetPosition(new Vector3(-1.5f,-2f,0f));_dog.Heading=handler.Heading;
                 NativeFunction.Natives.DO_SCREEN_FADE_IN(700);GameFiber.Wait(800);
-                Game.DisplayNotification("~b~Specialty academy:~s~ "+SpecialtyLabel(specialty)+" detection ("+_profile.SpecialtyProgress(specialty)+"%).");
-                var academy=new AcademySession(_dog,_profile.Name);int points=academy.RunSpecialty(specialty,Sit,Follow);
-                bool completed=_profile.ApplySpecialtyProgress(specialty,points);_trust.Change(Math.Max(1,points/20),"specialty detection training");
-                if(completed)Game.DisplayNotification("~g~"+SpecialtyLabel(specialty).ToUpperInvariant()+" DETECTION CERTIFIED — 100%~s~~n~Other detection specialties remain independently trainable.");
-                else Game.DisplayNotification("~b~Specialty saved:~s~ "+SpecialtyLabel(specialty)+" "+_profile.SpecialtyProgress(specialty)+"%.");
+                Game.DisplayNotification("~b~Specialty academy:~s~ "+SpecialtyLabel(specialty)+" detection • "+_profile.SpecialtyProgress(specialty)+"/250 XP.");
+                var academy=new AcademySession(_dog,_profile.Name);int performance=academy.RunSpecialty(specialty,Sit,Follow);int xp=CalculateSpecialtyXp(performance);
+                bool completed=_profile.ApplySpecialtyProgress(specialty,xp);_trust.Change(xp>0?Math.Max(1,xp/12):0,"specialty detection training");
+                if(completed)Game.DisplayNotification("~g~"+SpecialtyLabel(specialty).ToUpperInvariant()+" DETECTION CERTIFIED — 250 XP~s~~n~Other detection specialties remain independently trainable.");
+                else Game.DisplayNotification("~b~Specialty saved:~s~ +"+xp+" XP from "+performance+"% performance~n~"+SpecialtyLabel(specialty)+" "+_profile.SpecialtyProgress(specialty)+"/250 XP.");
             }
             finally{NativeFunction.Natives.DO_SCREEN_FADE_OUT(500);GameFiber.Wait(650);handler.Position=returnPosition;handler.Heading=returnHeading;_dog.Position=handler.GetOffsetPosition(new Vector3(-1f,-2f,0f));NativeFunction.Natives.DO_SCREEN_FADE_IN(700);Follow();}
         }
+
+        private int CalculateTrainingXp(int level,int performance){int cap=level<=2?10:level<=4?20:30;int earnedCap=(int)Math.Round(cap*Math.Max(0,Math.Min(100,performance))/100.0);return earnedCap<=0?0:_random.Next(0,earnedCap+1);}
+        private int CalculateSpecialtyXp(int performance){int earnedCap=(int)Math.Round(20*Math.Max(0,Math.Min(100,performance))/100.0);return earnedCap<=0?0:_random.Next(0,earnedCap+1);}
 
         private Entity FindSearchTarget(Vector3 center, float radius)
         {

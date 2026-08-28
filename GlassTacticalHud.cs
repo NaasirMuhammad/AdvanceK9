@@ -9,7 +9,7 @@ namespace AdvancedK9
     {
         internal sealed class Snapshot
         {
-            public bool Visible,Collapsed,ShowPortrait,ShowState,ShowHealth,ShowStamina,ShowDistance,ShowCommand,ShowBehavior,ShowSearchProgress;
+            public bool Visible,Collapsed,ShowPortrait,CircularPortrait,ShowState,ShowHealth,ShowStamina,ShowDistance,ShowCommand,ShowBehavior,ShowSearchProgress;
             public float X,Y,Scale,Opacity,Distance;
             public int Health,Stamina,SearchProgress,Coat,Vest,VestTexture;
             public string Name,State,Command,Behavior,SearchLabel,Alert,PortraitFile,Breed,Model,AppearanceKey;
@@ -71,8 +71,8 @@ namespace AdvancedK9
                 if(s.Collapsed)scale*=.70f;
                 float width=(s.Collapsed?205f:320f)*scale;
                 float height=(s.Collapsed?38f:174f)*scale;
-                float cx=Math.Max(width/2+12,Math.Min(resolution.Width-width/2-12,s.X*resolution.Width));
-                float cy=Math.Max(height/2+12,Math.Min(resolution.Height-height/2-12,s.Y*resolution.Height));
+                float cx=Math.Max(width,Math.Min(resolution.Width,s.X*resolution.Width));
+                float cy=Math.Max(height,Math.Min(resolution.Height,s.Y*resolution.Height));
                 var box=new RectangleF(cx-width,cy-height,width,height);
                 int alpha=(int)(Math.Max(.35f,Math.Min(1f,s.Opacity))*218);
                 DrawGlass(args.Graphics,box,alpha);
@@ -83,7 +83,7 @@ namespace AdvancedK9
                 if(s.ShowPortrait)
                 {
                     var portraitBox=new RectangleF(left,box.Y+13f*scale,portrait,portrait);
-                    args.Graphics.DrawRectangle(portraitBox,Color.FromArgb(235,35,215,235));
+                    if(!s.CircularPortrait)args.Graphics.DrawRectangle(portraitBox,Color.FromArgb(235,35,215,235));
                     if(_portrait!=null)args.Graphics.DrawTexture(_portrait,new RectangleF(portraitBox.X+3,portraitBox.Y+3,portraitBox.Width-6,portraitBox.Height-6));
                     else
                     {

@@ -16,7 +16,7 @@ namespace AdvancedK9
 
         public int Run(int level, Action sit, Action down, Action follow)
         {
-            Game.DisplayNotification("~b~ADVANCED K9 ACADEMY~s~~n~Level " + level + "/5: " + LevelName(level) + "~n~Each completed exercise awards 20%.");
+            int scenario=_random.Next(1,5);Game.DisplayNotification("~b~ADVANCED K9 ACADEMY~s~~n~Level "+level+"/5: "+LevelName(level)+" • Scenario "+scenario+"~n~Follow each command hint; performance determines a randomized XP award.");
             int points;
             if (level == 1) points = ObedienceCourse(sit, down, follow);
             else if (level == 2) points = AgilityCourse();
@@ -24,17 +24,17 @@ namespace AdvancedK9
             else if (level == 4) points = TrackingCourse(sit);
             else points = ApprehensionCourse(sit, follow);
             follow();
-            Game.DisplayNotification("~b~ACADEMY SESSION COMPLETE~s~~n~K9: " + _name + "~n~Progress earned: " + points + "%");
+            Game.DisplayNotification("~b~ACADEMY SESSION COMPLETE~s~~n~K9: "+_name+"~n~Performance: "+points+"% — XP is awarded by level and difficulty.");
             return points;
         }
 
         public int RunSpecialty(DetectionSpecialty specialty, Action sit, Action follow)
         {
             string name=specialty==DetectionSpecialty.Narcotics?"NARCOTICS DETECTION":specialty==DetectionSpecialty.Explosives?"EXPLOSIVES DETECTION":"WEAPONS DETECTION";
-            Game.DisplayNotification("~b~ADVANCED K9 SPECIALTY~s~~n~"+name+"~n~Five odor-recognition stations; 20% each.");
+            Game.DisplayNotification("~b~ADVANCED K9 SPECIALTY~s~~n~"+name+"~n~Randomized blind odor lineup; follow the instructional handling prompts.");
             int points=SpecialtyDetectionCourse(specialty,sit);
             follow();
-            Game.DisplayNotification("~b~SPECIALTY SESSION COMPLETE~s~~n~"+name+" progress earned: "+points+"%");
+            Game.DisplayNotification("~b~SPECIALTY SESSION COMPLETE~s~~n~"+name+" performance: "+points+"%");
             return points;
         }
 
@@ -75,18 +75,20 @@ namespace AdvancedK9
 
         private int ObedienceCourse(Action sit, Action down, Action follow)
         {
-            var score = 0;
-            if (CommandExercise("1/5 SIT", sit)) score += 20;
-            if (CommandExercise("2/5 DOWN", down)) score += 20;
-            if (CommandExercise("3/5 SIT FROM DOWN", sit)) score += 20;
-            if (PlaceStayExercise(sit)) score += 20;
-            if (RecallExercise(follow)) score += 20;
+            var score=0;var drills=new List<Func<bool>>{
+                ()=>CommandExercise("SIT — VERBAL MARKER",sit,"Use the clear command: “"+_name+", sit.” Then press ~y~Y~s~."),
+                ()=>CommandExercise("DOWN — VERBAL MARKER",down,"Use the clear command: “"+_name+", down.” Then press ~y~Y~s~."),
+                ()=>CommandExercise("POSITION CHANGE",sit,"Ask for sit from the current position, then press ~y~Y~s~."),
+                ()=>PlaceStayExercise(sit),()=>RecallExercise(follow)};
+            Shuffle(drills);for(int i=0;i<drills.Count;i++){Game.DisplaySubtitle("~b~Randomized obedience drill "+(i+1)+"/5",900);if(drills[i]())score+=20;}
             return score;
         }
 
         private bool CommandExercise(string title, Action action)
+        {return CommandExercise(title,action,"Say the displayed command, then press ~y~Y~s~ to issue it");}
+        private bool CommandExercise(string title, Action action,string instruction)
         {
-            if (!WaitForHandler(title, "Press ~y~Y~s~ to issue the command")) return false;
+            if (!WaitForHandler(title,instruction)) return false;
             try { action(); GameFiber.Wait(2200); return DogReady(); } catch { return false; }
         }
 
@@ -134,7 +136,7 @@ namespace AdvancedK9
             {
                 var handler = Game.LocalPlayer.Character;
                 var model = new Model("prop_mp_cone_02"); model.LoadAndWait(); if (!model.IsLoaded) return 0;
-                for (var i = 0; i < 5; i++) props.Add(new Rage.Object(model, handler.GetOffsetPosition(new Vector3(i % 2 == 0 ? -1.5f : 1.5f, 5f + i * 3f, 0f))));
+                float side=_random.Next(2)==0?-1f:1f;float spacing=2.5f+(float)_random.NextDouble();for(var i=0;i<5;i++)props.Add(new Rage.Object(model,handler.GetOffsetPosition(new Vector3((i%2==0?-1.5f:1.5f)*side,5f+i*spacing,0f))));
                 model.Dismiss();
                 for (var i = 0; i < props.Count; i++)
                 {
@@ -190,7 +192,7 @@ namespace AdvancedK9
             {
                 var handler = Game.LocalPlayer.Character;
                 var model = new Model("prop_cs_rub_binbag_01"); model.LoadAndWait(); if (!model.IsLoaded) return 0;
-                var offsets = new[]{new Vector3(2f,7f,0f),new Vector3(7f,14f,0f),new Vector3(3f,22f,0f),new Vector3(-5f,29f,0f),new Vector3(-10f,38f,0f)};
+                float side=_random.Next(2)==0?-1f:1f;float bend=_random.Next(3,9);var offsets=new[]{new Vector3(2f*side,7f,0f),new Vector3(bend*side,14f,0f),new Vector3(3f*side,22f,0f),new Vector3(-5f*side,29f,0f),new Vector3(-10f*side,36f+_random.Next(0,7),0f)};
                 foreach (var offset in offsets) props.Add(new Rage.Object(model, handler.GetOffsetPosition(offset)));
                 model.Dismiss();
                 for (var i = 0; i < props.Count; i++)
@@ -214,7 +216,7 @@ namespace AdvancedK9
             {
                 var handler = Game.LocalPlayer.Character;
                 var model = new Model("s_m_y_prisoner_01"); model.LoadAndWait(); if (!model.IsLoaded) return 0;
-                suspect = new Ped(model, handler.GetOffsetPosition(new Vector3(0f, 18f, 0f)), handler.Heading + 180f); model.Dismiss();
+                suspect=new Ped(model,handler.GetOffsetPosition(new Vector3(_random.Next(-5,6),16f+_random.Next(0,9),0f)),handler.Heading+180f);model.Dismiss();
                 suspect.IsPersistent = true; NativeFunction.Natives.SET_ENTITY_INVINCIBLE(suspect, true); suspect.BlockPermanentEvents = true;
                 if (WaitForAimedTarget(suspect, "1/5 THREAT IDENTIFICATION")) score += 20;
                 if (WaitForHandler("2/5 CONTROLLED DEPLOYMENT", "Aim at the training suspect and press ~y~Y~s~ to send the K9") && Game.LocalPlayer.GetFreeAimingTarget() == suspect)
@@ -281,6 +283,7 @@ namespace AdvancedK9
         }
 
         private void DrawMarkerFor(Vector3 position, int duration){var end=Game.GameTime+(uint)duration;while(Game.GameTime<end){NativeFunction.Natives.DRAW_MARKER(1,position.X,position.Y,position.Z-.9f,0f,0f,0f,0f,0f,0f,1.2f,1.2f,.35f,30,120,220,170,false,false,2,false,0,0,false);GameFiber.Yield();}}
+        private void Shuffle<T>(IList<T> values){for(int i=values.Count-1;i>0;i--){int j=_random.Next(i+1);T value=values[i];values[i]=values[j];values[j]=value;}}
         private static string LevelName(int level)=>level==1?"Basic Obedience":level==2?"Agility / Handler Control":level==3?"Detection Certification":level==4?"Tracking Certification":"Apprehension Certification";
         private static void DeleteAll(List<Rage.Object> props){foreach(var prop in props)if(prop!=null&&prop.Exists())prop.Delete();}
         private bool DogReady()=>_dog!=null&&_dog.Exists()&&!_dog.IsDead;

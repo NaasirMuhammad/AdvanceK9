@@ -2,6 +2,21 @@
 
 All published AdvancedK9 versions are beta builds.
 
+## 0.22.11-beta
+
+- Removes the human-skeleton animation from petting; the handler kneels while the K9 remains in a native animal seated idle, preventing body contortion.
+- Adds selectable circular or square HUD portrait framing, with the approved circular portrait as the default.
+- Removes the artificial HUD safe-zone gap and permits live dragging to the actual screen edges while retaining resolution-aware bounds.
+- Separates handler bond from K9 confidence and persists confidence per profile.
+- Makes elite-bond, high-confidence, properly certified K9s respond immediately and reliably to operational commands.
+- Restricts meaningful hesitation to commands still being learned, poor bond/confidence, exhaustion, hunger, dehydration or injury.
+- Replaces percentage training jumps with persistent requirements of 100, 250, 450, 800 and 1,200 XP for Levels 1–5.
+- Requires 250 XP independently for narcotics, explosives and weapons certifications.
+- Awards 0–10 XP at Levels 1–2, 0–20 XP at Levels 3–4 and 0–30 XP at Level 5, capped by session performance; specialty sessions award up to 20 XP.
+- Randomizes obedience drill order, agility direction/spacing, scent placement, tracking turns/distances and apprehension-suspect placement.
+- Adds instructional command wording and interactive handler prompts throughout academy sessions.
+- Migrates existing percentage progress into the new XP requirements without discarding completed certifications.
+
 ## 0.22.10-beta
 
 - Makes the approved compact Glass Tactical concept the exact default/reset HUD layout: smoked-charcoal card, cyan frame, portrait at left, name/status, real health and stamina meters, upper-right paw, divider and compact command/distance/behavior row.
