@@ -259,6 +259,26 @@ Still to add:
 - Configurable evacuation radius
 - Search lockout around the suspected explosive
 
+### 🟨 19. Simultaneous multiple detections in one search
+
+Currently implemented:
+
+- Reads and classifies every supported odor category exposed by the exact PR/CDF inventory instead of stopping after the first match.
+- Can classify every certified odor present in the same target inventory rather than stopping after the first positive category.
+- Preserves certification gating, excludes replicas/documents/permits, and avoids duplicate category results.
+- Retains the authoritative item list for normal officer-search and NexusMDT reconciliation without disclosing contraband early.
+
+Required final behavior:
+
+- One search can return a combined positive hit for Drugs + Weapons, Drugs + Explosives, Weapons + Explosives, or Drugs + Weapons + Explosives.
+- The K9 performs one clear multi-hit indication sequence for the same person, vehicle, building, bag, package, or article; the handler does not need to start separate searches.
+- The Glass Tactical HUD shows every detected certified category together in one result, followed by a concise combined summary.
+- Exact alert location for each odor when search evidence markers are implemented.
+- Configurable physical indication pattern for two-category and three-category hits without confusing a negative, single hit, or explosive safety alert.
+- Individual incident-log and deployment-report category entries grouped under one shared search event.
+- Safe explosive-first sequencing: silently indicate explosives, recall to a safe distance, and lock out continued close searching before presenting narcotics or weapons results.
+- Person, vehicle, building, baggage, package, and article support using the same duplicate-safe multi-detection rules.
+
 ### 🟨 17. Shift and kennel lifecycle
 
 Currently implemented:
