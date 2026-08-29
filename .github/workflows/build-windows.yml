@@ -91,7 +91,7 @@ jobs:
           foreach ($portrait in @('german_shepherd.png','belgian_malinois.png','dalmatian.png','rottweiler.png','husky.png','retriever.png','poodle.png','pug.png','westie.png','doberman.png','cane_corso.png','german_shepherd_coat_1.png','german_shepherd_coat_2.png','german_shepherd_coat_3.png','belgian_malinois_coat_0.png','belgian_malinois_coat_1.png','belgian_malinois_coat_2.png','belgian_malinois_coat_3.png','belgian_malinois_coat_4.png','belgian_malinois_coat_5.png','belgian_malinois_coat_6.png','belgian_malinois_coat_7.png','belgian_malinois_coat_8.png','belgian_malinois_coat_9.png','belgian_malinois_coat_10.png','belgian_malinois_coat_11.png','belgian_malinois_coat_12.png','doberman_coat_1.png','doberman_coat_2.png')) {
             if (-not (Test-Path "$config/Portraits/$portrait")) { throw "Required K9 portrait missing from package: $portrait" }
           }
-          Copy-Item 'INSTALL.txt','README.md','CHANGELOG.md','build-verification.txt' package
+          Copy-Item 'INSTALL.txt','README.md','CHANGELOG.md','AdvancedK9-Future-Roadmap-Post-v0.22.md','build-verification.txt' package
           $forbidden = Get-ChildItem package -Recurse -File | Where-Object { $_.Name -match '^(NAudio|Microsoft\.Win32\.Registry|System\.Security).*\.dll$' }
           if ($forbidden) { throw "Forbidden dependency DLL bundled: $($forbidden.Name -join ', ')" }
           if (-not (Test-Path 'package/Plugins/AdvancedK9.dll')) { throw 'RPH plugin DLL is not in Plugins root.' }
