@@ -2,7 +2,7 @@
 
 All published AdvancedK9 versions are beta builds.
 
-## Unreleased
+## 0.23.0-beta
 
 - Completes article-based scent identification for aimed world objects, active-pursuit articles, nearby single-owner articles, people and recently occupied vehicles; ambiguous or ownerless articles are rejected instead of assigning the wrong track.
 - Adds a physical track-direction indication before movement and after route reacquisition, including the K9's body line, cardinal direction, heading and incident-log entry.
