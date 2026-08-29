@@ -47,7 +47,7 @@ The compiled release includes AdvancedK9, its configuration, and the MIT-license
 - Persistent kennel profile for breed, coat variation, vest style/color and custom K9 name
 - Rear-door kennel staging and remote door-pop deployment from a stopped patrol vehicle
 - Heat, rain, fatigue, injury/limp, rest and veterinary-care simulation
-- Bagged scent articles with age, rain, distance and vehicle-travel degradation
+- Bagged scent articles from people, recently occupied vehicles and aimed world objects, with owner disambiguation plus age, rain, distance and vehicle-travel degradation
 - Track completion is alert-only: the K9 barks, sits and holds without attacking until the handler separately aims and commands Apprehend
 - Surrender, freeze, flee or fight suspect reactions plus whistle and silent hand-signal recall
 - Persistent duty equipment, patrol-vehicle restocking and CSV incident records in `Plugins/LSPDFR/AdvancedK9/K9IncidentLog.csv`
@@ -58,7 +58,8 @@ The compiled release includes AdvancedK9, its configuration, and the MIT-license
 - PR/STP active traffic-stop vehicle and interaction-ped targeting, restrained-ped safety, pursuit suspect acquisition, inventory-aware odor classification and best-effort K9 result sharing.
 - Five-minute recorded suspect scent trails with realistic trail loss and a handler-commanded reacquisition cast.
 - Six-sector building searches that end with an alert bark and hold, never an automatic bite.
-- Automatic PR/STP pursuit and vehicle-bailout scent assignment without requiring a ped or traffic stop.
+- Automatic LSPDFR/PR/STP pursuit and vehicle-bailout scent assignment and recorded-trail deployment without requiring a ped or traffic stop.
+- K9 perimeter patrol, non-bite suspect containment and automatic handler-down protection.
 - Tactical K9 warning with surrender, freeze, flee and fight outcomes before optional separate apprehension.
 - Detailed CSV deployment reports containing warning, scent source, track distance/time, bite duration, injuries and disposition.
 
@@ -110,13 +111,15 @@ Hold `V`, begin with the configured dog name or `K9`, and then say one of the ph
 | Narcotics search | search for narcotics; narcotics search; search for drugs; drug search; find the drugs; check for narcotics; narcotics sweep; find dope |
 | Explosives search | search for explosives; explosives search; bomb search; search for a bomb; find the bomb; check for explosives; explosive sweep; bomb sweep |
 | Weapons search | search for weapons; weapons search; gun search; search for a gun; find the weapon; check for firearms; firearm sweep; weapons sweep |
-| Collect scent article | collect scent article; bag the scent; take scent sample; collect scent — aim at the person, or aim at/stand beside the vehicle they fled from |
+| Collect scent article | collect scent article; bag the scent; take scent sample; collect scent — aim at the person, recently occupied vehicle or owner-associated world object |
 | Track | start tracking; pick up the scent; follow the scent; find the trail; track the suspect; locate them; find him; find her; find them; track |
 | Reacquire trail | reacquire the trail; find the trail again; pick the trail back up; recover the scent; find scent; reacquire scent |
 | K9 warning | give K9 warning; give the warning; police K9 warning; announce the dog; warn the suspect; K9 warning |
 | Apprehend | apprehend the suspect; engage the suspect; take the suspect; send the dog; attack; bite; get him; get her; take him; take her; apprehend; engage |
 | PR/STP arrest handoff | handoff arrest; start arrest handoff; give suspect to policing menu; process suspect; arrest handoff |
 | Request perimeter | request perimeter; set a perimeter; call perimeter units; containment units |
+| K9 hold perimeter | hold the perimeter; patrol the perimeter; watch the perimeter; perimeter patrol |
+| Contain suspect | contain the suspect; block the suspect; hold the suspect there; keep them contained; contain |
 | Request transport | request prisoner transport; call transport; prisoner transport; transport suspect |
 | Request medical | request EMS; call EMS; request medical; medical assistance |
 | Request bomb squad | request bomb squad; call bomb squad; request explosive unit; bomb disposal |

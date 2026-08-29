@@ -2,6 +2,15 @@
 
 All published AdvancedK9 versions are beta builds.
 
+## Unreleased
+
+- Completes article-based scent identification for aimed world objects, active-pursuit articles, nearby single-owner articles, people and recently occupied vehicles; ambiguous or ownerless articles are rejected instead of assigning the wrong track.
+- Adds a physical track-direction indication before movement and after route reacquisition, including the K9's body line, cardinal direction, heading and incident-log entry.
+- Adds separate K9 Hold Perimeter and Contain Suspect commands. The former patrols a handler-centered ring; the latter maintains a moving non-bite containment ring around an identified suspect, with both reducing radius while retaining an attached working leash.
+- Extends automatic pursuit integration to native LSPDFR pursuits in addition to PR/STP, assigns vehicle-bailout scent and starts the recorded trail automatically when a deployed K9 is available.
+- Adds handler-down protection: the K9 emergency-deploys from the vehicle, engages only an immediate non-officer attacker, otherwise guards and barks beside the handler, and requests medical service when a compatible provider is available.
+- Keeps apprehension a separate aimed command during scent tracking and containment, and preserves restrained/surrendered/officer safety interlocks.
+
 ## 0.22.12-beta
 
 - Services push-to-talk and recognized-command queues during interactive academy prompts, allowing the displayed SIT, DOWN, STAY, RECALL, SEARCH, TRACK, APPREHEND, GUARD and RELEASE commands to advance training without also pressing Y.

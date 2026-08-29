@@ -31,6 +31,8 @@ namespace AdvancedK9
             D(K9Command.Apprehend,"Apprehend",true,"apprehend the suspect","engage the suspect","take the suspect","send the dog","attack","bite","get him","get her","take him","take her","apprehend","engage"),
             D(K9Command.HandoffArrest,"PR/STP Arrest Handoff",true,"handoff arrest","start arrest handoff","give suspect to policing menu","process suspect","arrest handoff"),
             D(K9Command.RequestPerimeter,"Request Perimeter",true,"request perimeter","set a perimeter","call perimeter units","containment units"),
+            D(K9Command.HoldPerimeter,"K9 Hold Perimeter",true,"hold the perimeter","patrol the perimeter","watch the perimeter","perimeter patrol"),
+            D(K9Command.ContainSuspect,"Contain Suspect",true,"contain the suspect","block the suspect","hold the suspect there","keep them contained","contain"),
             D(K9Command.RequestTransport,"Request Transport",true,"request prisoner transport","call transport","prisoner transport","transport suspect"),
             D(K9Command.RequestMedical,"Request Medical",true,"request ems","call ems","request medical","medical assistance"),
             D(K9Command.RequestBombSquad,"Request Bomb Squad",true,"request bomb squad","call bomb squad","request explosive unit","bomb disposal"),
