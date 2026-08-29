@@ -66,7 +66,7 @@ namespace AdvancedK9
         private Ped _compatibilityPursuitSuspect;
         private Vehicle _pursuitLastVehicle;
         private bool _pursuitTrackStarted;
-        private int _lastAutomaticPursuitHandle=-1;
+        private PoolHandle _lastAutomaticPursuitHandle;
         private bool _automaticTrackRequested;
         private bool _trailLost;
         private float _activeTrackDistance;

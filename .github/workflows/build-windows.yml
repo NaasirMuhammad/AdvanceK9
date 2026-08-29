@@ -19,6 +19,7 @@ jobs:
       - name: Restore and compile source
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
           dotnet restore AdvancedK9.csproj
           dotnet build AdvancedK9.csproj -c Release --no-restore /p:ContinuousIntegrationBuild=true
           dotnet restore Bridge/LspdfrApiShim/LspdfrApiShim.csproj
