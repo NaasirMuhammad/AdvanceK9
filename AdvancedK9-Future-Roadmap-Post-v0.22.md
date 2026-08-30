@@ -302,6 +302,23 @@ Still to add:
 - Saved duty hours
 - Shift deployment summary
 
+### 🟨 20. Patrol-earned training XP
+
+Currently implemented:
+
+- Persistent K9 training levels, certification XP, trust, confidence, and Elite Bond progression.
+- Academy XP scales by level: Levels 1–2 award 0–10 XP, Levels 3–4 award 0–20 XP, and Level 5 awards 0–30 XP based on session performance.
+
+Still to add:
+
+- Allow a deployed K9 to gain randomly sized XP awards from successful real patrol work outside the academy.
+- Apply a 50% live-action bonus over academy-scale awards: Levels 1–2 gain 0–15 XP, Levels 3–4 gain 0–30 XP, and Level 5 gains 0–45 XP from an eligible completed patrol event.
+- Award XP only after meaningful completed actions such as a valid search, track, locate, containment, safe apprehension, evidence recovery, or handler-protection response.
+- Route specialty XP only to the relevant certification when the deployed dog is trained for that task; routine obedience and patrol work contribute to general training progression.
+- Scale the random award by difficulty, scent age, search size, trail distance, successful control, K9 condition, and outcome quality.
+- Add per-event cooldowns, duplicate-event detection, and daily/shift caps so repeated commands, idle actions, cancelled searches, and the same target cannot be farmed for XP.
+- Show a compact optional XP-earned notification and record the reason, amount, level, certification, and incident in the deployment log.
+
 ## Remaining unimplemented roadmap
 
 ### ⬜ 12. Search evidence markers
@@ -415,12 +432,13 @@ MaximumCalloutDistance=3500
 
 ## Updated recommended priorities
 
-The next five highest-impact additions after v0.23.0-beta are:
+The next six highest-impact additions after v0.23.0-beta are:
 
 1. Multiple persistent K9 profiles and kennel roster
 2. Search evidence markers with exact alert locations
 3. Vehicle-specific search paths
 4. K9 injury evacuation, emergency loading, veterinary transport, and rehabilitation
 5. Shared callout API and the first dynamic callout test set
+6. Patrol-earned training XP with a 50% live-action bonus, level-scaled random awards, and anti-farming safeguards
 
 The first controlled callout test set remains Lost Child, Fugitive Trail from an Abandoned Vehicle, and Armed Burglary Suspect Hiding. Continue full clothing, blood, weapons, property, and location-pad scent expansion alongside pursuit cleanup, water/obstacle tracking, explosive-safety procedures, and saved containment positions.
