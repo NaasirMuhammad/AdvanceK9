@@ -356,6 +356,21 @@ Create a kennel roster with multiple dogs, each retaining its own:
 - Training progress
 - Deployment statistics
 
+### ⬜ 21. BLR, PD Comp, and Damage Tracker Framework compatibility
+
+Add optional, independently detected compatibility adapters for BLR, PD Comp, and Damage Tracker Framework without making any of them required dependencies.
+
+Planned integration behavior:
+
+- Share the active K9, handler, suspect, vehicle, pursuit, search, apprehension, injury, and deployment state only through documented public APIs or a versioned AdvancedK9 bridge contract.
+- Allow BLR-originated supported patrol or incident context to reach AdvancedK9 without duplicating subjects, searches, pursuits, or reports.
+- Synchronize supported PD Comp interaction and subject state so surrendered, restrained, arrested, transported, or otherwise protected people remain ineligible for K9 apprehension.
+- Publish handler, suspect, and K9 damage events to Damage Tracker Framework and consume supported injury-state updates for first aid, handler-down protection, K9 evacuation, veterinary treatment, and incident reporting.
+- Preserve AdvancedK9 as the authority for K9 behavior, certifications, detection results, safety interlocks, XP awards, and deployment reports.
+- Detect each framework at runtime, isolate adapter failures, and retain full standalone operation when a framework is absent, disabled, outdated, or exposes no compatible public API.
+- Add per-framework configuration toggles and diagnostic logging without displaying routine compatibility noise during normal patrol.
+- Do not bundle, replace, modify, or redistribute BLR, PD Comp, Damage Tracker Framework, or any third-party framework files.
+
 ### ⬜ 18. K9-specific callouts
 
 Add a fully integrated callout expansion as part of the AdvancedK9 download. Keep the core gameplay systems and the LSPDFR callout lifecycle separated so AdvancedK9 can still load safely when LSPDFR is unavailable:
