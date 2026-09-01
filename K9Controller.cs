@@ -53,6 +53,7 @@ namespace AdvancedK9
         private bool _workingLeashed;
         private uint _nextLeashFollow;
         private uint _nextLeashVisualUpdate;
+        private uint _nextAnimalPresentationReset;
         private uint _nextNeedsUpdate;
         private uint _nextNeedsWarning;
         private VehicleSeatProfile _activeSeatProfile;
@@ -706,6 +707,7 @@ namespace AdvancedK9
             _dog.IsPersistent = true;
             _dog.BlockPermanentEvents = true;
             _dog.RelationshipGroup = officer.RelationshipGroup;
+            ApplyAnimalPedSafeguards();
             NativeFunction.Natives.SET_CAN_ATTACK_FRIENDLY(_dog, false, false);
             _profile.Apply(_dog);
             _blip = _dog.AttachBlip();
@@ -1374,13 +1376,16 @@ namespace AdvancedK9
             var hand=NativeFunction.Natives.GET_PED_BONE_COORDS<Vector3>(handler,18905,0f,0f,0f);
             var collar=NativeFunction.Natives.GET_PED_BONE_COORDS<Vector3>(_dog,39317,0f,.03f,0f);
             NativeFunction.Natives.ROPE_LOAD_TEXTURES();GameFiber.Wait(100);
-            _leashRope=NativeFunction.Natives.ADD_ROPE<int>(hand.X,hand.Y,hand.Z,0f,0f,0f,6.5f,4,6.5f,.35f,0f,false,false,true,1f,false,0);
+            float length=Math.Max(.65f,Math.Min(6f,VectorDistance(hand,collar)+.12f));
+            _leashRope=NativeFunction.Natives.ADD_ROPE<int>(hand.X,hand.Y,hand.Z,0f,0f,0f,length,4,6f,.45f,0f,false,false,true,1f,false,0);
             // Keep a visual hand-to-collar leash without entity-to-entity rope
             // physics, which can freeze animal navigation tasks.
             if(_leashRope>=0)PinLeashEndpoints();
         }
 
-        private void PinLeashEndpoints(){if(_leashRope<0||!DogEntityExists()||Game.GameTime<_nextLeashVisualUpdate)return;_nextLeashVisualUpdate=Game.GameTime+50;try{var handler=Game.LocalPlayer.Character;var hand=NativeFunction.Natives.GET_PED_BONE_COORDS<Vector3>(handler,18905,-.04f,.02f,0f);var collar=NativeFunction.Natives.GET_PED_BONE_COORDS<Vector3>(_dog,39317,0f,.03f,0f);NativeFunction.Natives.PIN_ROPE_VERTEX(_leashRope,0,hand.X,hand.Y,hand.Z);int vertices=NativeFunction.Natives.GET_ROPE_VERTEX_COUNT<int>(_leashRope);if(vertices>1)NativeFunction.Natives.PIN_ROPE_VERTEX(_leashRope,vertices-1,collar.X,collar.Y,collar.Z);}catch{}}
+        private void PinLeashEndpoints(){if(_leashRope<0||!DogEntityExists()||Game.GameTime<_nextLeashVisualUpdate)return;_nextLeashVisualUpdate=Game.GameTime+50;try{var handler=Game.LocalPlayer.Character;var hand=NativeFunction.Natives.GET_PED_BONE_COORDS<Vector3>(handler,18905,-.04f,.02f,0f);var collar=NativeFunction.Natives.GET_PED_BONE_COORDS<Vector3>(_dog,39317,0f,.03f,0f);float slack=_workingLeashed?.18f:.08f;float length=Math.Max(.65f,Math.Min(6f,VectorDistance(hand,collar)+slack));NativeFunction.Natives.ROPE_FORCE_LENGTH(_leashRope,length);NativeFunction.Natives.PIN_ROPE_VERTEX(_leashRope,0,hand.X,hand.Y,hand.Z);int vertices=NativeFunction.Natives.GET_ROPE_VERTEX_COUNT<int>(_leashRope);if(vertices>1)NativeFunction.Natives.PIN_ROPE_VERTEX(_leashRope,vertices-1,collar.X,collar.Y,collar.Z);}catch{}}
+
+        private static float VectorDistance(Vector3 a,Vector3 b){float x=a.X-b.X,y=a.Y-b.Y,z=a.Z-b.Z;return (float)Math.Sqrt(x*x+y*y+z*z);}
 
         private void DeleteLeashRope(){if(_leashRope>=0){try{NativeFunction.Natives.DELETE_ROPE(ref _leashRope);}catch{} }_leashRope=-1;}
 
@@ -1427,6 +1432,7 @@ namespace AdvancedK9
             if (!DogEntityExists()||_downed) return;
             if(_seatCalibrationDoorOpen&&(!_menu.Visible||_menuMode!="seat_config"||_state!=K9State.InVehicle))CloseSeatCalibrationDoor();
             EnforceHandlerSafety();
+            MaintainAnimalPedPresentation();
             UpdateNeeds();
             UpdateReliefNeeds();
             UpdateEnvironment();
@@ -1448,6 +1454,24 @@ namespace AdvancedK9
             if(_leashRope>=0)PinLeashEndpoints();
             if (_dog.DistanceTo(Game.LocalPlayer.Character) > 150f && _state == K9State.Following)
                 _dog.Position = Game.LocalPlayer.Character.GetOffsetPosition(new Vector3(-1f, -2f, 0f));
+        }
+
+        private void ApplyAnimalPedSafeguards(){if(!DogEntityExists())return;_dog.BlockPermanentEvents=true;NativeFunction.Natives.SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(_dog,true);NativeFunction.Natives.SET_PED_FLEE_ATTRIBUTES(_dog,0,false);NativeFunction.Natives.SET_PED_CAN_EVASIVE_DIVE(_dog,false);NativeFunction.Natives.SET_PED_USING_ACTION_MODE(_dog,false,-1,"DEFAULT_ACTION");}
+
+        private void MaintainAnimalPedPresentation()
+        {
+            if(!DogEntityExists()||_downed||_carryingDog)return;
+            ApplyAnimalPedSafeguards();
+            var handler=Game.LocalPlayer.Character;
+            if(handler==null||!handler.Exists()||!NativeFunction.Natives.IS_PED_SHOOTING<bool>(handler)||Game.GameTime<_nextAnimalPresentationReset)return;
+            _nextAnimalPresentationReset=Game.GameTime+900;
+            NativeFunction.Natives.RESET_PED_MOVEMENT_CLIPSET(_dog,.15f);
+            NativeFunction.Natives.RESET_PED_STRAFE_CLIPSET(_dog);
+            NativeFunction.Natives.RESET_PED_WEAPON_MOVEMENT_CLIPSET(_dog);
+            NativeFunction.Natives.SET_PED_USING_ACTION_MODE(_dog,false,-1,"DEFAULT_ACTION");
+            if(_state==K9State.Leashed)NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(_dog,handler,-.55f,-.85f,0f,2.2f,-1,1.15f,true);
+            else if(_state==K9State.Following||_state==K9State.Heeling)NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(_dog,handler,-.7f,-1.15f,0f,2.2f,-1,1.2f,true);
+            Game.LogTrivial("AdvancedK9 animal presentation: suppressed handler-gunfire reaction without clearing active K9 tasks.");
         }
 
         private void UpdateHandlerDownProtection()
