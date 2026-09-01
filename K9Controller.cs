@@ -53,8 +53,6 @@ namespace AdvancedK9
         private bool _workingLeashed;
         private uint _nextLeashFollow;
         private uint _nextLeashVisualUpdate;
-        private uint _leashProgressAt;
-        private Vector3 _leashProgressPosition;
         private uint _nextNeedsUpdate;
         private uint _nextNeedsWarning;
         private VehicleSeatProfile _activeSeatProfile;
@@ -1358,7 +1356,7 @@ namespace AdvancedK9
             _dog.Tasks.Clear();
             CreateLeashRope();
             _state = K9State.Leashed;
-            _leashProgressPosition=_dog.Position;_leashProgressAt=Game.GameTime;_nextLeashFollow=Game.GameTime+3500;
+            _nextLeashFollow=Game.GameTime+1800;
             NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(_dog,Game.LocalPlayer.Character,-.55f,-.85f,0f,1.8f,-1,1.15f,true);
             Game.LogTrivial("AdvancedK9 leash: attached visual leash and issued persistent animal follow task.");
             ActionNotification("~b~K9 leash attached.~s~ The K9 will walk at the handler's left side.");
@@ -1433,13 +1431,13 @@ namespace AdvancedK9
             {
                 var officer = Game.LocalPlayer.Character;
                 float distance=_dog.DistanceTo(officer);
-                if(_dog.DistanceTo(_leashProgressPosition)>.35f){_leashProgressPosition=_dog.Position;_leashProgressAt=Game.GameTime;}
-                if(distance>2.25f&&Game.GameTime>=_nextLeashFollow)
+                NativeFunction.Natives.FREEZE_ENTITY_POSITION(_dog,false);
+                NativeFunction.Natives.SET_ENTITY_COLLISION(_dog,true,true);
+                NativeFunction.Natives.SET_PED_CAN_RAGDOLL(_dog,true);
+                if(distance>1.35f&&Game.GameTime>=_nextLeashFollow)
                 {
-                    bool stalled=Game.GameTime-_leashProgressAt>=3000;
-                    _nextLeashFollow=Game.GameTime+(uint)(stalled?4000:3500);
-                    if(stalled){_dog.Tasks.Clear();_dog.Tasks.FollowNavigationMeshToPosition(officer.GetOffsetPosition(new Vector3(-.55f,-.85f,0f)),officer.Heading,2.4f);_leashProgressAt=Game.GameTime;Game.LogTrivial("AdvancedK9 leash: progress watchdog issued one navigation recovery task at distance "+distance.ToString("0.0")+"m.");}
-                    else NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(_dog,officer,-.55f,-.85f,0f,2.2f,-1,1.15f,true);
+                    _nextLeashFollow=Game.GameTime+1800;
+                    NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(_dog,officer,-.55f,-.85f,0f,2.2f,-1,1.15f,true);
                 }
             }
             if(_leashRope>=0)PinLeashEndpoints();
