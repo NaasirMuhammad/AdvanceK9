@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using Rage;
@@ -9,10 +10,10 @@ namespace AdvancedK9
     {
         internal sealed class Snapshot
         {
-            public bool Visible,Collapsed,ShowPortrait,CircularPortrait,ShowState,ShowHealth,ShowStamina,ShowDistance,ShowCommand,ShowBehavior,ShowSearchProgress;
+            public bool Visible,Collapsed,ShowPortrait,CircularPortrait,ShowState,ShowHealth,ShowStamina,ShowDistance,ShowCommand,ShowBehavior,ShowSearchProgress,ShowFood,ShowWater,ShowCertifications,ShowTrust,ShowTraining,ShowInjury,ShowVoice;
             public float X,Y,Scale,Opacity,Distance;
-            public int Health,Stamina,SearchProgress,Coat,Vest,VestTexture;
-            public string Name,State,Command,Behavior,SearchLabel,Alert,PortraitFile,Breed,Model,AppearanceKey;
+            public int Health,Stamina,Food,Water,Trust,TrainingLevel,TrainingXp,TrainingRequirement,SearchProgress,Coat,Vest,VestTexture;
+            public string Name,State,Command,Behavior,SearchLabel,Alert,PortraitFile,Breed,Model,AppearanceKey,Certifications,Injury,Voice;
             public bool Metric;
         }
 
@@ -69,8 +70,9 @@ namespace AdvancedK9
                 Size resolution=Game.Resolution;
                 float scale=Math.Max(.55f,Math.Min(1.35f,s.Scale));
                 if(s.Collapsed)scale*=.70f;
+                List<string> details=BuildDetailRows(s);
                 float width=(s.Collapsed?205f:320f)*scale;
-                float height=(s.Collapsed?38f:174f)*scale;
+                float height=(s.Collapsed?38f:174f+details.Count*17f+(!string.IsNullOrWhiteSpace(s.SearchLabel)?17f:0f))*scale;
                 float cx=Math.Max(width,Math.Min(resolution.Width,s.X*resolution.Width));
                 float cy=Math.Max(height,Math.Min(resolution.Height,s.Y*resolution.Height));
                 var box=new RectangleF(cx-width,cy-height,width,height);
@@ -99,17 +101,18 @@ namespace AdvancedK9
                 if(s.ShowHealth){DrawMeter(args.Graphics,"HEALTH",s.Health,left,row,box.Right-left-12f*scale,Color.FromArgb(255,58,210,118),scale);row+=25f*scale;}
                 if(s.ShowStamina){DrawMeter(args.Graphics,"STAMINA",s.Stamina,left,row,box.Right-left-12f*scale,Color.FromArgb(255,35,214,235),scale);row+=25f*scale;}
                 if(!s.ShowHealth&&!s.ShowStamina)row+=12f*scale;
+                foreach(string detail in details){DrawText(args.Graphics,detail,left,row,12f*scale,Color.FromArgb(255,208,231,236));row+=17f*scale;}
+                if(!string.IsNullOrWhiteSpace(s.SearchLabel))
+                {
+                    string search=Upper(s.SearchLabel)+(s.ShowSearchProgress?"  "+Math.Max(0,Math.Min(100,s.SearchProgress))+"%":"");
+                    DrawText(args.Graphics,search,left,row,14f*scale,Color.FromArgb(255,45,225,240));
+                }
                 string bottom="";
                 if(s.ShowCommand&&!string.IsNullOrWhiteSpace(s.Command))bottom=Upper(s.Command);
                 if(s.ShowDistance){float value=s.Metric?s.Distance:s.Distance*3.28084f;bottom=Join(bottom,value.ToString("0.0")+(s.Metric?" m":" ft"));}
                 if(s.ShowBehavior)bottom=Join(bottom,Upper(s.Behavior));
                 args.Graphics.DrawRectangle(new RectangleF(box.X+12f*scale,box.Bottom-43f*scale,box.Width-24f*scale,1f),Color.FromArgb(110,80,125,137));
                 DrawText(args.Graphics,bottom,box.X+13f*scale,box.Bottom-24f*scale,14f*scale,Color.FromArgb(255,208,231,236));
-                if(!string.IsNullOrWhiteSpace(s.SearchLabel))
-                {
-                    string search=Upper(s.SearchLabel)+(s.ShowSearchProgress?"  "+Math.Max(0,Math.Min(100,s.SearchProgress))+"%":"");
-                    DrawText(args.Graphics,search,left,box.Bottom-64f*scale,14f*scale,Color.FromArgb(255,45,225,240));
-                }
                 if(!string.IsNullOrWhiteSpace(s.Alert))
                 {
                     var alert=new RectangleF(box.X,box.Y-32f*scale,box.Width,27f*scale);
@@ -128,6 +131,23 @@ namespace AdvancedK9
         private static void DrawText(Rage.Graphics g,string text,float x,float y,float size,Color color,string font){if(string.IsNullOrWhiteSpace(text))return;g.DrawText(text,font,size,new PointF(x,y),color);}
         private static string Upper(string value)=>(value??"").ToUpperInvariant();
         private static string Join(string current,string value)=>string.IsNullOrWhiteSpace(current)?value:current+"  •  "+value;
+        private static List<string> BuildDetailRows(Snapshot s)
+        {
+            var rows=new List<string>();string row="";
+            if(s.ShowFood)row=Join(row,"FOOD "+s.Food+"%");
+            if(s.ShowWater)row=Join(row,"WATER "+s.Water+"%");
+            if(s.ShowTrust)row=Join(row,"TRUST "+s.Trust+"/100");
+            if(!string.IsNullOrWhiteSpace(row))rows.Add(row);
+            row="";
+            if(s.ShowTraining)row=Join(row,"TRAIN L"+s.TrainingLevel+" "+s.TrainingXp+"/"+s.TrainingRequirement+" XP");
+            if(s.ShowCertifications)row=Join(row,"CERT "+Upper(string.IsNullOrWhiteSpace(s.Certifications)?"IN TRAINING":s.Certifications));
+            if(!string.IsNullOrWhiteSpace(row))rows.Add(row);
+            row="";
+            if(s.ShowInjury)row=Join(row,"INJURY "+Upper(string.IsNullOrWhiteSpace(s.Injury)?"NONE":s.Injury));
+            if(s.ShowVoice)row=Join(row,"VOICE "+Upper(string.IsNullOrWhiteSpace(s.Voice)?"OFF":s.Voice));
+            if(!string.IsNullOrWhiteSpace(row))rows.Add(row);
+            return rows;
+        }
         private static string BreedBadge(string breed){if(string.IsNullOrWhiteSpace(breed))return "K9";string[] words=breed.Split(' ');return words.Length>1?(words[0][0].ToString()+words[1][0]).ToUpperInvariant():breed.Substring(0,Math.Min(2,breed.Length)).ToUpperInvariant();}
         private static Color StateColor(string state){if(state!=null&&state.IndexOf("down",StringComparison.OrdinalIgnoreCase)>=0)return Color.FromArgb(255,255,82,82);return state!=null&&(state.IndexOf("search",StringComparison.OrdinalIgnoreCase)>=0||state.IndexOf("track",StringComparison.OrdinalIgnoreCase)>=0||state.IndexOf("appreh",StringComparison.OrdinalIgnoreCase)>=0)?Color.FromArgb(255,245,179,62):Color.FromArgb(255,65,222,138);}
         private void DisposePortrait(){var disposable=_portrait as IDisposable;if(disposable!=null)disposable.Dispose();_portrait=null;}
