@@ -471,11 +471,13 @@ namespace AdvancedK9
             try
             {
                 _hudCommand=CommandLabel(command);
-                if(_leashRope>=0&&(command==K9Command.Apprehend||command==K9Command.Fetch)){DeleteLeashRope();_state=K9State.Following;ActionNotification("~b~Leash automatically released for K9 deployment.");}
-                _workingLeashed=_leashRope>=0&&(command==K9Command.SearchArea||command==K9Command.SearchBuilding||command==K9Command.SearchVehicle||command==K9Command.SearchNarcotics||command==K9Command.SearchExplosives||command==K9Command.SearchWeapons||command==K9Command.Track||command==K9Command.FindTrail);
+                bool leashed=_leashRope>=0;
+                if(leashed&&RequiresLeashRelease(command)){DeleteLeashRope();_state=K9State.Following;leashed=false;ActionNotification("~b~Leash automatically released for "+CommandLabel(command)+".");}
+                _workingLeashed=leashed&&IsWorkingLeashCommand(command);
                 if(_leashRope>=0&&(command==K9Command.Training||command==K9Command.TrainNarcotics||command==K9Command.TrainExplosives||command==K9Command.TrainWeapons)){Game.DisplayNotification("~y~Remove the leash before traveling to the academy.");return;}
                 if(_profile.Health<=25 && command!=K9Command.Inspect && command!=K9Command.FirstAid && command!=K9Command.CarryK9 && command!=K9Command.SpawnDismiss){Game.DisplayNotification("~r~K9 REMOVED FROM SERVICE~s~~n~Serious injury requires veterinary treatment. Earned certifications remain saved.");return;}
                 if (RequiresTrustCheck(command) && _leashRope<0 && !TrustAllowsCommand(command)) return;
+                if(leashed)Game.LogTrivial("AdvancedK9 leash: executing "+CommandLabel(command)+" while visual leash remains attached.");
                 switch (command)
                 {
                     case K9Command.SpawnDismiss: HandleKennelDeployment(); break;
@@ -540,6 +542,9 @@ namespace AdvancedK9
         {
             return command==K9Command.Follow||command==K9Command.Heel||command==K9Command.Sit||command==K9Command.LieDown||command==K9Command.Stay||command==K9Command.Recall||command==K9Command.SearchArea||command==K9Command.SearchBuilding||command==K9Command.SearchVehicle||command==K9Command.SearchNarcotics||command==K9Command.SearchExplosives||command==K9Command.SearchWeapons||command==K9Command.Track||command==K9Command.FindTrail||command==K9Command.Fetch||command==K9Command.Apprehend||command==K9Command.HoldPerimeter||command==K9Command.ContainSuspect;
         }
+
+        private static bool RequiresLeashRelease(K9Command command){return command==K9Command.Apprehend||command==K9Command.Fetch||command==K9Command.EnterVehicle||command==K9Command.CarryK9||command==K9Command.VeterinaryCare;}
+        private static bool IsWorkingLeashCommand(K9Command command){return command==K9Command.SearchArea||command==K9Command.SearchBuilding||command==K9Command.SearchVehicle||command==K9Command.SearchNarcotics||command==K9Command.SearchExplosives||command==K9Command.SearchWeapons||command==K9Command.Track||command==K9Command.FindTrail||command==K9Command.HoldPerimeter||command==K9Command.ContainSuspect;}
 
         private bool TrustAllowsCommand(K9Command command)
         {
