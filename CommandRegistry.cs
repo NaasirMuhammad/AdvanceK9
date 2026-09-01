@@ -48,6 +48,7 @@ namespace AdvancedK9
             D(K9Command.Rest,"Rest K9",true,"rest the dog","take a rest","sleep","rest"),
             D(K9Command.Inspect,"Inspect K9",true,"inspect the dog","check the dog","check status","check injury","check health","medical check","inspect"),
             D(K9Command.FirstAid,"Field First Aid",true,"give first aid","apply first aid","provide treatment","field treatment","treat the injury","treat injury","first aid"),
+            D(K9Command.CarryK9,"Carry / Set Down K9",true,"carry the dog","carry k9","pick up the dog","pick up k9","set the dog down","set k9 down","put the dog down","evacuate k9"),
             D(K9Command.VeterinaryCare,"Veterinary Care",true,"go to the vet","veterinary care","vet treatment","visit veterinarian","vet"),
             D(K9Command.Restock,"Restock Equipment",true,"restock equipment","reload k9 gear","replenish supplies","restock"),
             D(K9Command.ToggleLeash,"Toggle Leash",true,"attach the leash","put on the leash","take off the leash","remove the leash","leash on","leash off","attach leash","remove leash","leash"),

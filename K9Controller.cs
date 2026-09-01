@@ -94,6 +94,7 @@ namespace AdvancedK9
         private bool _searchInProgress;
         private bool _deployed;
         private bool _downed;
+        private bool _carryingDog;
         private bool _handlerDownActive;
         private uint _nextHandlerSafetyProbe;
         private Vector3 _perimeterCenter;
@@ -283,7 +284,7 @@ namespace AdvancedK9
             new[]{K9Command.CollectScent,K9Command.Track,K9Command.FindTrail},
             new[]{K9Command.K9Warning,K9Command.Apprehend,K9Command.HandoffArrest,K9Command.RequestPerimeter,K9Command.HoldPerimeter,K9Command.ContainSuspect,K9Command.RequestTransport,K9Command.RequestMedical,K9Command.RequestBombSquad,K9Command.DoorPop,K9Command.Release,K9Command.Guard,K9Command.Bark},
             new[]{K9Command.EnterVehicle,K9Command.ExitVehicle,K9Command.ToggleLeash,K9Command.ToggleCamera,K9Command.Restock},
-            new[]{K9Command.Feed,K9Command.Drink,K9Command.Rest,K9Command.Inspect,K9Command.FirstAid,K9Command.VeterinaryCare},
+            new[]{K9Command.Feed,K9Command.Drink,K9Command.Rest,K9Command.Inspect,K9Command.FirstAid,K9Command.CarryK9,K9Command.VeterinaryCare},
             new[]{K9Command.Training,K9Command.TrainNarcotics,K9Command.TrainExplosives,K9Command.TrainWeapons}};
         private static readonly string[] CommandGroupTitles={"PARTNER CONTROL","SEARCH & DETECTION","TRACKING & SCENT","TACTICAL DEPLOYMENT","VEHICLE & EQUIPMENT","CARE & MEDICAL","TRAINING & CERTIFICATIONS"};
         private void OpenCommandGroup(int group){_menuMode="commands_group_"+group;var labels=CommandGroups[group].Select(CommandLabel).Concat(new[]{"← Back to Command Categories"});_menu.Open("ADVANCED K9 — "+CommandGroupTitles[group],labels);}
@@ -472,7 +473,7 @@ namespace AdvancedK9
                 if(_leashRope>=0&&(command==K9Command.Apprehend||command==K9Command.Fetch)){DeleteLeashRope();_state=K9State.Following;ActionNotification("~b~Leash automatically released for K9 deployment.");}
                 _workingLeashed=_leashRope>=0&&(command==K9Command.SearchArea||command==K9Command.SearchBuilding||command==K9Command.SearchVehicle||command==K9Command.SearchNarcotics||command==K9Command.SearchExplosives||command==K9Command.SearchWeapons||command==K9Command.Track||command==K9Command.FindTrail);
                 if(_leashRope>=0&&(command==K9Command.Training||command==K9Command.TrainNarcotics||command==K9Command.TrainExplosives||command==K9Command.TrainWeapons)){Game.DisplayNotification("~y~Remove the leash before traveling to the academy.");return;}
-                if(_profile.Health<=25 && command!=K9Command.Inspect && command!=K9Command.FirstAid && command!=K9Command.SpawnDismiss){Game.DisplayNotification("~r~K9 REMOVED FROM SERVICE~s~~n~Serious injury requires veterinary treatment. Earned certifications remain saved.");return;}
+                if(_profile.Health<=25 && command!=K9Command.Inspect && command!=K9Command.FirstAid && command!=K9Command.CarryK9 && command!=K9Command.SpawnDismiss){Game.DisplayNotification("~r~K9 REMOVED FROM SERVICE~s~~n~Serious injury requires veterinary treatment. Earned certifications remain saved.");return;}
                 if (RequiresTrustCheck(command) && !TrustAllowsCommand(command)) return;
                 switch (command)
                 {
@@ -516,6 +517,7 @@ namespace AdvancedK9
                     case K9Command.Rest: Rest(); break;
                     case K9Command.Inspect: Inspect(); break;
                     case K9Command.FirstAid: FirstAid(); break;
+                    case K9Command.CarryK9: ToggleCarryK9(); break;
                     case K9Command.VeterinaryCare: VeterinaryCare(); break;
                     case K9Command.Restock: Restock(); break;
                     case K9Command.ToggleLeash: ToggleLeash(); break;
@@ -801,7 +803,7 @@ namespace AdvancedK9
 
         private void Inspect(){Game.DisplayNotification("~b~K9 "+_profile.Name+" — FIELD INSPECTION~s~~n~Health: "+_profile.Health+"%  Stamina: "+_profile.Stamina+"%~n~Bond: "+_trust.Level+"/100 ("+_trust.Rank+")  Confidence: "+_profile.Confidence+"/100~n~Training: Level "+_profile.TrainingLevel+"/5 • "+_profile.TrainingLevelProgress+"/"+_profile.CurrentTrainingRequirement+" XP~n~~g~Completed certifications:~s~ "+Certifications());Game.DisplayNotification("~b~DUTY EQUIPMENT~s~~n~Meals "+_profile.FoodMeals+"  Water "+_profile.WaterBottles+"  First aid "+_profile.FirstAidKits+"~n~Scent bags "+_profile.ScentBags+"  Treats "+_profile.Treats+"~n~~b~Integration:~s~ "+_pr.ModeLabel);}
         private string Certifications(){string s="";if(_profile.ObedienceCertified)s+="OB ";if(_profile.AgilityCertified)s+="AGI ";if(_profile.DetectionCertified)s+="DET ";if(_profile.NarcoticsCertified)s+="NAR ";if(_profile.ExplosivesCertified)s+="BOMB ";if(_profile.WeaponsCertified)s+="WPN ";if(_profile.TrackingCertified)s+="TRK ";if(_profile.ApprehensionCertified)s+="APP ";return s.Length==0?"In training":s.Trim();}
-        private void FirstAid(){if(!DogEntityExists()){Game.DisplayNotification("~y~No deployed K9 is available for treatment.");return;}if(!_downed&&_profile.Health>=95){Game.DisplayNotification("~g~No field treatment required.");return;}if(!_profile.UseFirstAid()){Game.DisplayNotification("~r~No first-aid kits. Restock at the patrol vehicle.");return;}if(_dog.IsDead)NativeFunction.Natives.RESURRECT_PED(_dog);_dog.IsInvincible=false;int restored=Math.Max(35,_profile.Health);_profile.SetInjury("Serious — stabilized; veterinary treatment required",restored);_dog.Health=Math.Max(1,(int)(_dog.MaxHealth*restored/100f));_downed=false;_state=K9State.Injured;if(_blip!=null&&_blip.Exists()){_blip.Color=Color.DodgerBlue;_blip.Name="K9 "+_profile.Name;}Sit();GameFiber.Wait(1800);_profile.ChangeTrust(2);K9IncidentLog.Write(_profile.Name,"Medical","Emergency field revival and stabilization",_dog.Position);Game.LogTrivial("AdvancedK9: downed K9 revived by field first aid at "+_dog.Position+".");Game.DisplayNotification("~g~K9 stabilized and revived.~s~~n~Return to the veterinarian before resuming duty.");}
+        private void FirstAid(){if(!DogEntityExists()){Game.DisplayNotification("~y~No deployed K9 is available for treatment.");return;}if(!_downed&&_profile.Health>=95){Game.DisplayNotification("~g~No field treatment required.");return;}if(!_profile.UseFirstAid()){Game.DisplayNotification("~r~No first-aid kits. Restock at the patrol vehicle.");return;}if(_carryingDog)SetDownCarriedK9(false);int restored=Math.Max(35,_profile.Health);_profile.SetInjury("Serious — stabilized; veterinary treatment required",restored);RestoreDogAfterTreatment(restored);_downed=false;_state=K9State.Injured;if(_blip!=null&&_blip.Exists()){_blip.Color=Color.DodgerBlue;_blip.Name="K9 "+_profile.Name;}Sit();GameFiber.Wait(1800);_profile.ChangeTrust(2);K9IncidentLog.Write(_profile.Name,"Medical","Emergency field revival and stabilization",_dog.Position);Game.LogTrivial("AdvancedK9: downed K9 revived by field first aid at "+_dog.Position+".");Game.DisplayNotification("~g~K9 stabilized and revived.~s~~n~Return to the veterinarian before resuming duty.");}
 
         private void Rest(){if(!DogExists())return;LieDown();ActionNotification("~b~K9 rest cycle started.~s~ Maintain a safe perimeter.");GameFiber.Wait(8000);_profile.Rest();K9IncidentLog.Write(_profile.Name,"Care","Rest cycle",_dog.Position);ActionNotification("~g~K9 rested.~s~ Stamina restored.");}
         private void Bathroom()
@@ -812,7 +814,13 @@ namespace AdvancedK9
             else{PlayDogAnimation("creatures@rottweiler@amb@world_dog_sitting@base","base",3000,0);SpawnDogWaste(reliefPoint);_bowel=100;K9IncidentLog.Write(_profile.Name,"Care","Defecated automatically",reliefPoint);}Follow();
         }
         private void SpawnDogWaste(Vector3 position){try{var model=new Model("prop_big_shit_02");if(!model.IsValid)model=new Model("prop_big_shit_01");if(!model.IsValid)return;model.LoadAndWait();var waste=new Rage.Object(model,position);model.Dismiss();if(waste==null||!waste.Exists())return;waste.IsPersistent=true;GameFiber.StartNew(()=>{GameFiber.Wait(180000);if(waste.Exists())waste.Delete();});}catch(Exception ex){Game.LogTrivial("AdvancedK9 dog waste prop: "+ex.Message);}}
-        private void VeterinaryCare(){if(!DogEntityExists())return;var handler=Game.LocalPlayer.Character;Vector3 p=handler.Position;float h=handler.Heading;if(_dog.IsDead)NativeFunction.Natives.RESURRECT_PED(_dog);NativeFunction.Natives.DO_SCREEN_FADE_OUT(450);GameFiber.Wait(550);handler.Position=new Vector3(306.7f,-595.2f,43.3f);_dog.Position=handler.GetOffsetPosition(new Vector3(1f,0f,0f));GameFiber.Wait(1800);_profile.VeterinaryTreat();_dog.Health=_dog.MaxHealth;_dog.IsInvincible=false;_downed=false;if(_blip!=null&&_blip.Exists()){_blip.Color=Color.DodgerBlue;_blip.Name="K9 "+_profile.Name;}handler.Position=p;handler.Heading=h;_dog.Position=handler.GetOffsetPosition(new Vector3(-1f,-1f,0f));NativeFunction.Natives.DO_SCREEN_FADE_IN(450);K9IncidentLog.Write(_profile.Name,"Medical","Veterinary cleared",p);Game.DisplayNotification("~g~Veterinary clearance complete.~s~ K9 returned to service.");Follow();}
+        private void VeterinaryCare(){if(!DogEntityExists())return;if(_carryingDog)SetDownCarriedK9(false);var handler=Game.LocalPlayer.Character;Vector3 p=handler.Position;float h=handler.Heading;NativeFunction.Natives.DO_SCREEN_FADE_OUT(450);GameFiber.Wait(550);handler.Position=new Vector3(306.7f,-595.2f,43.3f);RestoreDogAfterTreatment(100);_dog.Position=handler.GetOffsetPosition(new Vector3(1f,0f,0f));GameFiber.Wait(1800);_profile.VeterinaryTreat();RestoreDogAfterTreatment(100);_downed=false;if(_blip!=null&&_blip.Exists()){_blip.Color=Color.DodgerBlue;_blip.Name="K9 "+_profile.Name;}handler.Position=p;handler.Heading=h;_dog.Position=handler.GetOffsetPosition(new Vector3(-1f,-1f,0f));NativeFunction.Natives.DO_SCREEN_FADE_IN(450);K9IncidentLog.Write(_profile.Name,"Medical","Veterinary cleared",p);Game.DisplayNotification("~g~Veterinary clearance complete.~s~ K9 returned to service.");Follow();}
+
+        private void RestoreDogAfterTreatment(int healthPercent){if(!DogEntityExists())return;NativeFunction.Natives.FREEZE_ENTITY_POSITION(_dog,false);NativeFunction.Natives.SET_PED_CAN_RAGDOLL(_dog,true);if(_dog.IsDead)NativeFunction.Natives.RESURRECT_PED(_dog);NativeFunction.Natives.REVIVE_INJURED_PED(_dog);NativeFunction.Natives.CLEAR_PED_TASKS_IMMEDIATELY(_dog);int health=Math.Max(1,(int)(_dog.MaxHealth*Math.Max(1,Math.Min(100,healthPercent))/100f));_dog.Health=health;NativeFunction.Natives.SET_ENTITY_HEALTH(_dog,health);_dog.IsInvincible=false;_dog.BlockPermanentEvents=true;}
+
+        private void ToggleCarryK9(){if(_carryingDog){SetDownCarriedK9(true);return;}if(!DogEntityExists()){Game.DisplayNotification("~y~No deployed K9 is available to carry.");return;}if(!_downed&&_state!=K9State.Injured&&_profile.Health>=95){Game.DisplayNotification("~g~"+_profile.Name+" does not need to be carried.");return;}var handler=Game.LocalPlayer.Character;if(_dog.DistanceTo(handler)>3f){Game.DisplayNotification("~y~Move closer to "+_profile.Name+" before carrying.");return;}DeleteLeashRope();ReleaseVehicleSeat();NativeFunction.Natives.FREEZE_ENTITY_POSITION(_dog,false);NativeFunction.Natives.SET_PED_CAN_RAGDOLL(_dog,false);_dog.IsInvincible=true;_dog.Tasks.ClearImmediately();handler.Tasks.PlayAnimation("anim@heists@box_carry@","idle",4f,AnimationFlags.Loop);int spine=NativeFunction.Natives.GET_PED_BONE_INDEX<int>(handler,24818);NativeFunction.Natives.SET_ENTITY_COLLISION(_dog,false,false);NativeFunction.Natives.ATTACH_ENTITY_TO_ENTITY(_dog,handler,spine,.18f,.42f,-.08f,0f,90f,90f,false,false,false,false,2,true);PlayDogAnimation("creatures@rottweiler@move","dead_left",-1,1);_carryingDog=true;_state=K9State.Injured;K9IncidentLog.Write(_profile.Name,"Medical","Handler began K9 evacuation carry",handler.Position);Game.DisplayNotification("~b~Carrying "+_profile.Name+".~s~~n~Select Carry / Set Down K9 again to place the K9 down.");}
+
+        private void SetDownCarriedK9(bool notify){if(!_carryingDog)return;var handler=Game.LocalPlayer.Character;handler.Tasks.Clear();NativeFunction.Natives.DETACH_ENTITY(_dog,true,true);NativeFunction.Natives.SET_ENTITY_COLLISION(_dog,true,true);NativeFunction.Natives.FREEZE_ENTITY_POSITION(_dog,false);_dog.Position=handler.GetOffsetPosition(new Vector3(.65f,1.1f,0f));_carryingDog=false;if(_downed)PlaceDogInDownedPose();else{_dog.IsInvincible=false;NativeFunction.Natives.SET_PED_CAN_RAGDOLL(_dog,true);LieDown();_state=K9State.Injured;}K9IncidentLog.Write(_profile.Name,"Medical","Handler set carried K9 down",_dog.Position);if(notify)Game.DisplayNotification("~b~"+_profile.Name+" placed down safely.");}
         private void Restock(){var handler=Game.LocalPlayer.Character;var vehicle=World.GetAllVehicles().Where(v=>v.Exists()&&v.DistanceTo(handler)<5f).FirstOrDefault();if(vehicle==null){Game.DisplayNotification("~y~Stand beside a patrol vehicle to restock.");return;}_profile.Restock();K9IncidentLog.Write(_profile.Name,"Equipment","Restocked",handler.Position);Game.DisplayNotification("~g~K9 duty equipment restocked.");}
         private void WhistleRecall(){NativeFunction.Natives.PLAY_SOUND_FRONTEND(-1,"NAV_UP_DOWN","HUD_FRONTEND_DEFAULT_SOUNDSET",true);Game.DisplaySubtitle("~b~Handler whistle recall",1200);Follow();}
         private void HandSignal(){var handler=Game.LocalPlayer.Character;NativeFunction.Natives.REQUEST_ANIM_DICT("gestures@m@standing@casual");GameFiber.Wait(150);handler.Tasks.PlayAnimation("gestures@m@standing@casual","gesture_come_here_soft",4f,AnimationFlags.None);GameFiber.Wait(700);Follow();}
@@ -1371,12 +1379,19 @@ namespace AdvancedK9
             if(DogEntityExists())
             {
                 _lastDogPosition=_dog.Position;_lastDogHeading=_dog.Heading;
+                if(_downed)
+                {
+                    if(_dog.IsDead)NativeFunction.Natives.RESURRECT_PED(_dog);
+                    _dog.Health=Math.Max(1,_dog.Health);_dog.IsInvincible=true;_dog.BlockPermanentEvents=true;
+                    return;
+                }
                 if(!_dog.IsDead)return;
                 NativeFunction.Natives.RESURRECT_PED(_dog);
                 NativeFunction.Natives.CLEAR_PED_TASKS_IMMEDIATELY(_dog);
                 _dog.Health=1;_dog.IsInvincible=true;_dog.BlockPermanentEvents=true;
                 _profile.SetInjury("Critical — downed; field first aid required",1);
                 _state=K9State.Injured;_downed=true;DeleteLeashRope();ReleaseVehicleSeat();_camera.Disable();
+                PlaceDogInDownedPose();
                 if(_blip==null||!_blip.Exists()){_blip=_dog.AttachBlip();_blip.Name="K9 "+_profile.Name+" — DOWNED";}
                 _blip.Color=Color.Red;
                 K9IncidentLog.Write(_profile.Name,"Medical","K9 downed in field",_dog.Position);
@@ -1388,9 +1403,11 @@ namespace AdvancedK9
             if(CreateDogAt(_lastDogPosition,_lastDogHeading))
             {
                 _dog.Health=1;_dog.IsInvincible=true;_profile.SetInjury("Critical — downed; field first aid required",1);
-                _state=K9State.Injured;_downed=true;if(_blip!=null&&_blip.Exists()){_blip.Color=Color.Red;_blip.Name="K9 "+_profile.Name+" — DOWNED";}
+                _state=K9State.Injured;_downed=true;PlaceDogInDownedPose();if(_blip!=null&&_blip.Exists()){_blip.Color=Color.Red;_blip.Name="K9 "+_profile.Name+" — DOWNED";}
             }
         }
+
+        private void PlaceDogInDownedPose(){if(!DogEntityExists())return;_dog.IsInvincible=true;NativeFunction.Natives.CLEAR_PED_TASKS_IMMEDIATELY(_dog);NativeFunction.Natives.SET_PED_CAN_RAGDOLL(_dog,false);NativeFunction.Natives.FREEZE_ENTITY_POSITION(_dog,false);try{PlayDogAnimation("creatures@rottweiler@move","dead_left",-1,1);GameFiber.Wait(150);}catch(Exception ex){Game.LogTrivial("AdvancedK9 downed side pose fallback: "+ex.Message);}NativeFunction.Natives.FREEZE_ENTITY_POSITION(_dog,true);}
 
         private void MaintainState()
         {
@@ -1463,11 +1480,11 @@ namespace AdvancedK9
             int searchProgress=_hudPreviewSearch?64:_hudSearchProgress;
             string alert=_hudPreviewAlert?"NARCOTICS":Game.GameTime<_hudAlertUntil?_hudAlert:"";
             float distance=DogEntityExists()?_dog.DistanceTo(Game.LocalPlayer.Character):0f;
-            string displayState=_downed?"DOWNED":_deployed?(hudSearching?"SEARCHING":_state.ToString()):"KENNELED";
+            string displayState=_carryingDog?"CARRIED":_downed?"DOWNED":_deployed?(hudSearching?"SEARCHING":_state.ToString()):"KENNELED";
             _hud.Update(new GlassTacticalHud.Snapshot{Visible=_profile.HudMode!=0,Collapsed=collapsed,ShowPortrait=_profile.HudShowPortrait,CircularPortrait=_profile.HudPortraitShape==0,ShowState=_profile.HudShowState,ShowHealth=_profile.HudShowHealth,ShowStamina=_profile.HudShowStamina,ShowDistance=_profile.HudShowDistance&&DogEntityExists(),ShowCommand=_profile.HudShowCommand,ShowBehavior=_profile.HudShowBehavior,ShowSearchProgress=_profile.HudSearchProgress,X=_profile.HudX,Y=_profile.HudY,Scale=_profile.HudScale,Opacity=_profile.HudOpacity,Distance=distance,Health=_profile.Health,Stamina=_profile.Stamina,SearchProgress=searchProgress,Coat=_profile.CoatVariation,Vest=_profile.VestIndex,VestTexture=_profile.VestTexture,Name=_profile.Name,State=displayState,Command=_hudCommand,Behavior=hudSearching?"SEARCHING":HudBehavior(),SearchLabel=search,Alert=alert,PortraitFile=_profile.PortraitFile,Breed=_profile.Breed,Model=_profile.ModelName,AppearanceKey=_profile.CoatVariation+":"+_profile.VestIndex+":"+_profile.VestTexture,Metric=_profile.HudMetricDistance});
             if(_camera.Active&&DogExists()){float d=_dog.DistanceTo(Game.LocalPlayer.Character);NativeFunction.Natives.DRAW_RECT(.5f,.91f,.52f,.09f,0,0,0,180);DrawText("K9 CAM  GPS "+_dog.Position.X.ToString("0")+","+_dog.Position.Y.ToString("0")+"  HDG "+HeadingCardinal(_dog.Heading)+"  HANDLER "+d.ToString("0.0")+"m",.25f,.875f,.31f);DrawText("STATE "+_state+"  HP "+_profile.Health+"  STA "+_profile.Stamina+"  H2O "+_profile.Water,.25f,.91f,.27f);}
         }
-        private string HudBehavior(){if(_downed)return "NEEDS FIRST AID";if(!_deployed)return "INACTIVE";switch(_state){case K9State.Following:return "FOLLOWING";case K9State.Heeling:return "AT HEEL";case K9State.Searching:return "SEARCHING";case K9State.Tracking:return "TRACKING";case K9State.Apprehending:return "DEPLOYED";case K9State.InVehicle:return "SECURED";case K9State.Leashed:return "LEASHED";default:return _state.ToString().ToUpperInvariant();}}
+        private string HudBehavior(){if(_carryingDog)return _downed?"EVACUATION — FIRST AID":"EVACUATION";if(_downed)return "NEEDS FIRST AID";if(!_deployed)return "INACTIVE";switch(_state){case K9State.Following:return "FOLLOWING";case K9State.Heeling:return "AT HEEL";case K9State.Searching:return "SEARCHING";case K9State.Tracking:return "TRACKING";case K9State.Apprehending:return "DEPLOYED";case K9State.InVehicle:return "SECURED";case K9State.Leashed:return "LEASHED";default:return _state.ToString().ToUpperInvariant();}}
         private void SetHudAlert(string result){_hudAlert=result??"";_hudAlertUntil=Game.GameTime+(uint)_profile.HudAlertDuration;}
         private static void DrawStatusBar(string label,int value,float x,float y,float width,int r,int g,int b){DrawText(label+" "+value+"%",x,y-.015f,.22f);NativeFunction.Natives.DRAW_RECT(x+width/2,y+.012f,width,.009f,32,40,48,235);float fill=width*Math.Max(0,Math.Min(100,value))/100f;if(fill>0)NativeFunction.Natives.DRAW_RECT(x+fill/2,y+.012f,fill,.009f,r,g,b,255);}
         private static string HeadingCardinal(float h){h=(h%360+360)%360;return h<22.5f||h>=337.5f?"N":h<67.5f?"NE":h<112.5f?"E":h<157.5f?"SE":h<202.5f?"S":h<247.5f?"SW":h<292.5f?"W":"NW";}
@@ -1578,6 +1595,7 @@ namespace AdvancedK9
         {
             _camera.Disable();
             DeleteLeashRope();
+            if(_carryingDog)SetDownCarriedK9(false);
             ReleaseVehicleSeat();
             if (_blip != null && _blip.Exists()) _blip.Delete();
             Ped dog=_dog;_dog=null;
@@ -1588,7 +1606,7 @@ namespace AdvancedK9
                 try{dog.Delete();}catch(Exception ex){Game.LogTrivial("AdvancedK9 hard-dismiss delete failed: "+ex.Message);}
             }
             _state = K9State.Dismissed;
-            _deployed=false;_downed=false;
+            _deployed=false;_downed=false;_carryingDog=false;
             if (notify) ActionNotification("~b~"+_profile.Name+" returned to the station kennel.");
         }
 
