@@ -55,7 +55,7 @@ jobs:
             if ($compiled -notmatch [regex]::Escape($marker)) { throw "Missing compiled v0.22.11-beta marker: $marker" }
           }
           foreach ($marker in @('TryGetKennelLocation','SaveKennelLocation','MigrateLegacyKennelDefaults','SamePlacement','KennelLocations','MissionRow','BrookTrail','44.77443','60.83065','OpenKennelLocationMenu','Live kennel drag','SnapActiveKennelToGround','HandleLiveMenuEditors','Live HUD drag','SaveHudLayout')) {
-            if ($compiled -notmatch [regex]::Escape($marker)) { throw "Missing compiled configurable-kennel marker: $marker" }
+            if ($compiled -notmatch [regex]::Escape($marker)) { Write-Output "::error file=.github/workflows/build-windows.yml,line=58::Missing compiled configurable-kennel marker: $marker"; throw "Missing compiled configurable-kennel marker: $marker" }
           }
           foreach ($marker in @('NEGATIVE — NO ', 'three-bark alert authorized', 'K9 remains silent', 'TASK_PAUSE')) {
             if ($compiled -notmatch [regex]::Escape($marker)) { throw "Missing compiled contextual-search marker: $marker" }
