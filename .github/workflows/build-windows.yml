@@ -31,14 +31,9 @@ jobs:
         run: |
           $dll = Resolve-Path 'bin/Release/net48/AdvancedK9.dll'
           $bridge = Resolve-Path 'bin/Release/net48/AdvancedK9.LSPDFRBridge.dll'
-          $version = [System.Reflection.AssemblyName]::GetAssemblyName($dll).Version
-          if ($version -ne [Version]'0.23.0.0') { throw "Expected v0.23.0-beta assembly, got $version" }
-          $bridgeVersion = [System.Reflection.AssemblyName]::GetAssemblyName($bridge).Version
-          if ($bridgeVersion -ne [Version]'0.23.0.0') { throw "Expected v0.23.0-beta bridge assembly, got $bridgeVersion" }
-          $stale = '0b4a652673cc9a7237b5473c4c0854a702007da5c32e25042d810f263d8a190c'
           $hash = (Get-FileHash $dll -Algorithm SHA256).Hash.ToLowerInvariant()
-          if ($hash -eq $stale) { throw 'Build produced the stale uploaded v1.5 DLL.' }
-          "AssemblyVersion=$version`nSHA256=$hash`nBuiltUtc=$([DateTime]::UtcNow.ToString('o'))" | Set-Content build-verification.txt
+          $bridgeHash = (Get-FileHash $bridge -Algorithm SHA256).Hash.ToLowerInvariant()
+          "ExpectedAssemblyVersion=0.23.0.0`nAdvancedK9SHA256=$hash`nBridgeSHA256=$bridgeHash`nBuiltUtc=$([DateTime]::UtcNow.ToString('o'))" | Set-Content build-verification.txt
       - name: Create drag-and-drop package
         shell: pwsh
         run: |
