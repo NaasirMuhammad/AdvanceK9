@@ -1,5 +1,7 @@
 # Changelog
 
+- Replaces all per-shot K9 animation manipulation with GTA's paired persistent/task event blockers. AdvancedK9 no longer clears secondary animations, resets clipsets, disables the animal's ambient animation system or reissues movement tasks while the handler fires.
+
 - Prevents handler gunfire from applying human ambient/gesture reactions to the K9. Gunfire suppression now clears only the secondary reaction animation and no longer resets animal movement clipsets or replaces active K9 tasks.
 - Adds user-defined voice-command phrases through `[CommandPhrases]`; custom alternatives supplement built-in phrases and are supplied to transcription for improved recognition.
 - Makes every AdvancedK9 shortcut configurable while preserving existing defaults, and accepts `Modifier=None`/`Off`/`Disabled` for optional modifier-free shortcuts.
