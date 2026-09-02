@@ -72,6 +72,9 @@ jobs:
           foreach ($marker in @('FindArticleScentSubject','Track direction indicated','HoldPerimeter','ContainSuspect','MaintainContainment','CurrentPursuitSuspect','StartAutomaticPursuitTrack','GetPursuitPeds','UpdateHandlerDownProtection','HANDLER DOWN — K9 PROTECTION ACTIVE')) {
             if (($compiled + $bridgeCompiled) -notmatch [regex]::Escape($marker)) { throw "Missing compiled v0.23.0 roadmap marker: $marker" }
           }
+          foreach ($marker in @('gunfire protection: ambient reactions blocked without replacing the K9 task','existing K9 task preserved','TASK_FOLLOW_TO_OFFSET_OF_ENTITY','interior transition: K9 caught up after elevator/teleport change; leash=')) {
+            if ($compiled -notmatch [regex]::Escape($marker)) { throw "Missing compiled gunfire/interior regression marker: $marker" }
+          }
           foreach ($removed in @('K9 four-corner vehicle sweep started', 'Vehicle search~s~ — ', 'POSITIVE "+SpecialtyLabel', 'No "+(specialty==')) {
             if ($compiled -match [regex]::Escape($removed)) { throw "Legacy vehicle-search notification remains compiled: $removed" }
           }
