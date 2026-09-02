@@ -1435,7 +1435,7 @@ namespace AdvancedK9
             if(_seatCalibrationDoorOpen&&(!_menu.Visible||_menuMode!="seat_config"||_state!=K9State.InVehicle))CloseSeatCalibrationDoor();
             EnforceHandlerSafety();
             MaintainAnimalPedPresentation();
-            MaintainIndoorFollow();
+            MaintainFollowNavigation();
             UpdateNeeds();
             UpdateReliefNeeds();
             UpdateEnvironment();
@@ -1467,12 +1467,10 @@ namespace AdvancedK9
             ApplyAnimalPedSafeguards();
         }
 
-        private void MaintainIndoorFollow()
+        private void MaintainFollowNavigation()
         {
             if(_state!=K9State.Following&&_state!=K9State.Heeling)return;
             var handler=Game.LocalPlayer.Character;if(handler==null||!handler.Exists())return;
-            int handlerInterior=NativeFunction.Natives.GET_INTERIOR_FROM_ENTITY<int>(handler),dogInterior=NativeFunction.Natives.GET_INTERIOR_FROM_ENTITY<int>(_dog);
-            if(handlerInterior==0&&dogInterior==0)return;
             float distance=_dog.DistanceTo(handler);if(distance<=1.45f||Game.GameTime<_nextIndoorFollowUpdate)return;
             bool stopped=NativeFunction.Natives.IS_PED_STOPPED<bool>(_dog);if(!stopped&&distance<4f)return;
             _nextIndoorFollowUpdate=Game.GameTime+1200;
