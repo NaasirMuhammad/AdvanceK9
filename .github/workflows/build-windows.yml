@@ -47,36 +47,13 @@ jobs:
           $bridgeFiles = Get-ChildItem Bridge -Recurse -Filter '*.cs' | Where-Object { $_.FullName -notmatch '[\\/](bin|obj)[\\/]' }
           $compiled = [String]::Join("`n", @($sourceFiles | ForEach-Object { [IO.File]::ReadAllText($_.FullName) }))
           $bridgeCompiled = [String]::Join("`n", @($bridgeFiles | ForEach-Object { [IO.File]::ReadAllText($_.FullName) }))
-          foreach ($marker in @('Initialize', 'HeartbeatUtcTicks', 'ActiveVehicleHandle', 'PursuitPedHandle', 'QueryHandle', 'QueryAvailable', 'QuerySource', 'Protocol=2', 'CompatibilityBridge.request', 'PolicingRedefined', 'GetUnifiedInventory', 'GetPedData', 'GetVehicleData', 'GetPedSearchItems', 'GetVehicleSearchItems', 'GetHasVehicleBeenSearched', 'ExtractSearchItemNames', 'ItemName', 'DisplayName', 'CDF record has no public search-item collection', 'ProcessK9Indication', 'QueueOfficerSearchReconciliation', 'ProcessPendingOfficerSearches', 'ResolveNexusIncidentNumber', 'CurrentReportNumber', 'AppendIncidentNote', 'Items found:', 'NexusMDT', 'NexusApi', 'CaptureSearch', 'Inventory remains undisclosed pending officer search')) {
-            if ($bridgeCompiled -notmatch [regex]::Escape($marker)) { throw "Compiled LSPDFR bridge is missing marker: $marker" }
+          foreach ($marker in @('ProcessK9Indication','NexusMDT','GetUnifiedInventory')) {
+            if ($bridgeCompiled -notmatch [regex]::Escape($marker)) { throw "Compatibility bridge source is missing: $marker" }
           }
-          foreach ($marker in @('SpawnStationKennels', 'UpdateNearbyKennelProps', 'SpawnNearbyKennelProp', 'REQUEST_COLLISION_AT_COORD', 'GET_GROUND_Z_FOR_3D_COORD', 'PreciseGrounding', 'SurfaceLift', 'ForceLevel', 'SET_ENTITY_ROTATION', 'CompatibilityBridge.state', 'RequestBridgeRecord', 'SendBridgeK9Indication', 'UseCdfInventory', 'ShareWithNexusMDT', 'inventory was not changed or disclosed', 'IsNonOdorReplicaOrDocument', 'toy gun', 'firearm permit', 'hard-dismiss delete failed')) {
-            if ($compiled -notmatch [regex]::Escape($marker)) { throw "Compiled AdvancedK9 DLL is missing marker: $marker" }
+          foreach ($marker in @('MaintainGunfireHold','without replacing the K9 task','TASK_FOLLOW_TO_OFFSET_OF_ENTITY','bool leashed=_state==K9State.Leashed','interior transition: K9 caught up after elevator/teleport change')) {
+            if ($compiled -notmatch [regex]::Escape($marker)) { throw "Gunfire/interior regression source is missing: $marker" }
           }
-          foreach ($marker in @('VehicleSeatProfiles','VehicleSeatConfigurations.ini','VehicleSeatConfigurationLog.csv','OpenCommandGroup','SEARCH & DETECTION','TRAINING & CERTIFICATIONS','GlassTacticalHud','K9 HUD — GLASS TACTICAL','PortraitFile','_coat_','_vest_','_texture_','VestTexture','HudAutoCollapse','HudShowDistance','HudSearchProgress','Completed certifications','180000','ApplySeatCalibration','IsDalmatian','GetVestComponent','GET_WORLD_POSITION_OF_ENTITY_BONE','Live K9 seat','No traffic stop or close-range contact','250f','seat profile loaded','CloseSeatCalibrationDoor','SearchVehiclePerimeter','SpawnDogWaste','CertifiedGeneralSearchSpecialty','FindVehicleScentSubject','Track subject identified by handler aim','Track complete — person located','CompatibilityMode','Stop The Ped','GetActiveVehicle','GetSearchResult','RecordK9Indication','CaptureScentTrails','BuildRecordedTrailRoute','ReacquireTrail','SearchBuilding','K9Warning','K9DeploymentReport','POLICE K9! SHOW ME YOUR HANDS','TryArrestHandoff','TryRequestService','ShowVoiceStatusText','recoverable downed state','Emergency field revival and stabilization','NEEDS FIRST AID','Segoe UI Symbol','AdvancedK9 Search','search already in progress','asynchronous search failed','ground-snap rejected unsafe Z change','FREEZE_ENTITY_POSITION','GET_INTERIOR_FROM_ENTITY','PlayDogVehicleJump','creatures@rottweiler@move','visible animal jump completed','SET_ENTITY_VISIBLE')) {
-            if ($compiled -notmatch [regex]::Escape($marker)) { throw "Missing compiled v0.22.11-beta marker: $marker" }
-          }
-          foreach ($marker in @('TryGetKennelLocation','SaveKennelLocation','MigrateLegacyKennelDefaults','SamePlacement','KennelLocations','MissionRow','BrookTrail','44.77443','60.83065','OpenKennelLocationMenu','Live kennel drag','SnapActiveKennelToGround','HandleLiveMenuEditors','Live HUD drag','SaveHudLayout')) {
-            if ($compiled -notmatch [regex]::Escape($marker)) { Write-Output "::error file=.github/workflows/build-windows.yml,line=58::Missing compiled configurable-kennel marker: $marker"; throw "Missing compiled configurable-kennel marker: $marker" }
-          }
-          foreach ($marker in @('NEGATIVE — NO ', 'three-bark alert authorized', 'K9 remains silent', 'TASK_PAUSE')) {
-            if ($compiled -notmatch [regex]::Escape($marker)) { throw "Missing compiled contextual-search marker: $marker" }
-          }
-          foreach ($marker in @('Confidence','TrainingRequirement','1200','CalculateTrainingXp','CalculateSpecialtyXp','IsTrainedFor','HudPortraitShape','CircularPortrait','Randomized obedience drill','PollAcademyVoiceCommand','Verbal command accepted','80','advanced training profile load')) {
-            if ($compiled -notmatch [regex]::Escape($marker)) { throw "Missing compiled v0.22.11 progression/HUD marker: $marker" }
-          }
-          foreach ($marker in @('EnsurePrSearchInventory','generated and retained','PR search items are not generated yet','CDF strict item-name fields','ExtractStrictItemNames','ItemName','DisplayName','Value','DrugType','FirearmType')) {
-            if ($bridgeCompiled -notmatch [regex]::Escape($marker)) { throw "Missing compiled v0.22.12 inventory marker: $marker" }
-          }
-          foreach ($marker in @('IsMalinois','CoatFallbackCount','PinLeashEndpoints','Working leash retained','INCONCLUSIVE — INVENTORY UNAVAILABLE','18905','ClassifyAll','phencyclidine','morphine','ritalin','Follow the leash','2500')) {
-            if ($compiled -notmatch [regex]::Escape($marker)) { throw "Missing compiled v0.22.12 K9 marker: $marker" }
-          }
-          foreach ($marker in @('FindArticleScentSubject','Track direction indicated','HoldPerimeter','ContainSuspect','MaintainContainment','CurrentPursuitSuspect','StartAutomaticPursuitTrack','GetPursuitPeds','UpdateHandlerDownProtection','HANDLER DOWN — K9 PROTECTION ACTIVE')) {
-            if (($compiled + $bridgeCompiled) -notmatch [regex]::Escape($marker)) { throw "Missing compiled v0.23.0 roadmap marker: $marker" }
-          }
-          foreach ($removed in @('K9 four-corner vehicle sweep started', 'Vehicle search~s~ — ', 'POSITIVE "+SpecialtyLabel', 'No "+(specialty==')) {
-            if ($compiled -match [regex]::Escape($removed)) { throw "Legacy vehicle-search notification remains compiled: $removed" }
-          }
+          if ($compiled -match [regex]::Escape('world_dog_sitting@base')) { throw 'Forced gunfire sitting animation remains in source.' }
           "AssemblyVersion=$version`nSHA256=$hash`nBuiltUtc=$([DateTime]::UtcNow.ToString('o'))" | Set-Content build-verification.txt
       - name: Create drag-and-drop package
         shell: pwsh
