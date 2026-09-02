@@ -1,5 +1,10 @@
 # Changelog
 
+- Stages K9 unloading through the opened rear door with a visible animal jump to a collision-safe exterior point, preventing Rex from visibly phasing through the vehicle body during Exit Vehicle or Door Pop.
+
+- Adds a tactical gunfire hold for ordinary Follow/Heel: Rex receives one animal-safe stand task at the start of handler fire, cannot ragdoll or deform during the firing window, and automatically resumes Follow when firing stops. No per-shot animation replay occurs.
+- Upgrades interior following for future callout interiors with frequent navmesh routing plus elevator/teleport catch-up when the handler changes floors, interiors or distant lobby positions.
+
 - Removes the task-level event blocker that could compete with Follow and distort the animal skeleton. Gunfire immunity now uses only the non-task ped event flag.
 - Adds a Follow recovery path that uses the navigation mesh through doors, corridors and rooms whenever Rex becomes stopped or falls behind, including custom FIB lobby/MLO spaces that may not report an interior ID.
 
