@@ -7,6 +7,7 @@ namespace AdvancedK9
     internal sealed class CommandDefinition { public K9Command Command{get;} public string Label{get;} public string[] Phrases{get;} public bool RequiresDog{get;} public CommandDefinition(K9Command c,string l,bool r,params string[] p){Command=c;Label=l;RequiresDog=r;Phrases=p;} }
     internal static class CommandRegistry
     {
+        private static readonly Dictionary<K9Command,string[]> CustomPhrases=new Dictionary<K9Command,string[]>();
         public static readonly IReadOnlyList<CommandDefinition> All=new[]{
             D(K9Command.SpawnDismiss,"Deploy / Dismiss",false,"deploy k9","deploy the dog","bring out the dog","partner up","send out the dog","dismiss k9","kennel up","end shift","dismiss"),
             D(K9Command.Follow,"Follow",true,"follow me","stay with me","move with me","on me","with me","follow"),
@@ -58,6 +59,8 @@ namespace AdvancedK9
             D(K9Command.TrainExplosives,"Explosives Training",true,"start explosives training","bomb certification","bomb detection training","train for explosives","explosives academy"),
             D(K9Command.TrainWeapons,"Weapons Training",true,"start weapons training","weapons certification","gun detection training","firearm training","weapons academy")};
         static CommandDefinition D(K9Command c,string l,bool r,params string[] p)=>new CommandDefinition(c,l,r,p);
+        public static void Configure(IDictionary<K9Command,string[]> custom){CustomPhrases.Clear();if(custom==null)return;foreach(var pair in custom)if(pair.Value!=null&&pair.Value.Length>0)CustomPhrases[pair.Key]=pair.Value;}
+        public static string VoicePromptPhrases=>string.Join(", ",CustomPhrases.SelectMany(x=>x.Value).Where(x=>!string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase));
         public static bool TryMatch(string text,string dogName,out K9Command command)
         {
             command=default(K9Command);if(string.IsNullOrWhiteSpace(text))return false;
@@ -67,7 +70,9 @@ namespace AdvancedK9
             // Spoken "sit down" means sit; do not let the generic word "down" turn it
             // into the separate lie-down command.
             if(HasPhrase(t,"sit down")||HasPhrase(t,"take a seat")){command=K9Command.Sit;return true;}
-            foreach(var item in All.SelectMany(x=>x.Phrases.Select(p=>new{Item=x,Phrase=Normalize(p)})).OrderByDescending(x=>x.Phrase.Length))
+            var phrases=All.SelectMany(x=>x.Phrases.Select(p=>new{Item=x,Phrase=Normalize(p)}));
+            phrases=phrases.Concat(CustomPhrases.SelectMany(x=>x.Value.Select(p=>new{Item=All.First(d=>d.Command==x.Key),Phrase=Normalize(p)})));
+            foreach(var item in phrases.OrderByDescending(x=>x.Phrase.Length))
                 if(HasPhrase(t,item.Phrase)){command=item.Item.Command;return true;}
             return false;
         }

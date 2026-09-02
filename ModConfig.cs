@@ -16,6 +16,7 @@ namespace AdvancedK9
         public Keys LeashKey = Keys.L;
         public Keys PushToTalkKey = Keys.V;
         public Keys KennelKey = Keys.U;
+        public bool ModifierEnabled = true;
         public bool VoiceEnabled = true;
         public bool ContinuousListening = false;
         public bool ShowVoiceStatusText = false;
@@ -50,6 +51,7 @@ namespace AdvancedK9
         public bool CompatibilityShareWithNexusMdt = true;
         public bool CompatibilityProtectManagedPeds = true;
         public string PortraitFile = "";
+        public readonly Dictionary<K9Command,string[]> CustomCommandPhrases=new Dictionary<K9Command,string[]>();
         private readonly Dictionary<string,string> _kennelLocations=new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase);
         private readonly string _configPath=Path.Combine("Plugins","LSPDFR","AdvancedK9","AdvancedK9.ini");
 
@@ -69,7 +71,9 @@ namespace AdvancedK9
             var ini = new InitializationFile(path);
             if (!File.Exists(path)) ini.Create();
             result.SpawnKey = ini.ReadEnum("Keys", "SpawnDismiss", result.SpawnKey);
-            result.ModifierKey = ini.ReadEnum("Keys", "Modifier", result.ModifierKey);
+            string modifier=ini.ReadString("Keys","Modifier",result.ModifierKey.ToString()).Trim();
+            result.ModifierEnabled=!modifier.Equals("None",StringComparison.OrdinalIgnoreCase)&&!modifier.Equals("Disabled",StringComparison.OrdinalIgnoreCase)&&!modifier.Equals("Off",StringComparison.OrdinalIgnoreCase);
+            if(result.ModifierEnabled){Keys parsed;if(Enum.TryParse(modifier,true,out parsed)&&parsed!=Keys.None)result.ModifierKey=parsed;}
             result.CommandKey = ini.ReadEnum("Keys", "CommandWheel", result.CommandKey);
             result.CameraKey = ini.ReadEnum("Keys", "DogCamera", result.CameraKey);
             result.LeashKey = ini.ReadEnum("Keys", "Leash", result.LeashKey);
@@ -111,6 +115,13 @@ namespace AdvancedK9
             result.CompatibilityShareWithNexusMdt = ini.ReadBoolean("Compatibility", "ShareWithNexusMDT", result.CompatibilityShareWithNexusMdt);
             result.CompatibilityProtectManagedPeds = ini.ReadBoolean("Compatibility", "ProtectRestrainedPeds", result.CompatibilityProtectManagedPeds);
             result.PortraitFile = ini.ReadString("HUD", "PortraitFile", result.PortraitFile);
+            foreach(var definition in CommandRegistry.All)
+            {
+                string aliases=ini.ReadString("CommandPhrases",definition.Command.ToString(),"");
+                if(string.IsNullOrWhiteSpace(aliases))continue;
+                string[] phrases=aliases.Split(new[]{'|',';'},StringSplitOptions.RemoveEmptyEntries).Select(x=>x.Trim()).Where(x=>!string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+                if(phrases.Length>0)result.CustomCommandPhrases[definition.Command]=phrases;
+            }
             foreach(string key in KennelKeys)result._kennelLocations[key]=ini.ReadString("KennelLocations",key,"");
             result.MigrateLegacyKennelDefaults();
             return result;

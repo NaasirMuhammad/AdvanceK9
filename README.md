@@ -38,6 +38,8 @@ The compiled release includes AdvancedK9, its configuration, and the MIT-license
 - Push-to-talk voice recognition using OpenAI or Groq transcription; the microphone opens only while `V` is held
 - Persistent command and profile menus that remain open until explicitly closed
 - Runtime command registry shared by menu and voice recognition, with multiple natural verbal alternatives for every action
+- User-defined spoken alternatives in `[CommandPhrases]`; custom phrases augment the built-in vocabulary and are included in the transcription prompt
+- Fully configurable deploy, menu, camera, leash, push-to-talk and kennel/profile keys; set `Modifier=None` to use shortcut keys without a modifier
 - Fully optional K9 status HUD with five designs, icon sets, color themes and text styles plus individual data toggles
 - Per-dog XP, certifications, health, injuries, stamina, trust and statistics
 - Optional runtime bridge to Policing Redefined/Common Data Framework search records
@@ -88,6 +90,10 @@ The build copies the RAGE Plugin Hook entry-point assembly `AdvancedK9.dll` to `
 Voice phrases begin with the configured dog name or “K nine”: “Rex, sit”, “Rex, search”, “K nine, recall”, and so on. Commands without the wake name are ignored.
 Wake-word variants `K9`, `K-9`, `K nine`, `kay nine` and `canine` are accepted. Natural phrases such as “K9 sit down,” “K9 fetch the ball,” and “K9 search the vehicle” are normalized before matching.
 Specialty examples include “K9 search for narcotics,” “K9 bomb search,” “K9 weapons search,” “K9 narcotics training,” “K9 explosives training,” and “K9 weapons training.”
+
+To add personal wording, edit `[CommandPhrases]` in `AdvancedK9.ini` and use the `K9Command` name as the setting name. Separate alternatives with `|`, for example `SearchVehicle=check this ride|sniff around the car`. These phrases are added to—not substituted for—the built-in commands. Restart the plugin after editing.
+
+All AdvancedK9 shortcut keys are configurable under `[Keys]`. The shipped defaults remain unchanged. Change `Modifier` to another `System.Windows.Forms.Keys` name, or set `Modifier=None` to make deploy/dismiss, command menu, camera, leash, and kennel/profile shortcuts single-key actions. Push-to-talk remains its independently configurable key.
 
 ## Complete verbal command reference
 

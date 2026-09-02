@@ -1,5 +1,9 @@
 # Changelog
 
+- Prevents handler gunfire from applying human ambient/gesture reactions to the K9. Gunfire suppression now clears only the secondary reaction animation and no longer resets animal movement clipsets or replaces active K9 tasks.
+- Adds user-defined voice-command phrases through `[CommandPhrases]`; custom alternatives supplement built-in phrases and are supplied to transcription for improved recognition.
+- Makes every AdvancedK9 shortcut configurable while preserving existing defaults, and accepts `Modifier=None`/`Off`/`Disabled` for optional modifier-free shortcuts.
+
 All published AdvancedK9 versions are beta builds.
 
 ## 0.23.0-beta

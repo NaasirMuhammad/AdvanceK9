@@ -123,6 +123,7 @@ namespace AdvancedK9
         public K9Controller(ModConfig config)
         {
             _config = config;
+            CommandRegistry.Configure(config.CustomCommandPhrases);
             _pr = new PolicingRedefinedBridge(config.CompatibilityMode,config.CompatibilityShareResults,config.CompatibilityUseCdfInventory,config.CompatibilityShareWithNexusMdt);
             _trust = new TrustProfile(config.StartingTrust,config.ShowActionNotifications);
             _profile = new K9Profile(config);
@@ -153,13 +154,13 @@ namespace AdvancedK9
                 UpdateCompatibilityPursuit();
                 if (ChordPressed(_config.ModifierKey, _config.SpawnKey)) Execute(K9Command.SpawnDismiss);
                 if (ChordPressed(_config.ModifierKey, _config.KennelKey)) ShowKennelMenu();
-                if (Game.IsKeyDownRightNow(_config.ModifierKey) && Game.IsKeyDown(_config.CommandKey)) ShowCommandMenu();
+                if (ChordPressed(_config.ModifierKey,_config.CommandKey)) ShowCommandMenu();
                 HandlePushToTalk();
                 MaintainK9Availability();
                 if (!DogEntityExists()) { DrainVoice(false); continue; }
                 UpdateHandlerDownProtection();
-                if (Game.IsKeyDownRightNow(_config.ModifierKey) && Game.IsKeyDown(_config.CameraKey)) Execute(K9Command.ToggleCamera);
-                if (Game.IsKeyDownRightNow(_config.ModifierKey) && Game.IsKeyDown(_config.LeashKey)) Execute(K9Command.ToggleLeash);
+                if (ChordPressed(_config.ModifierKey,_config.CameraKey)) Execute(K9Command.ToggleCamera);
+                if (ChordPressed(_config.ModifierKey,_config.LeashKey)) Execute(K9Command.ToggleLeash);
                 DrainVoice(true);
                 MaintainState();
             }
@@ -232,7 +233,7 @@ namespace AdvancedK9
         {
             if (_voice == null) InitializeVoice();
             SpawnStationKennels();
-            ActionNotification("~b~Advanced K9 Beta active~s~. Hold ~y~" + _config.ModifierKey + "~s~ + ~y~" + _config.SpawnKey + "~s~ to deploy " + _profile.Name + ".");
+            ActionNotification("~b~Advanced K9 Beta active~s~. Press ~y~"+KeyChord(_config.SpawnKey)+"~s~ to deploy "+_profile.Name+".");
         }
 
         private void DeactivateForDuty()
@@ -247,7 +248,8 @@ namespace AdvancedK9
             Game.LogTrivial("AdvancedK9: player is off duty; K9, UI and voice are inactive.");
         }
 
-        private bool ChordPressed(Keys modifier, Keys key) => Game.IsKeyDownRightNow(modifier) && Game.IsKeyDown(key);
+        private bool ChordPressed(Keys modifier, Keys key)=>(!_config.ModifierEnabled||Game.IsKeyDownRightNow(modifier))&&Game.IsKeyDown(key);
+        private string KeyChord(Keys key)=>_config.ModifierEnabled?_config.ModifierKey+" + "+key:key.ToString();
 
         private void HandlePushToTalk()
         {
@@ -665,7 +667,7 @@ namespace AdvancedK9
             if(Game.GameTime<_nextKennelPrompt)return;_nextKennelPrompt=Game.GameTime+250;
             UpdateNearbyKennelProps();
             StationKennel kennel=NearestKennel(3.2f);if(kennel==null)return;
-            Game.DisplayHelp((DogExists()?"Return "+_profile.Name+" to":"Pick up "+_profile.Name+" from")+" the K9 kennel: hold "+_config.ModifierKey+" and press "+_config.SpawnKey+".");
+            Game.DisplayHelp((DogExists()?"Return "+_profile.Name+" to":"Pick up "+_profile.Name+" from")+" the K9 kennel: press "+KeyChord(_config.SpawnKey)+".");
         }
 
         private StationKennel NearestKennel(float radius){var handler=Game.LocalPlayer.Character;if(handler==null||!handler.Exists())return null;return _stationKennels.Where(k=>k.Prop!=null&&k.Prop.Exists()&&k.Position.DistanceTo(handler.Position)<=radius).OrderBy(k=>k.Position.DistanceTo(handler.Position)).FirstOrDefault();}
@@ -1456,7 +1458,7 @@ namespace AdvancedK9
                 _dog.Position = Game.LocalPlayer.Character.GetOffsetPosition(new Vector3(-1f, -2f, 0f));
         }
 
-        private void ApplyAnimalPedSafeguards(){if(!DogEntityExists())return;_dog.BlockPermanentEvents=true;NativeFunction.Natives.SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(_dog,true);NativeFunction.Natives.SET_PED_FLEE_ATTRIBUTES(_dog,0,false);NativeFunction.Natives.SET_PED_CAN_EVASIVE_DIVE(_dog,false);NativeFunction.Natives.SET_PED_USING_ACTION_MODE(_dog,false,-1,"DEFAULT_ACTION");}
+        private void ApplyAnimalPedSafeguards(){if(!DogEntityExists())return;_dog.BlockPermanentEvents=true;NativeFunction.Natives.SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(_dog,true);NativeFunction.Natives.SET_PED_FLEE_ATTRIBUTES(_dog,0,false);NativeFunction.Natives.SET_PED_CAN_EVASIVE_DIVE(_dog,false);NativeFunction.Natives.SET_PED_USING_ACTION_MODE(_dog,false,-1,"DEFAULT_ACTION");NativeFunction.Natives.SET_PED_CAN_PLAY_GESTURE_ANIMS(_dog,false);NativeFunction.Natives.SET_PED_CAN_PLAY_VISEME_ANIMS(_dog,false,false);NativeFunction.Natives.SET_PED_CAN_PLAY_AMBIENT_ANIMS(_dog,false);NativeFunction.Natives.SET_PED_CAN_PLAY_AMBIENT_BASE_ANIMS(_dog,false);}
 
         private void MaintainAnimalPedPresentation()
         {
@@ -1464,14 +1466,9 @@ namespace AdvancedK9
             ApplyAnimalPedSafeguards();
             var handler=Game.LocalPlayer.Character;
             if(handler==null||!handler.Exists()||!NativeFunction.Natives.IS_PED_SHOOTING<bool>(handler)||Game.GameTime<_nextAnimalPresentationReset)return;
-            _nextAnimalPresentationReset=Game.GameTime+900;
-            NativeFunction.Natives.RESET_PED_MOVEMENT_CLIPSET(_dog,.15f);
-            NativeFunction.Natives.RESET_PED_STRAFE_CLIPSET(_dog);
-            NativeFunction.Natives.RESET_PED_WEAPON_MOVEMENT_CLIPSET(_dog);
+            _nextAnimalPresentationReset=Game.GameTime+120;
             NativeFunction.Natives.SET_PED_USING_ACTION_MODE(_dog,false,-1,"DEFAULT_ACTION");
-            if(_state==K9State.Leashed)NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(_dog,handler,-.55f,-.85f,0f,2.2f,-1,1.15f,true);
-            else if(_state==K9State.Following||_state==K9State.Heeling)NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(_dog,handler,-.7f,-1.15f,0f,2.2f,-1,1.2f,true);
-            Game.LogTrivial("AdvancedK9 animal presentation: suppressed handler-gunfire reaction without clearing active K9 tasks.");
+            NativeFunction.Natives.CLEAR_PED_SECONDARY_TASK(_dog);
         }
 
         private void UpdateHandlerDownProtection()
