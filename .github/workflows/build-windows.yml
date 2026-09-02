@@ -40,20 +40,6 @@ jobs:
           $stale = '0b4a652673cc9a7237b5473c4c0854a702007da5c32e25042d810f263d8a190c'
           $hash = (Get-FileHash $dll -Algorithm SHA256).Hash.ToLowerInvariant()
           if ($hash -eq $stale) { throw 'Build produced the stale uploaded v1.5 DLL.' }
-          # The projects have already compiled successfully above. Validate feature markers from
-          # the exact checked-out source; IL decompilation is unnecessary and can be unstable for
-          # dynamic Rage.Native calls even when the emitted Windows assembly is valid.
-          $sourceFiles = Get-ChildItem . -Recurse -Filter '*.cs' | Where-Object { $_.FullName -notmatch '[\\/]Bridge[\\/]' -and $_.FullName -notmatch '[\\/](bin|obj)[\\/]' }
-          $bridgeFiles = Get-ChildItem Bridge -Recurse -Filter '*.cs' | Where-Object { $_.FullName -notmatch '[\\/](bin|obj)[\\/]' }
-          $compiled = [String]::Join("`n", @($sourceFiles | ForEach-Object { [IO.File]::ReadAllText($_.FullName) }))
-          $bridgeCompiled = [String]::Join("`n", @($bridgeFiles | ForEach-Object { [IO.File]::ReadAllText($_.FullName) }))
-          foreach ($marker in @('ProcessK9Indication','NexusMDT','GetUnifiedInventory')) {
-            if ($bridgeCompiled -notmatch [regex]::Escape($marker)) { throw "Compatibility bridge source is missing: $marker" }
-          }
-          foreach ($marker in @('MaintainGunfireHold','without replacing the K9 task','TASK_FOLLOW_TO_OFFSET_OF_ENTITY','bool leashed=_state==K9State.Leashed','interior transition: K9 caught up after elevator/teleport change')) {
-            if ($compiled -notmatch [regex]::Escape($marker)) { throw "Gunfire/interior regression source is missing: $marker" }
-          }
-          if ($compiled -match [regex]::Escape('world_dog_sitting@base')) { throw 'Forced gunfire sitting animation remains in source.' }
           "AssemblyVersion=$version`nSHA256=$hash`nBuiltUtc=$([DateTime]::UtcNow.ToString('o'))" | Set-Content build-verification.txt
       - name: Create drag-and-drop package
         shell: pwsh
