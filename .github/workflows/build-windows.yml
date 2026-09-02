@@ -26,7 +26,7 @@ jobs:
           dotnet build Bridge/LspdfrApiShim/LspdfrApiShim.csproj -c Release --no-restore /p:ContinuousIntegrationBuild=true
           dotnet restore AdvancedK9.LSPDFRBridge.csproj
           dotnet build AdvancedK9.LSPDFRBridge.csproj -c Release --no-restore /p:ContinuousIntegrationBuild=true
-      - name: Stage drag-and-drop package
+      - name: Stage compiled binaries
         shell: pwsh
         run: |
           $plugins = 'package/Plugins'
@@ -35,9 +35,16 @@ jobs:
           Copy-Item 'bin/Release/net48/AdvancedK9.dll' $plugins
           Copy-Item 'bin/Release/net48/AdvancedK9.LSPDFRBridge.dll' "$plugins/LSPDFR"
           Copy-Item 'bin/Release/net48/LemonUI.RagePluginHook.dll' 'package'
+      - name: Stage configuration and portraits
+        shell: pwsh
+        run: |
+          $config = 'package/Plugins/LSPDFR/AdvancedK9'
           Copy-Item 'Config/AdvancedK9.ini' "$config/AdvancedK9.default.ini"
           Copy-Item 'Config/AcademyCourses.json','Config/CompatibilityPresets.json' $config
           Copy-Item 'Config/Portraits' $config -Recurse
+      - name: Stage documentation
+        shell: pwsh
+        run: |
           Copy-Item 'INSTALL.txt','README.md','CHANGELOG.md' package
       - name: Compress drag-and-drop package
         shell: pwsh
