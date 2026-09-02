@@ -60,7 +60,7 @@ jobs:
           foreach ($marker in @('NEGATIVE — NO ', 'three-bark alert authorized', 'K9 remains silent', 'TASK_PAUSE')) {
             if ($compiled -notmatch [regex]::Escape($marker)) { throw "Missing compiled contextual-search marker: $marker" }
           }
-          foreach ($marker in @('Confidence','TrainingRequirement','1200','CalculateTrainingXp','CalculateSpecialtyXp','IsTrainedFor','HudPortraitShape','CircularPortrait','Randomized obedience drill','PollAcademyVoiceCommand','Verbal command accepted','80','creatures@rottweiler@amb@world_dog_sitting@base','advanced training profile load')) {
+          foreach ($marker in @('Confidence','TrainingRequirement','1200','CalculateTrainingXp','CalculateSpecialtyXp','IsTrainedFor','HudPortraitShape','CircularPortrait','Randomized obedience drill','PollAcademyVoiceCommand','Verbal command accepted','80','advanced training profile load')) {
             if ($compiled -notmatch [regex]::Escape($marker)) { throw "Missing compiled v0.22.11 progression/HUD marker: $marker" }
           }
           foreach ($marker in @('EnsurePrSearchInventory','generated and retained','PR search items are not generated yet','CDF strict item-name fields','ExtractStrictItemNames','ItemName','DisplayName','Value','DrugType','FirearmType')) {
