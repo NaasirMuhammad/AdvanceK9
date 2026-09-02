@@ -43,8 +43,8 @@ jobs:
           # The projects have already compiled successfully above. Validate feature markers from
           # the exact checked-out source; IL decompilation is unnecessary and can be unstable for
           # dynamic Rage.Native calls even when the emitted Windows assembly is valid.
-          $compiled = Get-ChildItem . -Recurse -Filter '*.cs' | Where-Object { $_.FullName -notmatch '[\\/]Bridge[\\/]' -and $_.FullName -notmatch '[\\/](bin|obj)[\\/]' } | Get-Content -Raw
-          $bridgeCompiled = Get-ChildItem Bridge -Recurse -Filter '*.cs' | Where-Object { $_.FullName -notmatch '[\\/](bin|obj)[\\/]' } | Get-Content -Raw
+          $compiled = (Get-ChildItem . -Recurse -Filter '*.cs' | Where-Object { $_.FullName -notmatch '[\\/]Bridge[\\/]' -and $_.FullName -notmatch '[\\/](bin|obj)[\\/]' } | Get-Content -Raw) -join "`n"
+          $bridgeCompiled = (Get-ChildItem Bridge -Recurse -Filter '*.cs' | Where-Object { $_.FullName -notmatch '[\\/](bin|obj)[\\/]' } | Get-Content -Raw) -join "`n"
           foreach ($marker in @('Initialize', 'HeartbeatUtcTicks', 'ActiveVehicleHandle', 'PursuitPedHandle', 'QueryHandle', 'QueryAvailable', 'QuerySource', 'Protocol=2', 'CompatibilityBridge.request', 'PolicingRedefined', 'GetUnifiedInventory', 'GetPedData', 'GetVehicleData', 'GetPedSearchItems', 'GetVehicleSearchItems', 'GetHasVehicleBeenSearched', 'ExtractSearchItemNames', 'ItemName', 'DisplayName', 'CDF record has no public search-item collection', 'ProcessK9Indication', 'QueueOfficerSearchReconciliation', 'ProcessPendingOfficerSearches', 'ResolveNexusIncidentNumber', 'CurrentReportNumber', 'AppendIncidentNote', 'Items found:', 'NexusMDT', 'NexusApi', 'CaptureSearch', 'Inventory remains undisclosed pending officer search')) {
             if ($bridgeCompiled -notmatch [regex]::Escape($marker)) { throw "Compiled LSPDFR bridge is missing marker: $marker" }
           }
