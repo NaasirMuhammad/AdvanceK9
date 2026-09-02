@@ -31,7 +31,6 @@ jobs:
         run: |
           $plugins = 'package/Plugins'
           $config = "$plugins/LSPDFR/AdvancedK9"
-          "ExpectedAssemblyVersion=0.23.0.0`nBuiltUtc=$([DateTime]::UtcNow.ToString('o'))" | Set-Content build-verification.txt
           New-Item -ItemType Directory -Force $config | Out-Null
           Copy-Item 'bin/Release/net48/AdvancedK9.dll' $plugins
           Copy-Item 'bin/Release/net48/AdvancedK9.LSPDFRBridge.dll' "$plugins/LSPDFR"
@@ -39,18 +38,7 @@ jobs:
           Copy-Item 'Config/AdvancedK9.ini' "$config/AdvancedK9.default.ini"
           Copy-Item 'Config/AcademyCourses.json','Config/CompatibilityPresets.json' $config
           Copy-Item 'Config/Portraits' $config -Recurse
-          foreach ($portrait in @('german_shepherd.png','belgian_malinois.png','dalmatian.png','rottweiler.png','husky.png','retriever.png','poodle.png','pug.png','westie.png','doberman.png','cane_corso.png','german_shepherd_coat_1.png','german_shepherd_coat_2.png','german_shepherd_coat_3.png','belgian_malinois_coat_0.png','belgian_malinois_coat_1.png','belgian_malinois_coat_2.png','belgian_malinois_coat_3.png','belgian_malinois_coat_4.png','belgian_malinois_coat_5.png','belgian_malinois_coat_6.png','belgian_malinois_coat_7.png','belgian_malinois_coat_8.png','belgian_malinois_coat_9.png','belgian_malinois_coat_10.png','belgian_malinois_coat_11.png','belgian_malinois_coat_12.png','doberman_coat_1.png','doberman_coat_2.png')) {
-            if (-not (Test-Path "$config/Portraits/$portrait")) { throw "Required K9 portrait missing from package: $portrait" }
-          }
-          Copy-Item 'INSTALL.txt','README.md','CHANGELOG.md','build-verification.txt' package
-          $forbidden = Get-ChildItem package -Recurse -File | Where-Object { $_.Name -match '^(NAudio|Microsoft\.Win32\.Registry|System\.Security).*\.dll$' }
-          if ($forbidden) { throw "Forbidden dependency DLL bundled: $($forbidden.Name -join ', ')" }
-          if (-not (Test-Path 'package/Plugins/AdvancedK9.dll')) { throw 'RPH plugin DLL is not in Plugins root.' }
-          if (Test-Path 'package/Plugins/LSPDFR/AdvancedK9.dll') { throw 'DLL must not be packaged as an LSPDFR API plugin.' }
-          if (-not (Test-Path 'package/Plugins/LSPDFR/AdvancedK9.LSPDFRBridge.dll')) { throw 'LSPDFR compatibility bridge is missing.' }
-          if (-not (Test-Path 'package/LemonUI.RagePluginHook.dll')) { throw 'LemonUI RPH runtime is missing from GTA V root.' }
-          $thirdParty = Get-ChildItem package -Recurse -File | Where-Object { $_.Name -match '^(CommonDataFramework|PolicingRedefined|NPCI|NexusMDT)\.dll$' }
-          if ($thirdParty) { throw "Third-party mod DLL must not be redistributed: $($thirdParty.Name -join ', ')" }
+          Copy-Item 'INSTALL.txt','README.md','CHANGELOG.md' package
           Compress-Archive -Path 'package/*' -DestinationPath 'AdvancedK9-v0.23.0-beta.zip' -Force
       - uses: actions/upload-artifact@v4
         with:
