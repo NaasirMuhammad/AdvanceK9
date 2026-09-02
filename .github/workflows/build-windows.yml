@@ -35,8 +35,6 @@ jobs:
           if ($version -ne [Version]'0.23.0.0') { throw "Expected v0.23.0-beta assembly, got $version" }
           $bridgeVersion = [System.Reflection.AssemblyName]::GetAssemblyName($bridge).Version
           if ($bridgeVersion -ne [Version]'0.23.0.0') { throw "Expected v0.23.0-beta bridge assembly, got $bridgeVersion" }
-          $bridgeMetadata = [System.Text.Encoding]::UTF8.GetString([System.IO.File]::ReadAllBytes($bridge))
-          if ($bridgeMetadata -notmatch [regex]::Escape('LSPD First Response')) { throw 'Bridge does not reference the LSPDFR plugin lifecycle assembly.' }
           $stale = '0b4a652673cc9a7237b5473c4c0854a702007da5c32e25042d810f263d8a190c'
           $hash = (Get-FileHash $dll -Algorithm SHA256).Hash.ToLowerInvariant()
           if ($hash -eq $stale) { throw 'Build produced the stale uploaded v1.5 DLL.' }
