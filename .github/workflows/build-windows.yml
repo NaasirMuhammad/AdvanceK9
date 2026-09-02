@@ -26,37 +26,11 @@ jobs:
           dotnet build Bridge/LspdfrApiShim/LspdfrApiShim.csproj -c Release --no-restore /p:ContinuousIntegrationBuild=true
           dotnet restore AdvancedK9.LSPDFRBridge.csproj
           dotnet build AdvancedK9.LSPDFRBridge.csproj -c Release --no-restore /p:ContinuousIntegrationBuild=true
-      - name: Stage compiled binaries
-        shell: pwsh
-        run: |
-          $plugins = 'package/Plugins'
-          $config = "$plugins/LSPDFR/AdvancedK9"
-          New-Item -ItemType Directory -Force $config | Out-Null
-          $mainDll = Get-ChildItem bin -Recurse -Filter 'AdvancedK9.dll' | Select-Object -First 1
-          $bridgeDll = Get-ChildItem bin -Recurse -Filter 'AdvancedK9.LSPDFRBridge.dll' | Select-Object -First 1
-          $lemonDll = Get-ChildItem bin -Recurse -Filter 'LemonUI.RagePluginHook.dll' | Select-Object -First 1
-          if (-not $lemonDll) { $lemonDll = Get-ChildItem "$env:USERPROFILE/.nuget/packages/lemonui.ragepluginhook/2.2.0" -Recurse -Filter 'LemonUI.RagePluginHook.dll' | Select-Object -First 1 }
-          if (-not $mainDll -or -not $bridgeDll -or -not $lemonDll) { throw 'One or more compiled release binaries could not be located.' }
-          Copy-Item $mainDll.FullName $plugins
-          Copy-Item $bridgeDll.FullName "$plugins/LSPDFR"
-          Copy-Item $lemonDll.FullName 'package'
-      - name: Stage configuration and portraits
-        shell: pwsh
-        run: |
-          $config = 'package/Plugins/LSPDFR/AdvancedK9'
-          Copy-Item 'Config/AdvancedK9.ini' "$config/AdvancedK9.default.ini"
-          Copy-Item 'Config/AcademyCourses.json','Config/CompatibilityPresets.json' $config
-          Copy-Item 'Config/Portraits' $config -Recurse
-      - name: Stage documentation
-        shell: pwsh
-        run: |
-          Copy-Item 'INSTALL.txt','README.md','CHANGELOG.md' package
-      - name: Compress drag-and-drop package
-        shell: pwsh
-        run: |
-          Compress-Archive -Path 'package/*' -DestinationPath 'AdvancedK9-v0.23.0-beta.zip' -Force
       - uses: actions/upload-artifact@v4
         with:
           name: AdvancedK9-v0.23.0-beta
-          path: AdvancedK9-v0.23.0-beta.zip
+          path: |
+            bin/**/AdvancedK9.dll
+            bin/**/AdvancedK9.LSPDFRBridge.dll
+            bin/**/LemonUI.RagePluginHook.dll
           if-no-files-found: error
