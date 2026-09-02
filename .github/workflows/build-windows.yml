@@ -26,19 +26,12 @@ jobs:
           dotnet build Bridge/LspdfrApiShim/LspdfrApiShim.csproj -c Release --no-restore /p:ContinuousIntegrationBuild=true
           dotnet restore AdvancedK9.LSPDFRBridge.csproj
           dotnet build AdvancedK9.LSPDFRBridge.csproj -c Release --no-restore /p:ContinuousIntegrationBuild=true
-      - name: Verify v0.23.0-beta assembly and compiled systems
-        shell: pwsh
-        run: |
-          $dll = Resolve-Path 'bin/Release/net48/AdvancedK9.dll'
-          $bridge = Resolve-Path 'bin/Release/net48/AdvancedK9.LSPDFRBridge.dll'
-          $hash = (Get-FileHash $dll -Algorithm SHA256).Hash.ToLowerInvariant()
-          $bridgeHash = (Get-FileHash $bridge -Algorithm SHA256).Hash.ToLowerInvariant()
-          "ExpectedAssemblyVersion=0.23.0.0`nAdvancedK9SHA256=$hash`nBridgeSHA256=$bridgeHash`nBuiltUtc=$([DateTime]::UtcNow.ToString('o'))" | Set-Content build-verification.txt
       - name: Create drag-and-drop package
         shell: pwsh
         run: |
           $plugins = 'package/Plugins'
           $config = "$plugins/LSPDFR/AdvancedK9"
+          "ExpectedAssemblyVersion=0.23.0.0`nBuiltUtc=$([DateTime]::UtcNow.ToString('o'))" | Set-Content build-verification.txt
           New-Item -ItemType Directory -Force $config | Out-Null
           Copy-Item 'bin/Release/net48/AdvancedK9.dll' $plugins
           Copy-Item 'bin/Release/net48/AdvancedK9.LSPDFRBridge.dll' "$plugins/LSPDFR"
