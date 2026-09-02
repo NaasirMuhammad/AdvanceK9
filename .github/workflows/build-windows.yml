@@ -35,6 +35,7 @@ jobs:
           $mainDll = Get-ChildItem bin -Recurse -Filter 'AdvancedK9.dll' | Select-Object -First 1
           $bridgeDll = Get-ChildItem bin -Recurse -Filter 'AdvancedK9.LSPDFRBridge.dll' | Select-Object -First 1
           $lemonDll = Get-ChildItem bin -Recurse -Filter 'LemonUI.RagePluginHook.dll' | Select-Object -First 1
+          if (-not $lemonDll) { $lemonDll = Get-ChildItem "$env:USERPROFILE/.nuget/packages/lemonui.ragepluginhook/2.2.0" -Recurse -Filter 'LemonUI.RagePluginHook.dll' | Select-Object -First 1 }
           if (-not $mainDll -or -not $bridgeDll -or -not $lemonDll) { throw 'One or more compiled release binaries could not be located.' }
           Copy-Item $mainDll.FullName $plugins
           Copy-Item $bridgeDll.FullName "$plugins/LSPDFR"
