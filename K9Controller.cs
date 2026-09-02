@@ -58,6 +58,9 @@ namespace AdvancedK9
         private uint _lastHandlerShotAt;
         private Vector3 _lastHandlerNavigationPosition;
         private bool _handlerNavigationPositionReady;
+        private readonly Queue<Vector3> _handlerBreadcrumbs=new Queue<Vector3>();
+        private Vector3 _lastBreadcrumbPosition;
+        private bool _breadcrumbPositionReady;
         private uint _nextNeedsUpdate;
         private uint _nextNeedsWarning;
         private VehicleSeatProfile _activeSeatProfile;
@@ -732,6 +735,7 @@ namespace AdvancedK9
         private void Follow()
         {
             if (!DogExists()) return;
+            ResetFollowBreadcrumbs();
             _dog.Tasks.Clear();
             NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(_dog, Game.LocalPlayer.Character, -0.7f, -1.15f, 0f, 2.2f, -1, 1.2f, true);
             _state = _leashRope >= 0 ? K9State.Leashed : K9State.Following;
@@ -1489,7 +1493,7 @@ namespace AdvancedK9
             if(shooting&&!_gunfireHoldActive&&(_state==K9State.Following||_state==K9State.Heeling))
             {
                 _gunfireHoldActive=true;NativeFunction.Natives.SET_PED_CAN_RAGDOLL(_dog,false);NativeFunction.Natives.SET_PED_CAN_RAGDOLL_FROM_PLAYER_IMPACT(_dog,false);ApplyAnimalPedSafeguards();
-                _dog.Tasks.Clear();NativeFunction.Natives.TASK_STAND_STILL(_dog,-1);
+                _dog.Tasks.Clear();const string holdDictionary="creatures@rottweiler@amb@world_dog_sitting@base";NativeFunction.Natives.REQUEST_ANIM_DICT(holdDictionary);uint timeout=Game.GameTime+800;while(!NativeFunction.Natives.HAS_ANIM_DICT_LOADED<bool>(holdDictionary)&&Game.GameTime<timeout)GameFiber.Yield();if(NativeFunction.Natives.HAS_ANIM_DICT_LOADED<bool>(holdDictionary))NativeFunction.Natives.TASK_PLAY_ANIM(_dog,holdDictionary,"base",4f,-4f,-1,1,0f,false,false,false);
                 uint model=NativeFunction.Natives.GET_ENTITY_MODEL<uint>(_dog);Game.LogTrivial("AdvancedK9 gunfire hold: animal task secured; model=0x"+model.ToString("X8")+", state="+_state+".");
             }
             else if(!shooting&&_gunfireHoldActive&&Game.GameTime-_lastHandlerShotAt>=750)
@@ -1505,21 +1509,26 @@ namespace AdvancedK9
             if(_state!=K9State.Following&&_state!=K9State.Heeling)return;
             var handler=Game.LocalPlayer.Character;if(handler==null||!handler.Exists())return;
             Vector3 handlerPosition=handler.Position;
+            if(!_breadcrumbPositionReady){_lastBreadcrumbPosition=handlerPosition;_breadcrumbPositionReady=true;_handlerBreadcrumbs.Enqueue(handlerPosition);}
+            else if(handlerPosition.DistanceTo(_lastBreadcrumbPosition)>=.8f){_handlerBreadcrumbs.Enqueue(handlerPosition);_lastBreadcrumbPosition=handlerPosition;while(_handlerBreadcrumbs.Count>120)_handlerBreadcrumbs.Dequeue();}
             if(!_handlerNavigationPositionReady){_lastHandlerNavigationPosition=handlerPosition;_handlerNavigationPositionReady=true;}
             float handlerJump=handlerPosition.DistanceTo(_lastHandlerNavigationPosition),verticalJump=Math.Abs(handlerPosition.Z-_lastHandlerNavigationPosition.Z);_lastHandlerNavigationPosition=handlerPosition;
             float distance=_dog.DistanceTo(handler);
             int handlerInterior=NativeFunction.Natives.GET_INTERIOR_FROM_ENTITY<int>(handler),dogInterior=NativeFunction.Natives.GET_INTERIOR_FROM_ENTITY<int>(_dog);
             if(distance>8f&&(verticalJump>4.5f||handlerJump>22f||(handlerInterior!=dogInterior&&distance>18f)))
             {
-                _dog.Position=handler.GetOffsetPosition(new Vector3(-.8f,-1.4f,.1f));_dog.Heading=handler.Heading;NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(_dog,handler,-.7f,-1.15f,0f,2.2f,-1,1.2f,true);ApplyAnimalPedSafeguards();
+                _dog.Position=handler.GetOffsetPosition(new Vector3(-.8f,-1.4f,.1f));_dog.Heading=handler.Heading;ResetFollowBreadcrumbs();NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(_dog,handler,-.7f,-1.15f,0f,2.2f,-1,1.2f,true);ApplyAnimalPedSafeguards();
                 Game.LogTrivial("AdvancedK9 interior transition: K9 caught up after elevator/teleport change.");return;
             }
             if(_gunfireHoldActive||distance<=1.45f||Game.GameTime<_nextIndoorFollowUpdate)return;
+            while(_handlerBreadcrumbs.Count>1&&_dog.Position.DistanceTo(_handlerBreadcrumbs.Peek())<1.25f)_handlerBreadcrumbs.Dequeue();
             bool stopped=NativeFunction.Natives.IS_PED_STOPPED<bool>(_dog);if(!stopped&&distance<4f)return;
             _nextIndoorFollowUpdate=Game.GameTime+800;
-            Vector3 target=handler.GetOffsetPosition(new Vector3(-.45f,-1.05f,0f));
+            Vector3 target=_handlerBreadcrumbs.Count>0?_handlerBreadcrumbs.Peek():handler.GetOffsetPosition(new Vector3(-.45f,-1.05f,0f));
             NativeFunction.Natives.TASK_FOLLOW_NAV_MESH_TO_COORD(_dog,target.X,target.Y,target.Z,2.8f,-1,.85f,true,0f);
         }
+
+        private void ResetFollowBreadcrumbs(){_handlerBreadcrumbs.Clear();var handler=Game.LocalPlayer.Character;if(handler==null||!handler.Exists()){_breadcrumbPositionReady=false;return;}_lastBreadcrumbPosition=handler.Position;_breadcrumbPositionReady=true;_handlerBreadcrumbs.Enqueue(_lastBreadcrumbPosition);}
 
         private void UpdateHandlerDownProtection()
         {

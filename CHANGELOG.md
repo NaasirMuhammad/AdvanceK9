@@ -1,5 +1,8 @@
 # Changelog
 
+- Replaces the generic gunfire stand task with an explicit looping K9 sitting animation, preventing GTA from selecting a human-compatible stand pose for the animal skeleton.
+- Replaces direct-to-handler indoor routing with a 120-point handler breadcrumb trail so Rex follows the route actually walked through FIB doors, halls and corners instead of cutting toward an unreachable corner.
+
 - Stages K9 unloading through the opened rear door with a visible animal jump to a collision-safe exterior point, preventing Rex from visibly phasing through the vehicle body during Exit Vehicle or Door Pop.
 
 - Adds a tactical gunfire hold for ordinary Follow/Heel: Rex receives one animal-safe stand task at the start of handler fire, cannot ragdoll or deform during the firing window, and automatically resumes Follow when firing stops. No per-shot animation replay occurs.
