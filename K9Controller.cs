@@ -53,6 +53,7 @@ namespace AdvancedK9
         private bool _workingLeashed;
         private uint _nextLeashFollow;
         private uint _nextLeashVisualUpdate;
+        private uint _nextIndoorFollowUpdate;
         private uint _nextNeedsUpdate;
         private uint _nextNeedsWarning;
         private VehicleSeatProfile _activeSeatProfile;
@@ -709,7 +710,6 @@ namespace AdvancedK9
             _dog.BlockPermanentEvents = true;
             _dog.RelationshipGroup = officer.RelationshipGroup;
             ApplyAnimalPedSafeguards();
-            NativeFunction.Natives.TASK_SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(_dog,true);
             NativeFunction.Natives.SET_CAN_ATTACK_FRIENDLY(_dog, false, false);
             _profile.Apply(_dog);
             _blip = _dog.AttachBlip();
@@ -723,14 +723,13 @@ namespace AdvancedK9
             return true;
         }
 
-        private void PreviewBreed(int delta){if(!DogExists()){_profile.AdjustBreed(delta);return;}Vector3 position=_dog.Position;float heading=_dog.Heading;K9State previous=_state;if(_blip!=null&&_blip.Exists())_blip.Delete();_dog.Delete();_dog=null;_profile.AdjustBreed(delta);if(!CreateDogAt(position,heading))return;if(previous==K9State.Leashed)_state=K9State.Leashed;else{NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(_dog,Game.LocalPlayer.Character,-.7f,-1.15f,0f,2.2f,-1,1.2f,true);NativeFunction.Natives.TASK_SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(_dog,true);_state=K9State.Following;}}
+        private void PreviewBreed(int delta){if(!DogExists()){_profile.AdjustBreed(delta);return;}Vector3 position=_dog.Position;float heading=_dog.Heading;K9State previous=_state;if(_blip!=null&&_blip.Exists())_blip.Delete();_dog.Delete();_dog=null;_profile.AdjustBreed(delta);if(!CreateDogAt(position,heading))return;if(previous==K9State.Leashed)_state=K9State.Leashed;else{NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(_dog,Game.LocalPlayer.Character,-.7f,-1.15f,0f,2.2f,-1,1.2f,true);_state=K9State.Following;}}
 
         private void Follow()
         {
             if (!DogExists()) return;
             _dog.Tasks.Clear();
             NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(_dog, Game.LocalPlayer.Character, -0.7f, -1.15f, 0f, 2.2f, -1, 1.2f, true);
-            NativeFunction.Natives.TASK_SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(_dog,true);
             _state = _leashRope >= 0 ? K9State.Leashed : K9State.Following;
             Acknowledge("Following.");
         }
@@ -1436,6 +1435,7 @@ namespace AdvancedK9
             if(_seatCalibrationDoorOpen&&(!_menu.Visible||_menuMode!="seat_config"||_state!=K9State.InVehicle))CloseSeatCalibrationDoor();
             EnforceHandlerSafety();
             MaintainAnimalPedPresentation();
+            MaintainIndoorFollow();
             UpdateNeeds();
             UpdateReliefNeeds();
             UpdateEnvironment();
@@ -1451,7 +1451,7 @@ namespace AdvancedK9
                 if(distance>1.35f&&Game.GameTime>=_nextLeashFollow)
                 {
                     _nextLeashFollow=Game.GameTime+1800;
-                    NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(_dog,officer,-.55f,-.85f,0f,2.2f,-1,1.15f,true);NativeFunction.Natives.TASK_SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(_dog,true);
+                    NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(_dog,officer,-.55f,-.85f,0f,2.2f,-1,1.15f,true);
                 }
             }
             if(_leashRope>=0)PinLeashEndpoints();
@@ -1465,6 +1465,19 @@ namespace AdvancedK9
         {
             if(!DogEntityExists()||_downed||_carryingDog)return;
             ApplyAnimalPedSafeguards();
+        }
+
+        private void MaintainIndoorFollow()
+        {
+            if(_state!=K9State.Following&&_state!=K9State.Heeling)return;
+            var handler=Game.LocalPlayer.Character;if(handler==null||!handler.Exists())return;
+            int handlerInterior=NativeFunction.Natives.GET_INTERIOR_FROM_ENTITY<int>(handler),dogInterior=NativeFunction.Natives.GET_INTERIOR_FROM_ENTITY<int>(_dog);
+            if(handlerInterior==0&&dogInterior==0)return;
+            float distance=_dog.DistanceTo(handler);if(distance<=1.45f||Game.GameTime<_nextIndoorFollowUpdate)return;
+            bool stopped=NativeFunction.Natives.IS_PED_STOPPED<bool>(_dog);if(!stopped&&distance<4f)return;
+            _nextIndoorFollowUpdate=Game.GameTime+1200;
+            Vector3 target=handler.GetOffsetPosition(new Vector3(-.45f,-1.05f,0f));
+            NativeFunction.Natives.TASK_FOLLOW_NAV_MESH_TO_COORD(_dog,target.X,target.Y,target.Z,2.2f,-1,1.0f,true,0f);
         }
 
         private void UpdateHandlerDownProtection()
@@ -1536,7 +1549,6 @@ namespace AdvancedK9
                 NativeFunction.Natives.SET_CAN_ATTACK_FRIENDLY(_dog, false, false);
                 _state = K9State.Following;
                 NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(_dog, handler, -0.7f, -1.15f, 0f, 2.2f, -1, 1.2f, true);
-                NativeFunction.Natives.TASK_SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(_dog,true);
                 Game.LogTrivial("AdvancedK9: handler-safety interlock recalled dog from invalid combat state.");
             }
         }

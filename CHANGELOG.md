@@ -1,5 +1,8 @@
 # Changelog
 
+- Removes the task-level event blocker that could compete with Follow and distort the animal skeleton. Gunfire immunity now uses only the non-task ped event flag.
+- Adds an interior-aware Follow recovery path that uses the navigation mesh through doors, corridors and rooms when Rex becomes stopped or falls behind inside a building.
+
 - Replaces all per-shot K9 animation manipulation with GTA's paired persistent/task event blockers. AdvancedK9 no longer clears secondary animations, resets clipsets, disables the animal's ambient animation system or reissues movement tasks while the handler fires.
 
 - Prevents handler gunfire from applying human ambient/gesture reactions to the K9. Gunfire suppression now clears only the secondary reaction animation and no longer resets animal movement clipsets or replaces active K9 tasks.
