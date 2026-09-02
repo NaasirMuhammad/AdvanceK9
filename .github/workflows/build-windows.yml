@@ -32,9 +32,13 @@ jobs:
           $plugins = 'package/Plugins'
           $config = "$plugins/LSPDFR/AdvancedK9"
           New-Item -ItemType Directory -Force $config | Out-Null
-          Copy-Item 'bin/Release/net48/AdvancedK9.dll' $plugins
-          Copy-Item 'bin/Release/net48/AdvancedK9.LSPDFRBridge.dll' "$plugins/LSPDFR"
-          Copy-Item 'bin/Release/net48/LemonUI.RagePluginHook.dll' 'package'
+          $mainDll = Get-ChildItem bin -Recurse -Filter 'AdvancedK9.dll' | Select-Object -First 1
+          $bridgeDll = Get-ChildItem bin -Recurse -Filter 'AdvancedK9.LSPDFRBridge.dll' | Select-Object -First 1
+          $lemonDll = Get-ChildItem bin -Recurse -Filter 'LemonUI.RagePluginHook.dll' | Select-Object -First 1
+          if (-not $mainDll -or -not $bridgeDll -or -not $lemonDll) { throw 'One or more compiled release binaries could not be located.' }
+          Copy-Item $mainDll.FullName $plugins
+          Copy-Item $bridgeDll.FullName "$plugins/LSPDFR"
+          Copy-Item $lemonDll.FullName 'package'
       - name: Stage configuration and portraits
         shell: pwsh
         run: |
