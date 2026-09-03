@@ -101,6 +101,7 @@ namespace AdvancedK9
         private uint _nextLiveEditorInput;
         private bool _searchInProgress;
         private int _searchGeneration;
+        private uint _nextPatrolXpAward;
         private bool _deployed;
         private bool _downed;
         private bool _carryingDog;
@@ -544,6 +545,7 @@ namespace AdvancedK9
                     case K9Command.TrainExplosives: RunAcademySpecialty(DetectionSpecialty.Explosives); break;
                     case K9Command.TrainWeapons: RunAcademySpecialty(DetectionSpecialty.Weapons); break;
                 }
+                TryAwardPatrolCommandXp(command);
             }
             catch (Exception ex)
             {
@@ -576,7 +578,9 @@ namespace AdvancedK9
             double bond=(_trust.Level/100.0*.55)+(_profile.Confidence/100.0*.35)+(trained?.10:0);
             double condition=Math.Max(.35,Math.Min(1.0,(_profile.Health/100.0)*(.65+.35*_profile.Stamina/100.0)*_profile.NeedsFactor));
             double chance=Math.Max(.25,Math.Min(trained?.99:.88,bond*condition));if(_random.NextDouble()<=chance)return true;
-            Game.DisplayNotification("~o~"+_profile.Name+" hesitated.~s~ Bond "+_trust.Level+"/100 • Confidence "+_profile.Confidence+"/100"+(trained?"":"~n~This command is still being learned in training."));
+            int confidenceLoss=0;if(_random.Next(100)<50){confidenceLoss=_random.Next(1,4);_profile.ChangeConfidence(-confidenceLoss);}
+            Game.DisplayNotification("~o~"+_profile.Name+" hesitated.~s~ Bond "+_trust.Level+"/100 • Confidence "+_profile.Confidence+"/100"+(confidenceLoss>0?" ~r~(-"+confidenceLoss+")~s~":"")+(trained?"":"~n~This command is still being learned in training."));
+            Game.LogTrivial("AdvancedK9 hesitation: "+command+", random confidence loss="+confidenceLoss+".");
             if (DogExists()) NativeFunction.Natives.TASK_TURN_PED_TO_FACE_ENTITY(_dog, Game.LocalPlayer.Character, 900);
             return false;
         }
@@ -721,6 +725,7 @@ namespace AdvancedK9
             _dog.BlockPermanentEvents = true;
             _dog.RelationshipGroup = officer.RelationshipGroup;
             ApplyAnimalPedSafeguards();
+            ConfigureAmbientGunfireImmunity();
             NativeFunction.Natives.SET_CAN_ATTACK_FRIENDLY(_dog, false, false);
             _profile.Apply(_dog);
             _blip = _dog.AttachBlip();
@@ -1515,6 +1520,50 @@ namespace AdvancedK9
         }
 
         private void ApplyAnimalPedSafeguards(){if(!DogEntityExists())return;_dog.BlockPermanentEvents=true;NativeFunction.Natives.SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(_dog,true);NativeFunction.Natives.SET_PED_FLEE_ATTRIBUTES(_dog,0,false);NativeFunction.Natives.SET_PED_CAN_EVASIVE_DIVE(_dog,false);}
+
+        private void ConfigureAmbientGunfireImmunity()
+        {
+            if(!DogEntityExists())return;
+            // a_c_shepherd's native animal AI can hear handler gunfire and select a dramatic
+            // startle/leap response even while a follow task remains active. Remove only ambient
+            // sound perception; explicit AdvancedK9 search and apprehension logic is unaffected.
+            NativeFunction.Natives.SET_PED_HEARING_RANGE(_dog,0f);
+            NativeFunction.Natives.SET_PED_ALERTNESS(_dog,0);
+            NativeFunction.Natives.SET_PED_HIGHLY_PERCEPTIVE(_dog,false);
+            Game.LogTrivial("AdvancedK9 ambient gunfire immunity configured for a_c_shepherd-compatible K9 behavior.");
+        }
+
+        private void TryAwardPatrolCommandXp(K9Command command)
+        {
+            if(Game.GameTime<_nextPatrolXpAward||!DogExists()||!PatrolCommandSucceeded(command))return;
+            _nextPatrolXpAward=Game.GameTime+45000;
+            if(_random.Next(100)>=50){Game.LogTrivial("AdvancedK9 patrol reward: successful "+command+" received no random reward this interval.");return;}
+            int level=_profile.TrainingLevel,max=level<=2?10:level<=4?20:30;
+            int baseXp=_random.Next(0,max+1);
+            int awarded=(int)Math.Round(baseXp*1.5,MidpointRounding.AwayFromZero);
+            int confidenceAward=_random.Next(1,4);
+            int previousLevel=_profile.TrainingLevel,previousProgress=_profile.TrainingLevelProgress,previousConfidence=_profile.Confidence;
+            bool completed=_profile.ApplyPatrolProgress(awarded,confidenceAward);
+            int confidenceGained=Math.Max(0,_profile.Confidence-previousConfidence);
+            Game.DisplayNotification("~b~PATROL COMMAND XP~s~~n~Successful "+CommandLabel(command)+": ~g~+"+awarded+" XP~s~ (~y~50% live-action bonus~s~)~n~Confidence: ~g~+"+confidenceGained+"~s~ • Level "+previousLevel+" • "+previousProgress+" → "+_profile.TrainingLevelProgress+" / "+_profile.CurrentTrainingRequirement);
+            Game.LogTrivial("AdvancedK9 patrol XP: "+command+" base="+baseXp+", liveBonus=50%, awarded="+awarded+", confidenceGained="+confidenceGained+", level="+previousLevel+", completed="+completed+".");
+        }
+
+        private bool PatrolCommandSucceeded(K9Command command)
+        {
+            if(command==K9Command.Follow||command==K9Command.Heel||command==K9Command.Recall||command==K9Command.WhistleRecall||command==K9Command.HandSignal||command==K9Command.Release||command==K9Command.ExitVehicle)return _state==K9State.Following||_state==K9State.Leashed;
+            if(command==K9Command.Sit)return _state==K9State.Sitting;
+            if(command==K9Command.LieDown)return _state==K9State.Lying;
+            if(command==K9Command.Stay)return _state==K9State.Staying;
+            if(command==K9Command.Guard)return _state==K9State.Guarding;
+            if(command==K9Command.EnterVehicle)return _state==K9State.InVehicle;
+            if(command==K9Command.Track||command==K9Command.FindTrail)return _state==K9State.Tracking;
+            if(command==K9Command.Apprehend)return _state==K9State.Apprehending;
+            if(command==K9Command.HoldPerimeter)return _state==K9State.Containing;
+            if(command==K9Command.ContainSuspect)return _state==K9State.Containing;
+            if(command==K9Command.ToggleLeash)return _state==K9State.Leashed||_state==K9State.Following;
+            return command==K9Command.Bark;
+        }
 
         private void MaintainAnimalPedPresentation()
         {

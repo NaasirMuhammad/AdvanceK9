@@ -1,5 +1,11 @@
 # Changelog
 
+- Prevents the native `a_c_shepherd` gunshot-startle/leap response by disabling only the deployed K9's ambient sound perception. Explicit AdvancedK9 follow, search, tracking, apprehension and damage behavior remains active.
+- Implements successful patrol-command XP from the roadmap using the existing level ranges: 0–10 XP at Levels 1–2, 0–20 at Levels 3–4 and 0–30 at Level 5, with the approved 50% live-action bonus.
+- Every successful patrol reward also grants a separate random 1–3 confidence, including when the level-based XP roll is zero. The reward notification shows both XP and confidence gained.
+- Uses a 50% random reward chance after an eligible successful command, plus a 45-second patrol reward cooldown and state-based success validation so rewards are occasional and rejected or repeated commands cannot farm XP.
+- When Rex genuinely hesitates or disobeys, there is a separate 50% chance of losing 1–3 confidence. A successful command that simply receives no patrol reward does not reduce confidence.
+
 - Rebuilds Building Search as a handler-led dynamic sweep: Rex alternates ahead and across the handler's live route through doors, rooms and corridors instead of using six precomputed world points that custom interiors can collapse onto one nav node.
 - Prevents Building Search from selecting and running toward an arbitrary nearby pedestrian through glass, walls or unreachable corners. Subject alerts now require close range and clear line of sight during the live sweep.
 - Adds generation-based search cancellation. Recall, Follow and every other replacement command immediately clear the current search task and invalidate its fiber, preventing an old sector task or sniff animation from reclaiming Rex after recall.

@@ -120,6 +120,23 @@ namespace AdvancedK9
         public int TrainingRequirement(int level){return level<=1?100:level==2?250:level==3?450:level==4?800:1200;}
         public int CurrentTrainingRequirement=>TrainingRequirement(TrainingLevel);
         public bool ApplyTrainingProgress(int level,int xp){if(level!=TrainingLevel||TrainingLevelProgress>=TrainingRequirement(level))return false;xp=Math.Max(0,xp);TrainingLevelProgress=Clamp(TrainingLevelProgress+xp,0,TrainingRequirement(level));TrainingXp+=xp;Confidence=Clamp(Confidence+(xp>0?Math.Max(1,xp/8):0),0,100);bool completed=TrainingLevelProgress>=TrainingRequirement(level);if(completed){if(level==1)ObedienceCertified=true;else if(level==2)AgilityCertified=true;else if(level==3)DetectionCertified=true;else if(level==4)TrackingCertified=true;else if(level==5)ApprehensionCertified=true;if(level<5){TrainingLevel++;TrainingLevelProgress=0;}}Save();return completed;}
+        public bool ApplyPatrolProgress(int xp,int confidence)
+        {
+            xp=Math.Max(0,xp);confidence=Clamp(confidence,1,3);int level=TrainingLevel,requirement=TrainingRequirement(level);
+            if(TrainingLevelProgress<requirement)
+            {
+                int applied=Math.Min(xp,requirement-TrainingLevelProgress);TrainingLevelProgress+=applied;TrainingXp+=applied;
+            }
+            Confidence=Clamp(Confidence+confidence,0,100);
+            bool completed=TrainingLevelProgress>=requirement;
+            if(completed)
+            {
+                if(level==1)ObedienceCertified=true;else if(level==2)AgilityCertified=true;else if(level==3)DetectionCertified=true;else if(level==4)TrackingCertified=true;else if(level==5)ApprehensionCertified=true;
+                if(level<5){TrainingLevel++;TrainingLevelProgress=0;}
+            }
+            Save();return completed;
+        }
+        public void ChangeConfidence(int value){Confidence=Clamp(Confidence+value,0,100);Save();}
         public string CurrentTrainingName=>TrainingLevel==1?"Basic Obedience":TrainingLevel==2?"Agility / Handler Control":TrainingLevel==3?"Detection":TrainingLevel==4?"Tracking":"Apprehension";
         public int SpecialtyProgress(DetectionSpecialty specialty)=>specialty==DetectionSpecialty.Narcotics?NarcoticsProgress:specialty==DetectionSpecialty.Explosives?ExplosivesProgress:specialty==DetectionSpecialty.Weapons?WeaponsProgress:0;
         public bool HasSpecialty(DetectionSpecialty specialty)=>specialty==DetectionSpecialty.Narcotics?NarcoticsCertified:specialty==DetectionSpecialty.Explosives?ExplosivesCertified:specialty==DetectionSpecialty.Weapons?WeaponsCertified:DetectionCertified;
