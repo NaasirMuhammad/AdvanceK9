@@ -22,20 +22,15 @@ jobs:
           $ErrorActionPreference = 'Stop'
           New-Item -ItemType Directory -Force artifact-bin | Out-Null
           dotnet restore AdvancedK9.csproj
-          dotnet build AdvancedK9.csproj -c Release --no-restore /p:ContinuousIntegrationBuild=true -o build/main
-          $mainDll = Get-ChildItem build/main -Recurse -Filter 'AdvancedK9.dll' | Select-Object -First 1
-          if (-not $mainDll) { throw 'AdvancedK9.dll was not emitted by the Windows build.' }
-          Copy-Item $mainDll.FullName artifact-bin
+          dotnet build AdvancedK9.csproj -c Release --no-restore /p:ContinuousIntegrationBuild=true /p:OutputPath="$pwd/artifact-bin/"
           dotnet restore Bridge/LspdfrApiShim/LspdfrApiShim.csproj
           dotnet build Bridge/LspdfrApiShim/LspdfrApiShim.csproj -c Release --no-restore /p:ContinuousIntegrationBuild=true -o build/shim
           dotnet restore AdvancedK9.LSPDFRBridge.csproj
-          dotnet build AdvancedK9.LSPDFRBridge.csproj -c Release --no-restore /p:ContinuousIntegrationBuild=true -o build/bridge
-          $bridgeDll = Get-ChildItem build/bridge -Recurse -Filter 'AdvancedK9.LSPDFRBridge.dll' | Select-Object -First 1
-          if (-not $bridgeDll) { throw 'AdvancedK9.LSPDFRBridge.dll was not emitted by the Windows build.' }
-          Copy-Item $bridgeDll.FullName artifact-bin
+          dotnet build AdvancedK9.LSPDFRBridge.csproj -c Release --no-restore /p:ContinuousIntegrationBuild=true /p:OutputPath="$pwd/artifact-bridge/"
       - uses: actions/upload-artifact@v4
         with:
           name: AdvancedK9-v0.23.0-beta
           path: |
-            artifact-bin/*.dll
+            artifact-bin/AdvancedK9.dll
+            artifact-bridge/AdvancedK9.LSPDFRBridge.dll
           if-no-files-found: error
