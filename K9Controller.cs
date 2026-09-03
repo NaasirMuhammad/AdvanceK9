@@ -60,6 +60,7 @@ namespace AdvancedK9
         private readonly Queue<Vector3> _handlerBreadcrumbs=new Queue<Vector3>();
         private Vector3 _lastBreadcrumbPosition;
         private bool _breadcrumbPositionReady;
+        private uint _lastBreadcrumbAt;
         private uint _nextNeedsUpdate;
         private uint _nextNeedsWarning;
         private VehicleSeatProfile _activeSeatProfile;
@@ -101,7 +102,9 @@ namespace AdvancedK9
         private uint _nextLiveEditorInput;
         private bool _searchInProgress;
         private int _searchGeneration;
-        private uint _nextPatrolXpAward;
+        private K9Command _lastPatrolCommand;
+        private int _patrolCommandRepeatCount;
+        private uint _lastPatrolCommandAt;
         private bool _deployed;
         private bool _downed;
         private bool _carryingDog;
@@ -1241,12 +1244,13 @@ namespace AdvancedK9
                 var destination=routeIndex<route.Count?route[routeIndex]:target.Position;
                 float dx = destination.X - _dog.Position.X, dy = destination.Y - _dog.Position.Y;
                 float distance = (float)Math.Sqrt(dx * dx + dy * dy);
-                float step = _workingLeashed?Math.Min(4.5f,Math.Max(1.5f,distance-1f)):Math.Min(28f, Math.Max(12f, distance - 2f));
+                float step = Math.Min(_workingLeashed?4.5f:6f,Math.Max(2.4f,distance-1f));
                 float inv = distance > .01f ? 1f / distance : 0f;
                 float scentJitter = (float)(_random.NextDouble() * 1.4 - .7);
                 var waypoint = new Vector3(_dog.Position.X + dx * inv * step - dy * inv * scentJitter,
                                            _dog.Position.Y + dy * inv * step + dx * inv * scentJitter,
                                            destination.Z);
+                waypoint=WorkingLeadWaypoint(waypoint,_workingLeashed?4.5f:6f);
                 _dog.Tasks.Clear();
                 if(Game.GameTime>=nextScentCheck)
                 {
@@ -1256,15 +1260,15 @@ namespace AdvancedK9
                 }
                 if(_workingLeashed)
                 {
-                    var handler=Game.LocalPlayer.Character;float hx=destination.X-handler.Position.X,hy=destination.Y-handler.Position.Y;float hd=(float)Math.Sqrt(hx*hx+hy*hy);if(hd>4.5f){float hi=4.5f/hd;waypoint=new Vector3(handler.Position.X+hx*hi,handler.Position.Y+hy*hi,destination.Z);}
                     _dog.Tasks.FollowNavigationMeshToPosition(waypoint,target.Heading,rain>.35f?2.2f:3.0f).WaitForCompletion(2400);
                     if(_dog.DistanceTo(destination)<5f&&routeIndex<route.Count)routeIndex++;
                     else Game.DisplaySubtitle("~b~Follow the leash~s~ — "+_profile.Name+" is holding the scent line.",900);
                 }
                 else
                 {
-                    _dog.Tasks.FollowNavigationMeshToPosition(waypoint,target.Heading,rain>.35f?2.8f:4.2f).WaitForCompletion(8500);
-                    if(routeIndex<route.Count)routeIndex++;
+                    _dog.Tasks.FollowNavigationMeshToPosition(waypoint,target.Heading,rain>.35f?2.8f:3.8f).WaitForCompletion(3200);
+                    if(_dog.DistanceTo(destination)<5f&&routeIndex<route.Count)routeIndex++;
+                    else if(_dog.DistanceTo(Game.LocalPlayer.Character)>6.5f)Game.DisplaySubtitle("~b~Advance with your K9~s~ — "+_profile.Name+" is holding the scent line ahead.",900);
                 }
                 _activeTrackDistance+=previous.DistanceTo(_dog.Position);previous=_dog.Position;
                 _profile.UseStamina(1);
@@ -1495,6 +1499,7 @@ namespace AdvancedK9
             EnforceHandlerSafety();
             MaintainAnimalPedPresentation();
             ObserveHandlerGunfire();
+            CaptureHandlerWalkingLine();
             MaintainFollowNavigation();
             UpdateNeeds();
             UpdateReliefNeeds();
@@ -1535,18 +1540,32 @@ namespace AdvancedK9
 
         private void TryAwardPatrolCommandXp(K9Command command)
         {
-            if(Game.GameTime<_nextPatrolXpAward||!DogExists()||!PatrolCommandSucceeded(command))return;
-            _nextPatrolXpAward=Game.GameTime+45000;
+            if(!DogExists()||!PatrolCommandSucceeded(command))return;
+            if(command.Equals(_lastPatrolCommand)&&Game.GameTime-_lastPatrolCommandAt<=30000)_patrolCommandRepeatCount++;else{_lastPatrolCommand=command;_patrolCommandRepeatCount=1;}
+            _lastPatrolCommandAt=Game.GameTime;
+            bool productiveWork=_state==K9State.Searching||_state==K9State.Tracking;
+            if(_patrolCommandRepeatCount>=5&&!productiveWork)
+            {
+                int penaltyChance=Math.Min(80,20+(_patrolCommandRepeatCount-5)*15);
+                if(_random.Next(100)<penaltyChance)
+                {
+                    int xpLoss=_random.Next(1,Math.Min(7,_patrolCommandRepeatCount)+1),confidenceLoss=_random.Next(1,4);
+                    int appliedLoss=_profile.ApplyPatrolPenalty(xpLoss,confidenceLoss);
+                    Game.DisplayNotification("~r~REPETITIVE COMMAND PENALTY~s~~n~Nonproductive "+CommandLabel(command)+" repetition: ~r~-"+appliedLoss+" XP, -"+confidenceLoss+" confidence.~s~~n~Use varied commands or begin meaningful search/track work.");
+                    Game.LogTrivial("AdvancedK9 patrol farming penalty: "+command+", repeat="+_patrolCommandRepeatCount+", xpLoss="+appliedLoss+", confidenceLoss="+confidenceLoss+".");return;
+                }
+            }
             if(_random.Next(100)>=50){Game.LogTrivial("AdvancedK9 patrol reward: successful "+command+" received no random reward this interval.");return;}
             int level=_profile.TrainingLevel,max=level<=2?10:level<=4?20:30;
             int baseXp=_random.Next(0,max+1);
-            int awarded=(int)Math.Round(baseXp*1.5,MidpointRounding.AwayFromZero);
+            float repeatFactor=_patrolCommandRepeatCount<=2?1f:_patrolCommandRepeatCount==3?.5f:_patrolCommandRepeatCount==4?.25f:.1f;
+            int awarded=(int)Math.Round(baseXp*1.5f*repeatFactor,MidpointRounding.AwayFromZero);
             int confidenceAward=_random.Next(1,4);
             int previousLevel=_profile.TrainingLevel,previousProgress=_profile.TrainingLevelProgress,previousConfidence=_profile.Confidence;
             bool completed=_profile.ApplyPatrolProgress(awarded,confidenceAward);
             int confidenceGained=Math.Max(0,_profile.Confidence-previousConfidence);
-            Game.DisplayNotification("~b~PATROL COMMAND XP~s~~n~Successful "+CommandLabel(command)+": ~g~+"+awarded+" XP~s~ (~y~50% live-action bonus~s~)~n~Confidence: ~g~+"+confidenceGained+"~s~ • Level "+previousLevel+" • "+previousProgress+" → "+_profile.TrainingLevelProgress+" / "+_profile.CurrentTrainingRequirement);
-            Game.LogTrivial("AdvancedK9 patrol XP: "+command+" base="+baseXp+", liveBonus=50%, awarded="+awarded+", confidenceGained="+confidenceGained+", level="+previousLevel+", completed="+completed+".");
+            Game.DisplayNotification("~b~PATROL COMMAND XP~s~~n~Successful "+CommandLabel(command)+": ~g~+"+awarded+" XP~s~ (~y~50% live-action bonus"+(_patrolCommandRepeatCount>2?", repetition reduced":"")+"~s~)~n~Confidence: ~g~+"+confidenceGained+"~s~ • Level "+previousLevel+" • "+previousProgress+" → "+_profile.TrainingLevelProgress+" / "+_profile.CurrentTrainingRequirement);
+            Game.LogTrivial("AdvancedK9 patrol XP: "+command+" base="+baseXp+", liveBonus=50%, repeat="+_patrolCommandRepeatCount+", factor="+repeatFactor+", awarded="+awarded+", confidenceGained="+confidenceGained+", level="+previousLevel+", completed="+completed+".");
         }
 
         private bool PatrolCommandSucceeded(K9Command command)
@@ -1590,8 +1609,6 @@ namespace AdvancedK9
             if(_state!=K9State.Following&&_state!=K9State.Heeling&&!leashed)return;
             var handler=Game.LocalPlayer.Character;if(handler==null||!handler.Exists())return;
             Vector3 handlerPosition=handler.Position;
-            if(!_breadcrumbPositionReady){_lastBreadcrumbPosition=handlerPosition;_breadcrumbPositionReady=true;_handlerBreadcrumbs.Enqueue(handlerPosition);}
-            else if(handlerPosition.DistanceTo(_lastBreadcrumbPosition)>=.8f){_handlerBreadcrumbs.Enqueue(handlerPosition);_lastBreadcrumbPosition=handlerPosition;while(_handlerBreadcrumbs.Count>120)_handlerBreadcrumbs.Dequeue();}
             if(!_handlerNavigationPositionReady){_lastHandlerNavigationPosition=handlerPosition;_handlerNavigationPositionReady=true;}
             float handlerJump=handlerPosition.DistanceTo(_lastHandlerNavigationPosition),verticalJump=Math.Abs(handlerPosition.Z-_lastHandlerNavigationPosition.Z);_lastHandlerNavigationPosition=handlerPosition;
             float distance=_dog.DistanceTo(handler);
@@ -1621,7 +1638,30 @@ namespace AdvancedK9
             ApplyAnimalPedSafeguards();
         }
 
-        private void ResetFollowBreadcrumbs(){_handlerBreadcrumbs.Clear();var handler=Game.LocalPlayer.Character;if(handler==null||!handler.Exists()){_breadcrumbPositionReady=false;return;}_lastBreadcrumbPosition=handler.Position;_breadcrumbPositionReady=true;_handlerBreadcrumbs.Enqueue(_lastBreadcrumbPosition);}
+        private void CaptureHandlerWalkingLine()
+        {
+            var handler=Game.LocalPlayer.Character;if(handler==null||!handler.Exists())return;Vector3 position=handler.Position;
+            if(!_breadcrumbPositionReady){_lastBreadcrumbPosition=position;_breadcrumbPositionReady=true;_handlerBreadcrumbs.Enqueue(position);_lastBreadcrumbAt=Game.GameTime;return;}
+            if(position.DistanceTo(_lastBreadcrumbPosition)<.65f)return;
+            _handlerBreadcrumbs.Enqueue(position);_lastBreadcrumbPosition=position;_lastBreadcrumbAt=Game.GameTime;while(_handlerBreadcrumbs.Count>120)_handlerBreadcrumbs.Dequeue();
+        }
+
+        private Vector3 WorkingLeadWaypoint(Vector3 scentDestination,float leadDistance)
+        {
+            var handler=Game.LocalPlayer.Character;Vector3 origin=handler.Position;
+            float sx=scentDestination.X-origin.X,sy=scentDestination.Y-origin.Y,sd=(float)Math.Sqrt(sx*sx+sy*sy);if(sd>.01f){sx/=sd;sy/=sd;}
+            float wx=0f,wy=0f;bool recent=_breadcrumbPositionReady&&Game.GameTime-_lastBreadcrumbAt<=4500;
+            if(recent&&_handlerBreadcrumbs.Count>=2)
+            {
+                var points=_handlerBreadcrumbs.ToArray();Vector3 newest=points[points.Length-1];
+                for(int i=points.Length-2;i>=0;i--){float dx=newest.X-points[i].X,dy=newest.Y-points[i].Y,d=(float)Math.Sqrt(dx*dx+dy*dy);if(d>=1.2f){wx=dx/d;wy=dy/d;break;}}
+            }
+            if(Math.Abs(wx)<.01f&&Math.Abs(wy)<.01f){Vector3 forward=handler.GetOffsetPosition(new Vector3(0f,2f,0f));float dx=forward.X-origin.X,dy=forward.Y-origin.Y,d=(float)Math.Sqrt(dx*dx+dy*dy);if(d>.01f){wx=dx/d;wy=dy/d;}}
+            float dot=wx*sx+wy*sy,scentWeight=dot<-.2f?.65f:.35f;float lx=wx*(1f-scentWeight)+sx*scentWeight,ly=wy*(1f-scentWeight)+sy*scentWeight,ld=(float)Math.Sqrt(lx*lx+ly*ly);if(ld<.01f){lx=sx;ly=sy;ld=1f;}else{lx/=ld;ly/=ld;}
+            float distance=Math.Min(leadDistance,Math.Max(2.4f,sd));return new Vector3(origin.X+lx*distance,origin.Y+ly*distance,origin.Z);
+        }
+
+        private void ResetFollowBreadcrumbs(){_handlerBreadcrumbs.Clear();var handler=Game.LocalPlayer.Character;if(handler==null||!handler.Exists()){_breadcrumbPositionReady=false;return;}_lastBreadcrumbPosition=handler.Position;_breadcrumbPositionReady=true;_lastBreadcrumbAt=Game.GameTime;_handlerBreadcrumbs.Enqueue(_lastBreadcrumbPosition);}
 
         private void UpdateHandlerDownProtection()
         {

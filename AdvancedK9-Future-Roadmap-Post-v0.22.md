@@ -12,8 +12,8 @@ Current verified baseline:
 
 - AdvancedK9 core assembly `0.23.0.0`
 - LSPDFR companion bridge assembly `0.23.0.0`
-- Windows build 350 passed
-- Release branch `codex/advancedk9-v0.23.0-beta` at `b0bd57c50cfe0c624f84937e6f3e0bfb2d129c4c`
+- Windows build pending for the current tracking and patrol-progression update
+- Release branch `codex/advancedk9-v0.23.0-beta` (current update pending verification)
 - Release artifact `AdvancedK9-v0.23.0-beta.zip`
 - PR #18 remains open and unmerged
 - Drag-and-drop updates preserve an existing `AdvancedK9.ini`
@@ -302,22 +302,18 @@ Still to add:
 - Saved duty hours
 - Shift deployment summary
 
-### 🟨 20. Patrol-earned training XP
+### ✅ ~~20. Patrol-earned training XP~~
 
-Currently implemented:
+Implemented in v0.23.0-beta:
 
-- Persistent K9 training levels, certification XP, trust, confidence, and Elite Bond progression.
-- Academy XP scales by level: Levels 1–2 award 0–10 XP, Levels 3–4 award 0–20 XP, and Level 5 awards 0–30 XP based on session performance.
-
-Still to add:
-
-- Allow a deployed K9 to gain randomly sized XP awards from successful real patrol work outside the academy.
-- Apply a 50% live-action bonus over academy-scale awards: Levels 1–2 gain 0–15 XP, Levels 3–4 gain 0–30 XP, and Level 5 gains 0–45 XP from an eligible completed patrol event.
-- Award XP only after meaningful completed actions such as a valid search, track, locate, containment, safe apprehension, evidence recovery, or handler-protection response.
-- Route specialty XP only to the relevant certification when the deployed dog is trained for that task; routine obedience and patrol work contribute to general training progression.
-- Scale the random award by difficulty, scent age, search size, trail distance, successful control, K9 condition, and outcome quality.
-- Add per-event cooldowns, duplicate-event detection, and daily/shift caps so repeated commands, idle actions, cancelled searches, and the same target cannot be farmed for XP.
-- Show a compact optional XP-earned notification and record the reason, amount, level, certification, and incident in the deployment log.
+- Deployed K9s can receive randomly sized general-training XP from successful real patrol commands.
+- Level-based base ranges are 0–10 XP at Levels 1–2, 0–20 XP at Levels 3–4, and 0–30 XP at Level 5.
+- Every awarded patrol roll receives the approved 50% live-action markup.
+- A patrol reward also grants a separate random 1–3 confidence; genuine hesitation or disobedience can randomly remove 1–3 confidence.
+- Command farming is permitted. The first two repeated successful uses retain full reward potential, the third and later identical commands receive progressively smaller XP.
+- From the fifth continued nonproductive repetition, an escalating random penalty can remove general-training XP and 1–3 confidence.
+- Genuine active Search and Track work is exempt from repetition penalties.
+- Reward and penalty notifications and diagnostic log entries show the command, XP, confidence, repeat count, and reduction factor.
 
 ## Remaining unimplemented roadmap
 
@@ -449,11 +445,13 @@ MaximumCalloutDistance=3500
 
 The next six highest-impact additions after v0.23.0-beta are:
 
-1. Multiple persistent K9 profiles and kennel roster
-2. Search evidence markers with exact alert locations
-3. Vehicle-specific search paths
-4. K9 injury evacuation, emergency loading, veterinary transport, and rehabilitation
-5. Shared callout API and the first dynamic callout test set
-6. Patrol-earned training XP with a 50% live-action bonus, level-scaled random awards, and anti-farming safeguards
+1. Multiple simultaneous detections in one search, including any two odor categories or all three together
+2. BLR, PD Comp, and Damage Tracker Framework compatibility through optional public APIs
+3. Multiple persistent K9 profiles and kennel roster
+4. Search evidence markers with exact alert locations
+5. Vehicle-specific search paths
+6. K9 injury evacuation, emergency loading, veterinary transport, and rehabilitation
+
+Handler-line tracking/search navigation and patrol progression are now implemented for v0.23.0-beta and remain active tuning items during field testing.
 
 The first controlled callout test set remains Lost Child, Fugitive Trail from an Abandoned Vehicle, and Armed Burglary Suspect Hiding. Continue full clothing, blood, weapons, property, and location-pad scent expansion alongside pursuit cleanup, water/obstacle tracking, explosive-safety procedures, and saved containment positions.

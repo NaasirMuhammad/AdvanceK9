@@ -137,6 +137,10 @@ namespace AdvancedK9
             Save();return completed;
         }
         public void ChangeConfidence(int value){Confidence=Clamp(Confidence+value,0,100);Save();}
+        public int ApplyPatrolPenalty(int xp,int confidence)
+        {
+            xp=Math.Max(0,xp);confidence=Clamp(confidence,1,3);int applied=Math.Min(xp,TrainingLevelProgress);TrainingLevelProgress-=applied;TrainingXp=Math.Max(0,TrainingXp-applied);Confidence=Clamp(Confidence-confidence,0,100);Save();return applied;
+        }
         public string CurrentTrainingName=>TrainingLevel==1?"Basic Obedience":TrainingLevel==2?"Agility / Handler Control":TrainingLevel==3?"Detection":TrainingLevel==4?"Tracking":"Apprehension";
         public int SpecialtyProgress(DetectionSpecialty specialty)=>specialty==DetectionSpecialty.Narcotics?NarcoticsProgress:specialty==DetectionSpecialty.Explosives?ExplosivesProgress:specialty==DetectionSpecialty.Weapons?WeaponsProgress:0;
         public bool HasSpecialty(DetectionSpecialty specialty)=>specialty==DetectionSpecialty.Narcotics?NarcoticsCertified:specialty==DetectionSpecialty.Explosives?ExplosivesCertified:specialty==DetectionSpecialty.Weapons?WeaponsCertified:DetectionCertified;

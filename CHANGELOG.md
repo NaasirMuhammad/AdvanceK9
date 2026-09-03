@@ -1,5 +1,11 @@
 # Changelog
 
+- Makes Rex lead roughly 4.5–6 meters in front during active tracking while continuously capturing the handler's walking line in every deployed state.
+- Blends scent direction with the handler's recent travel direction so the K9 works ahead along the route the handler actually walks instead of cutting far across interiors or running 12–28 meters to a remote scent point.
+- Keeps each recorded scent point active until Rex genuinely reaches it and paces both leashed and off-leash tracking to the handler, preventing skipped trail points and corner fixation.
+- Allows patrol-command farming without a blanket cooldown: the first two repeated successful commands keep full reward potential, then XP is progressively reduced.
+- From the fifth repeated nonproductive command, escalating random penalties can remove patrol XP and 1–3 confidence; active Search and Track work is exempt from repetition penalties.
+
 - Prevents the native `a_c_shepherd` gunshot-startle/leap response by disabling only the deployed K9's ambient sound perception. Explicit AdvancedK9 follow, search, tracking, apprehension and damage behavior remains active.
 - Implements successful patrol-command XP from the roadmap using the existing level ranges: 0–10 XP at Levels 1–2, 0–20 at Levels 3–4 and 0–30 at Level 5, with the approved 50% live-action bonus.
 - Every successful patrol reward also grants a separate random 1–3 confidence, including when the level-based XP roll is zero. The reward notification shows both XP and confidence gained.
