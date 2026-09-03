@@ -21,16 +21,16 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           dotnet restore AdvancedK9.csproj
-          dotnet build AdvancedK9.csproj -c Release --no-restore /p:ContinuousIntegrationBuild=true
+          dotnet build AdvancedK9.csproj -c Release --no-restore /p:ContinuousIntegrationBuild=true -o build/main
           dotnet restore Bridge/LspdfrApiShim/LspdfrApiShim.csproj
-          dotnet build Bridge/LspdfrApiShim/LspdfrApiShim.csproj -c Release --no-restore /p:ContinuousIntegrationBuild=true
+          dotnet build Bridge/LspdfrApiShim/LspdfrApiShim.csproj -c Release --no-restore /p:ContinuousIntegrationBuild=true -o build/shim
           dotnet restore AdvancedK9.LSPDFRBridge.csproj
-          dotnet build AdvancedK9.LSPDFRBridge.csproj -c Release --no-restore /p:ContinuousIntegrationBuild=true
+          dotnet build AdvancedK9.LSPDFRBridge.csproj -c Release --no-restore /p:ContinuousIntegrationBuild=true -o build/bridge
       - uses: actions/upload-artifact@v4
         with:
           name: AdvancedK9-v0.23.0-beta
           path: |
-            bin/**/AdvancedK9.dll
-            bin/**/AdvancedK9.LSPDFRBridge.dll
-            bin/**/LemonUI.RagePluginHook.dll
+            build/main/AdvancedK9.dll
+            build/main/LemonUI.RagePluginHook.dll
+            build/bridge/AdvancedK9.LSPDFRBridge.dll
           if-no-files-found: error
