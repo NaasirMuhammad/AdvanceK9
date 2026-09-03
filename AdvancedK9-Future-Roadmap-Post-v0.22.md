@@ -12,8 +12,8 @@ Current verified baseline:
 
 - AdvancedK9 core assembly `0.23.0.0`
 - LSPDFR companion bridge assembly `0.23.0.0`
-- Windows build pending for the current tracking and patrol-progression update
-- Release branch `codex/advancedk9-v0.23.0-beta` (current update pending verification)
+- Windows build 400 passed for the current tracking and patrol-progression update
+- Latest verified code commit `f4b327451f041733a22efd0d02d00041e32c089d`
 - Release artifact `AdvancedK9-v0.23.0-beta.zip`
 - PR #18 remains open and unmerged
 - Drag-and-drop updates preserve an existing `AdvancedK9.ini`
