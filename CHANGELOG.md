@@ -1,5 +1,10 @@
 # Changelog
 
+- Rebuilds Building Search as a handler-led dynamic sweep: Rex alternates ahead and across the handler's live route through doors, rooms and corridors instead of using six precomputed world points that custom interiors can collapse onto one nav node.
+- Prevents Building Search from selecting and running toward an arbitrary nearby pedestrian through glass, walls or unreachable corners. Subject alerts now require close range and clear line of sight during the live sweep.
+- Adds generation-based search cancellation. Recall, Follow and every other replacement command immediately clear the current search task and invalidate its fiber, preventing an old sector task or sniff animation from reclaiming Rex after recall.
+- Removes every remaining gunfire-driven K9 mutation, including ragdoll toggles and the per-frame ped action-mode reset identified by the matching test log. Handler gunfire is now observation-only and cannot replace Rex's task, animation, clipset, movement or skeleton state.
+
 - Adds selectable menu and voice-command localization for Spanish, French, Chinese, Portuguese, Russian, Thai, Turkish, Vietnamese, German, Czech, Italian, Japanese and Polish, with English retained as the safe fallback.
 - Adds translated labels and natural spoken alternatives for all 49 AdvancedK9 commands, including localized K9 wake words, detection specialties, tactical actions, medical care, vehicle commands and training commands.
 - Adds an in-game language selector at the top of the K9 Profile menu. Left/right or select cycles languages, saves the choice to `AdvancedK9.ini`, and immediately rebuilds voice recognition in that language.

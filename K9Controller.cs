@@ -54,8 +54,7 @@ namespace AdvancedK9
         private uint _nextLeashFollow;
         private uint _nextLeashVisualUpdate;
         private uint _nextIndoorFollowUpdate;
-        private bool _gunfireHoldActive;
-        private uint _lastHandlerShotAt;
+        private bool _handlerWasShooting;
         private Vector3 _lastHandlerNavigationPosition;
         private bool _handlerNavigationPositionReady;
         private readonly Queue<Vector3> _handlerBreadcrumbs=new Queue<Vector3>();
@@ -101,6 +100,7 @@ namespace AdvancedK9
         private bool _editorMouseHeld;
         private uint _nextLiveEditorInput;
         private bool _searchInProgress;
+        private int _searchGeneration;
         private bool _deployed;
         private bool _downed;
         private bool _carryingDog;
@@ -483,6 +483,7 @@ namespace AdvancedK9
         {
             try
             {
+                if(_searchInProgress&&!IsSearchCommand(command))CancelActiveSearch(command);
                 _hudCommand=CommandLabel(command);
                 bool leashed=_leashRope>=0;
                 if(leashed&&RequiresLeashRelease(command)){DeleteLeashRope();_state=K9State.Following;leashed=false;ActionNotification("~b~Leash automatically released for "+CommandLabel(command)+".");}
@@ -1039,23 +1040,56 @@ namespace AdvancedK9
         private void BeginBuildingSearch()
         {
             if(_searchInProgress){Game.DisplayNotification("~y~K9 search already in progress.");return;}
-            _searchInProgress=true;_state=K9State.Searching;_hudSearchLabel="BUILDING SEARCH";_hudSearchProgress=0;
-            GameFiber.StartNew(()=>{try{SearchBuilding();}catch(Exception ex){Game.LogTrivial("AdvancedK9 asynchronous building search failed: "+ex);Game.DisplayNotification("~r~K9 building search failed.~s~ See RagePluginHook.log.");Follow();}finally{_hudSearchLabel="";_searchInProgress=false;}},"AdvancedK9 Building Search");
+            int generation=++_searchGeneration;_searchInProgress=true;_state=K9State.Searching;_hudSearchLabel="BUILDING SEARCH";_hudSearchProgress=0;
+            GameFiber.StartNew(()=>{try{SearchBuilding(generation);}catch(Exception ex){Game.LogTrivial("AdvancedK9 asynchronous building search failed: "+ex);Game.DisplayNotification("~r~K9 building search failed.~s~ See RagePluginHook.log.");if(SearchSessionActive(generation))Follow();}finally{if(generation==_searchGeneration){_hudSearchLabel="";_searchInProgress=false;}}},"AdvancedK9 Building Search");
         }
 
-        private void SearchBuilding()
+        private void SearchBuilding(int generation)
         {
-            if(!DogExists())return;var handler=Game.LocalPlayer.Character;var target=(_config.CompatibilityUseActiveTargets?_pr.GetActivePed(handler,60f):null)??CurrentPursuitSuspect();
-            if(target==null)target=World.GetAllPeds().Where(p=>p.Exists()&&p!=handler&&p!=_dog&&!p.IsDead&&!LspdfrBridge.IsPedCop(p)&&p.DistanceTo(handler)<=45f).OrderBy(p=>p.DistanceTo(handler)).FirstOrDefault();
-            _state=K9State.Searching;_dog.Tasks.Clear();Vector3 origin=handler.GetOffsetPosition(new Vector3(0f,3f,0f));
-            var points=new[]{origin,handler.GetOffsetPosition(new Vector3(-3f,7f,0f)),handler.GetOffsetPosition(new Vector3(3f,10f,0f)),handler.GetOffsetPosition(new Vector3(-2f,14f,0f)),handler.GetOffsetPosition(new Vector3(2f,18f,0f)),target!=null?target.Position:handler.GetOffsetPosition(new Vector3(0f,22f,0f))};
-            Game.DisplayNotification("~b~Building search started.~s~~n~K9 will clear six sectors, then bark and hold only if a subject is located.");
-            for(int i=0;i<points.Length;i++)
+            if(!SearchSessionActive(generation))return;var handler=Game.LocalPlayer.Character;
+            Ped assignedTarget=(_config.CompatibilityUseActiveTargets?_pr.GetActivePed(handler,60f):null)??CurrentPursuitSuspect();
+            _state=K9State.Searching;_dog.Tasks.Clear();
+            var sweepOffsets=new[]{new Vector3(-1.8f,2.4f,0f),new Vector3(1.8f,2.8f,0f),new Vector3(-1.4f,3.3f,0f),new Vector3(1.4f,3.6f,0f),new Vector3(-.8f,4f,0f),new Vector3(.8f,4.2f,0f)};
+            Game.DisplayNotification("~b~Building search started.~s~~n~Move through the structure; the K9 will sweep ahead and across your live route.");
+            for(int i=0;i<sweepOffsets.Length;i++)
             {
-                if(!DogExists()||_state!=K9State.Searching){Follow();return;}Game.DisplaySubtitle("~b~Building sector "+(i+1)+"/6",1300);_dog.Tasks.FollowNavigationMeshToPosition(points[i],handler.Heading,2.4f).WaitForCompletion(5500);PlayDogAnimation("creatures@rottweiler@indication@","indicate_low",500,0);GameFiber.Wait(200);
-                if(target!=null&&target.Exists()&&_dog.DistanceTo(target)<4f){_dog.Tasks.Clear();Bark(2);Sit();_pr.RecordLocatedSuspect(target);K9IncidentLog.Write(_profile.Name,"Building search","Subject located; alert and hold",target.Position);K9DeploymentReport.Write("Player",_profile.Name,"Building search","Structure clearance","None",false,0f,0,0,"Located","None","Alert bark and hold",target.Position);Game.DisplayNotification("~g~Building search: subject located.~s~~n~K9 is sitting and holding; Apprehend requires a separate aimed command.");return;}
+                if(!SearchSessionActive(generation))return;
+                Game.DisplaySubtitle("~b~Building sector "+(i+1)+"/6~s~ — advance with your K9",1300);
+                Vector3 offset=sweepOffsets[i];
+                // Entity-relative movement follows the handler's actual path through doors and
+                // corridors. Fixed world/navmesh points can collapse onto one portal node or an
+                // unreachable glass-side corner in custom interiors.
+                NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(_dog,handler,offset.X,offset.Y,0f,2.0f,-1,1.15f,true);
+                Vector3 start=_dog.Position;uint until=Game.GameTime+2600;
+                while(Game.GameTime<until)
+                {
+                    if(!SearchSessionActive(generation))return;
+                    Ped located=VisibleBuildingSubject(assignedTarget);
+                    if(located!=null){CompleteBuildingAlert(located);return;}
+                    GameFiber.Yield();
+                }
+                Game.LogTrivial("AdvancedK9 building sweep sector "+(i+1)+": moved "+_dog.DistanceTo(start).ToString("0.0")+"m; handler distance "+_dog.DistanceTo(handler).ToString("0.0")+"m.");
             }
-            Sit();K9DeploymentReport.Write("Player",_profile.Name,"Building search","Structure clearance","None",false,0f,0,0,"None","None","No subject located",handler.Position);Game.DisplayNotification("~g~Building search complete.~s~ No subject located in the cleared sectors.");
+            if(!SearchSessionActive(generation))return;
+            Sit();K9DeploymentReport.Write("Player",_profile.Name,"Building search","Handler-led dynamic structure clearance","None",false,0f,0,0,"None","None","No subject located",handler.Position);Game.DisplayNotification("~g~Building search complete.~s~ No subject located along the cleared route.");
+        }
+
+        private bool SearchSessionActive(int generation)=>generation==_searchGeneration&&_searchInProgress&&DogExists()&&_state==K9State.Searching;
+        private static bool IsSearchCommand(K9Command command)=>command==K9Command.SearchArea||command==K9Command.SearchBuilding||command==K9Command.SearchVehicle||command==K9Command.SearchNarcotics||command==K9Command.SearchExplosives||command==K9Command.SearchWeapons;
+        private void CancelActiveSearch(K9Command replacement)
+        {
+            _searchGeneration++;_searchInProgress=false;_hudSearchLabel="";_hudSearchProgress=0;
+            if(DogEntityExists())NativeFunction.Natives.CLEAR_PED_TASKS_IMMEDIATELY(_dog);
+            Game.LogTrivial("AdvancedK9 search cancelled immediately by "+replacement+"; stale search fiber generation invalidated.");
+        }
+        private Ped VisibleBuildingSubject(Ped assigned)
+        {
+            if(assigned!=null&&assigned.Exists()&&!assigned.IsDead&&_dog.DistanceTo(assigned)<=6f&&NativeFunction.Natives.HAS_ENTITY_CLEAR_LOS_TO_ENTITY<bool>(_dog,assigned,17))return assigned;
+            return World.GetAllPeds().Where(p=>p!=null&&p.Exists()&&p!=Game.LocalPlayer.Character&&p!=_dog&&!p.IsDead&&!LspdfrBridge.IsPedCop(p)&&p.DistanceTo(_dog)<=5f&&NativeFunction.Natives.HAS_ENTITY_CLEAR_LOS_TO_ENTITY<bool>(_dog,p,17)).OrderBy(p=>p.DistanceTo(_dog)).FirstOrDefault();
+        }
+        private void CompleteBuildingAlert(Ped target)
+        {
+            _dog.Tasks.Clear();Bark(2);Sit();_pr.RecordLocatedSuspect(target);K9IncidentLog.Write(_profile.Name,"Building search","Visible subject located; alert and hold",target.Position);K9DeploymentReport.Write("Player",_profile.Name,"Building search","Handler-led dynamic structure clearance","None",false,0f,0,0,"Located","None","Alert bark and hold",target.Position);Game.DisplayNotification("~g~Building search: subject located.~s~~n~K9 is sitting and holding; Apprehend requires a separate aimed command.");
         }
 
         private void K9Warning()
@@ -1455,7 +1489,7 @@ namespace AdvancedK9
             if(_seatCalibrationDoorOpen&&(!_menu.Visible||_menuMode!="seat_config"||_state!=K9State.InVehicle))CloseSeatCalibrationDoor();
             EnforceHandlerSafety();
             MaintainAnimalPedPresentation();
-            MaintainGunfireHold();
+            ObserveHandlerGunfire();
             MaintainFollowNavigation();
             UpdateNeeds();
             UpdateReliefNeeds();
@@ -1480,7 +1514,7 @@ namespace AdvancedK9
                 _dog.Position = Game.LocalPlayer.Character.GetOffsetPosition(new Vector3(-1f, -2f, 0f));
         }
 
-        private void ApplyAnimalPedSafeguards(){if(!DogEntityExists())return;_dog.BlockPermanentEvents=true;NativeFunction.Natives.SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(_dog,true);NativeFunction.Natives.SET_PED_FLEE_ATTRIBUTES(_dog,0,false);NativeFunction.Natives.SET_PED_CAN_EVASIVE_DIVE(_dog,false);NativeFunction.Natives.SET_PED_USING_ACTION_MODE(_dog,false,-1,"DEFAULT_ACTION");}
+        private void ApplyAnimalPedSafeguards(){if(!DogEntityExists())return;_dog.BlockPermanentEvents=true;NativeFunction.Natives.SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(_dog,true);NativeFunction.Natives.SET_PED_FLEE_ATTRIBUTES(_dog,0,false);NativeFunction.Natives.SET_PED_CAN_EVASIVE_DIVE(_dog,false);}
 
         private void MaintainAnimalPedPresentation()
         {
@@ -1488,24 +1522,17 @@ namespace AdvancedK9
             ApplyAnimalPedSafeguards();
         }
 
-        private void MaintainGunfireHold()
+        private void ObserveHandlerGunfire()
         {
             var handler=Game.LocalPlayer.Character;if(handler==null||!handler.Exists())return;
             bool shooting=NativeFunction.Natives.IS_PED_SHOOTING<bool>(handler);
-            if(shooting)_lastHandlerShotAt=Game.GameTime;
-            if(shooting&&!_gunfireHoldActive&&(_state==K9State.Following||_state==K9State.Heeling))
+            if(shooting&&!_handlerWasShooting)
             {
-                // Do not replace an animal's movement task or force an animation here. Custom K9
-                // models can deform when a breed-specific clip is mapped onto their skeleton.
-                _gunfireHoldActive=true;NativeFunction.Natives.SET_PED_CAN_RAGDOLL(_dog,false);NativeFunction.Natives.SET_PED_CAN_RAGDOLL_FROM_PLAYER_IMPACT(_dog,false);ApplyAnimalPedSafeguards();
-                uint model=NativeFunction.Natives.GET_ENTITY_MODEL<uint>(_dog);Game.LogTrivial("AdvancedK9 gunfire protection: ambient reactions blocked without replacing the K9 task; model=0x"+model.ToString("X8")+", state="+_state+".");
+                // Observation only. No animation, action-mode, ragdoll, task, clipset or movement
+                // native is allowed to touch the K9 in response to handler gunfire.
+                uint model=NativeFunction.Natives.GET_ENTITY_MODEL<uint>(_dog);Game.LogTrivial("AdvancedK9 gunfire observed with zero K9 task/animation intervention; model=0x"+model.ToString("X8")+", state="+_state+".");
             }
-            else if(!shooting&&_gunfireHoldActive&&Game.GameTime-_lastHandlerShotAt>=750)
-            {
-                _gunfireHoldActive=false;NativeFunction.Natives.SET_PED_CAN_RAGDOLL(_dog,true);NativeFunction.Natives.SET_PED_CAN_RAGDOLL_FROM_PLAYER_IMPACT(_dog,true);
-                ApplyAnimalPedSafeguards();
-                Game.LogTrivial("AdvancedK9 gunfire protection: handler ceased fire; existing K9 task preserved.");
-            }
+            _handlerWasShooting=shooting;
         }
 
         private void MaintainFollowNavigation()
