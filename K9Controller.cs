@@ -855,7 +855,7 @@ namespace AdvancedK9
         private void SpawnDogWaste(Vector3 position){try{var model=new Model("prop_big_shit_02");if(!model.IsValid)model=new Model("prop_big_shit_01");if(!model.IsValid)return;model.LoadAndWait();var waste=new Rage.Object(model,position);model.Dismiss();if(waste==null||!waste.Exists())return;waste.IsPersistent=true;GameFiber.StartNew(()=>{GameFiber.Wait(180000);if(waste.Exists())waste.Delete();});}catch(Exception ex){Game.LogTrivial("AdvancedK9 dog waste prop: "+ex.Message);}}
         private void VeterinaryCare(){if(!DogEntityExists())return;if(_carryingDog)SetDownCarriedK9(false);var handler=Game.LocalPlayer.Character;Vector3 p=handler.Position;float h=handler.Heading;NativeFunction.Natives.DO_SCREEN_FADE_OUT(450);GameFiber.Wait(550);handler.Position=new Vector3(306.7f,-595.2f,43.3f);RestoreDogAfterTreatment(100);_dog.Position=handler.GetOffsetPosition(new Vector3(1f,0f,0f));GameFiber.Wait(1800);_profile.VeterinaryTreat();RestoreDogAfterTreatment(100);_downed=false;if(_blip!=null&&_blip.Exists()){_blip.Color=Color.DodgerBlue;_blip.Name="K9 "+_profile.Name;}handler.Position=p;handler.Heading=h;_dog.Position=handler.GetOffsetPosition(new Vector3(-1f,-1f,0f));NativeFunction.Natives.DO_SCREEN_FADE_IN(450);K9IncidentLog.Write(_profile.Name,"Medical","Veterinary cleared",p);Game.DisplayNotification("~g~Veterinary clearance complete.~s~ K9 returned to service.");Follow();}
 
-        private void RestoreDogAfterTreatment(int healthPercent){if(!DogEntityExists())return;NativeFunction.Natives.FREEZE_ENTITY_POSITION(_dog,false);NativeFunction.Natives.SET_PED_CAN_RAGDOLL(_dog,true);if(_dog.IsDead)NativeFunction.Natives.RESURRECT_PED(_dog);NativeFunction.Natives.REVIVE_INJURED_PED(_dog);NativeFunction.Natives.CLEAR_PED_TASKS_IMMEDIATELY(_dog);int health=Math.Max(1,(int)(_dog.MaxHealth*Math.Max(1,Math.Min(100,healthPercent))/100f));_dog.Health=health;NativeFunction.Natives.SET_ENTITY_HEALTH(_dog,health);_dog.IsInvincible=false;_dog.BlockPermanentEvents=true;}
+        private void RestoreDogAfterTreatment(int healthPercent){if(!DogEntityExists())return;NativeFunction.Natives.FREEZE_ENTITY_POSITION(_dog,false);NativeFunction.Natives.SET_PED_CAN_RAGDOLL(_dog,true);if(_dog.IsDead)NativeFunction.Natives.RESURRECT_PED(_dog);NativeFunction.Natives.REVIVE_INJURED_PED(_dog);NativeFunction.Natives.CLEAR_PED_TASKS_IMMEDIATELY(_dog);int health=Math.Max(1,(int)(_dog.MaxHealth*Math.Max(1,Math.Min(100,healthPercent))/100f));_dog.Health=health;NativeFunction.Natives.SET_ENTITY_HEALTH(_dog,health);_dog.IsInvincible=false;_dog.BlockPermanentEvents=true;ConfigureAmbientGunfireImmunity();}
 
         private void ToggleCarryK9(){if(_carryingDog){SetDownCarriedK9(true);return;}if(!DogEntityExists()){Game.DisplayNotification("~y~No deployed K9 is available to carry.");return;}if(!_downed&&_state!=K9State.Injured&&_profile.Health>=95){Game.DisplayNotification("~g~"+_profile.Name+" does not need to be carried.");return;}var handler=Game.LocalPlayer.Character;if(_dog.DistanceTo(handler)>3f){Game.DisplayNotification("~y~Move closer to "+_profile.Name+" before carrying.");return;}DeleteLeashRope();ReleaseVehicleSeat();NativeFunction.Natives.FREEZE_ENTITY_POSITION(_dog,false);NativeFunction.Natives.SET_PED_CAN_RAGDOLL(_dog,false);_dog.IsInvincible=true;_dog.Tasks.ClearImmediately();handler.Tasks.PlayAnimation("anim@heists@box_carry@","idle",4f,AnimationFlags.Loop);int spine=NativeFunction.Natives.GET_PED_BONE_INDEX<int>(handler,24818);NativeFunction.Natives.SET_ENTITY_COLLISION(_dog,false,false);NativeFunction.Natives.ATTACH_ENTITY_TO_ENTITY(_dog,handler,spine,.18f,.42f,-.08f,0f,90f,90f,false,false,false,false,2,true);PlayDogAnimation("creatures@rottweiler@move","dead_left",-1,1);_carryingDog=true;_state=K9State.Injured;K9IncidentLog.Write(_profile.Name,"Medical","Handler began K9 evacuation carry",handler.Position);Game.DisplayNotification("~b~Carrying "+_profile.Name+".~s~~n~Select Carry / Set Down K9 again to place the K9 down.");}
 
@@ -1529,13 +1529,19 @@ namespace AdvancedK9
         private void ConfigureAmbientGunfireImmunity()
         {
             if(!DogEntityExists())return;
-            // a_c_shepherd's native animal AI can hear handler gunfire and select a dramatic
-            // startle/leap response even while a follow task remains active. Remove only ambient
-            // sound perception; explicit AdvancedK9 search and apprehension logic is unaffected.
+            // Block both permanent AI events and temporary shocking events. Handler gunfire is a
+            // temporary shocking event, so BlockPermanentEvents/hearing range alone cannot stop
+            // the animal brain from selecting a reaction clip. Flag 49 also prevents the normal
+            // group-member aimed-at response. Gesture animations are human upper-body clips and
+            // must never be selected for an a_c_shepherd-compatible skeleton.
             NativeFunction.Natives.SET_PED_HEARING_RANGE(_dog,0f);
             NativeFunction.Natives.SET_PED_ALERTNESS(_dog,0);
             NativeFunction.Natives.SET_PED_HIGHLY_PERCEPTIVE(_dog,false);
-            Game.LogTrivial("AdvancedK9 ambient gunfire immunity configured for a_c_shepherd-compatible K9 behavior.");
+            NativeFunction.Natives.SET_PED_CONFIG_FLAG(_dog,17,true);
+            NativeFunction.Natives.SET_PED_CONFIG_FLAG(_dog,49,true);
+            NativeFunction.Natives.SET_PED_CONFIG_FLAG(_dog,294,true);
+            NativeFunction.Natives.SET_PED_CAN_PLAY_GESTURE_ANIMS(_dog,false);
+            Game.LogTrivial("AdvancedK9 gunfire immunity configured: permanent events blocked, aimed-group response blocked, shocking events disabled, human gesture animations disabled.");
         }
 
         private void TryAwardPatrolCommandXp(K9Command command)

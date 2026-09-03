@@ -1,5 +1,8 @@
 # Changelog
 
+- Blocks temporary shocking events on the deployed K9 in addition to permanent events. The supplied test log proved handler shots were still reaching the native shepherd brain despite hearing range being zero.
+- Blocks GTA's group-member aimed-at response and disables human upper-body gesture animations for the K9 skeleton. These are persistent spawn-time safeguards and do not clear tasks, replay poses, or interfere with explicit AdvancedK9 movement and apprehension commands.
+
 - Makes Rex lead roughly 4.5–6 meters in front during active tracking while continuously capturing the handler's walking line in every deployed state.
 - Blends scent direction with the handler's recent travel direction so the K9 works ahead along the route the handler actually walks instead of cutting far across interiors or running 12–28 meters to a remote scent point.
 - Keeps each recorded scent point active until Rex genuinely reaches it and paces both leashed and off-leash tracking to the handler, preventing skipped trail points and corner fixation.
