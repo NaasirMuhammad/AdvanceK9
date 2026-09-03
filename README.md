@@ -1,6 +1,6 @@
-# Advanced K9 v0.22.11-beta for LSPDFR
+# Advanced K9 v0.23.1-beta for LSPDFR
 
-AdvancedK9 v0.22.11-beta is a persistent LSPDFR/RAGE Plugin Hook police-dog partner with push-to-talk voice control, per-dog progression, user-positioned exterior station kennels and a compact Glass Tactical HUD with silent negative vehicle searches and attached result alerts. All published builds are beta builds while gameplay and model compatibility continue to be tested.
+AdvancedK9 v0.23.1-beta is a persistent LSPDFR/RAGE Plugin Hook police-dog partner with push-to-talk voice control, per-dog progression, user-positioned exterior station kennels and a compact Glass Tactical HUD with silent negative vehicle searches and attached result alerts. All published builds are beta builds while gameplay and model compatibility continue to be tested.
 
 ## Glass Tactical HUD
 
@@ -22,7 +22,7 @@ The compiled release includes AdvancedK9, its configuration, and the MIT-license
 - Sit, lie down, pet, feed, physical rope leash with handler-follow movement, and dog-mounted camera
 - Persistent food and water care HUD, low-need warnings, separate feed/drink interactions and working-dog consumption
 - Kneeling handler petting interaction with a synchronized K9 response
-- Automatic operational leash release when search, tracking, fetch or apprehension is deployed
+- Working leash support for follow, heel, obedience, searches, tracking, perimeter and containment; automatic release only for unrestricted actions such as apprehension, fetch, vehicle entry and K9 carrying
 - Pedestrian and four-corner vehicle odor searches; silent sit means clear, sit plus repeated bark after the completed sweep means positive
 - General searches identify narcotics, explosives or weapons whenever the deployed dog holds the corresponding specialty certification
 - Automatic natural bladder and bowel relief during safe idle periods, with urine effects and temporary dog-waste props

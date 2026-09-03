@@ -1,11 +1,11 @@
-name: Build AdvancedK9 v0.23.0-beta
-# Produces the verified Windows drag-and-drop artifact.
+name: Build AdvancedK9 v0.23.1-beta
+# Produces the verified Windows release artifacts.
 on:
   workflow_dispatch:
   pull_request:
     branches: [ main ]
   push:
-    branches: [ main, codex/advancedk9-v0.23.0-beta ]
+    branches: [ main, codex/advancedk9-v0.23.1-beta ]
 jobs:
   build:
     runs-on: windows-latest
@@ -24,7 +24,7 @@ jobs:
           dotnet build AdvancedK9.csproj -c Release --no-restore /p:ContinuousIntegrationBuild=true
       - uses: actions/upload-artifact@v4
         with:
-          name: AdvancedK9-v0.23.0-beta
+          name: AdvancedK9-v0.23.1-beta
           path: bin/**/AdvancedK9.dll
           if-no-files-found: error
       - name: Build AdvancedK9 compatibility bridge
@@ -37,6 +37,6 @@ jobs:
           dotnet build AdvancedK9.LSPDFRBridge.csproj -c Release --no-restore /p:ContinuousIntegrationBuild=true /p:OutputPath="$pwd/artifact-bridge/"
       - uses: actions/upload-artifact@v4
         with:
-          name: AdvancedK9-v0.23.0-beta-bridge
+          name: AdvancedK9-v0.23.1-beta-bridge
           path: artifact-bridge/AdvancedK9.LSPDFRBridge.dll
           if-no-files-found: error

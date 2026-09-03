@@ -1,52 +1,72 @@
 # Changelog
 
-- Places the deployed K9 in a dedicated `ADVANCEDK9` companion relationship group instead of copying the handler's police relationship group. The latest test log showed LSPDFR `AmbientCombatControl` active while Rex shared the officer group, allowing external cop-combat presentation to target the animal skeleton when the handler fired.
-- Defines friendly two-way relationships between the K9, handler, player, and police groups, and continuously preserves only the K9 group assignment. Rex remains a police companion without being classified as a human police ped by ambient combat systems.
+## 0.23.1-beta
 
-- Blocks temporary shocking events on the deployed K9 in addition to permanent events. The supplied test log proved handler shots were still reaching the native shepherd brain despite hearing range being zero.
-- Blocks GTA's group-member aimed-at response and disables human upper-body gesture animations for the K9 skeleton. These are persistent spawn-time safeguards and do not clear tasks, replay poses, or interfere with explicit AdvancedK9 movement and apprehension commands.
+### K9 behavior and handler gunfire
 
-- Makes Rex lead roughly 4.5–6 meters in front during active tracking while continuously capturing the handler's walking line in every deployed state.
-- Blends scent direction with the handler's recent travel direction so the K9 works ahead along the route the handler actually walks instead of cutting far across interiors or running 12–28 meters to a remote scent point.
-- Keeps each recorded scent point active until Rex genuinely reaches it and paces both leashed and off-leash tracking to the handler, preventing skipped trail points and corner fixation.
-- Allows patrol-command farming without a blanket cooldown: the first two repeated successful commands keep full reward potential, then XP is progressively reduced.
-- From the fifth repeated nonproductive command, escalating random penalties can remove patrol XP and 1–3 confidence; active Search and Track work is exempt from repetition penalties.
+- Places the deployed dog in a dedicated `ADVANCEDK9` companion relationship group while maintaining friendly two-way relationships with the handler, player and police.
+- Prevents LSPDFR ambient police-combat systems from classifying the animal as a human police ped and applying incompatible combat presentation when the handler fires.
+- Blocks native shocking-event, aimed-group, flee and human gesture responses without clearing or replacing the K9's active movement task.
+- Rex now remains in his correct animal pose and continues following normally while the handler fires a weapon.
+- Gunfire protection is restored whenever the K9 is created, revived or returned from treatment.
 
-- Prevents the native `a_c_shepherd` gunshot-startle/leap response by disabling only the deployed K9's ambient sound perception. Explicit AdvancedK9 follow, search, tracking, apprehension and damage behavior remains active.
-- Implements successful patrol-command XP from the roadmap using the existing level ranges: 0–10 XP at Levels 1–2, 0–20 at Levels 3–4 and 0–30 at Level 5, with the approved 50% live-action bonus.
-- Every successful patrol reward also grants a separate random 1–3 confidence, including when the level-based XP roll is zero. The reward notification shows both XP and confidence gained.
-- Uses a 50% random reward chance after an eligible successful command, plus a 45-second patrol reward cooldown and state-based success validation so rewards are occasional and rejected or repeated commands cannot farm XP.
-- When Rex genuinely hesitates or disobeys, there is a separate 50% chance of losing 1–3 confidence. A successful command that simply receives no patrol reward does not reduce confidence.
+### Leash and command handling
 
-- Rebuilds Building Search as a handler-led dynamic sweep: Rex alternates ahead and across the handler's live route through doors, rooms and corridors instead of using six precomputed world points that custom interiors can collapse onto one nav node.
-- Prevents Building Search from selecting and running toward an arbitrary nearby pedestrian through glass, walls or unreachable corners. Subject alerts now require close range and clear line of sight during the live sweep.
-- Adds generation-based search cancellation. Recall, Follow and every other replacement command immediately clear the current search task and invalidate its fiber, preventing an old sector task or sniff animation from reclaiming Rex after recall.
-- Removes every remaining gunfire-driven K9 mutation, including ragdoll toggles and the per-frame ped action-mode reset identified by the matching test log. Handler gunfire is now observation-only and cannot replace Rex's task, animation, clipset, movement or skeleton state.
+- Keeps the dog mobile while leashed; the leash visual does not freeze or attach the K9 entity to the handler.
+- Maintains a retractable handler-to-collar leash length so excess rope does not continuously fall through the ground.
+- Allows every command that can safely be performed while leashed, including Follow, Heel, Sit, Down, Stay, Recall, searches, Track, Find Trail, Hold Perimeter and Contain Suspect.
+- Automatically releases the leash only for commands that require unrestricted movement, including Apprehend, Fetch, vehicle entry, carrying and veterinary care.
+- Prevents repeated leash-follow task clearing from leaving Rex standing motionless.
 
-- Adds selectable menu and voice-command localization for Spanish, French, Chinese, Portuguese, Russian, Thai, Turkish, Vietnamese, German, Czech, Italian, Japanese and Polish, with English retained as the safe fallback.
-- Adds translated labels and natural spoken alternatives for all 49 AdvancedK9 commands, including localized K9 wake words, detection specialties, tactical actions, medical care, vehicle commands and training commands.
-- Adds an in-game language selector at the top of the K9 Profile menu. Left/right or select cycles languages, saves the choice to `AdvancedK9.ini`, and immediately rebuilds voice recognition in that language.
+### Following, interiors and elevators
 
-- Removes the forced breed-specific sitting animation during handler gunfire. Gunfire protection now blocks ambient reactions while preserving Rex's current animal movement task, preventing custom-model skeleton twisting.
-- Replaces stale indoor navmesh breadcrumb recovery with the same entity-follow task proven by leash movement, preventing Rex from repeatedly running into a glass wall or corner while the handler continues through an interior.
-- Extends elevator and floor-transition catch-up to leashed movement so Rex arrives beside the handler on the destination floor and resumes walking with the leash intact.
+- Uses handler-relative following and route recovery through doors, corridors, rooms and custom interiors instead of sending Rex toward an unreachable corner.
+- Captures the handler's walking line and uses it as the safe navigation corridor during supported movement and working states.
+- Detects elevators, teleports, floor changes and large interior transitions; Rex catches up beside the handler and immediately resumes following.
+- Preserves elevator/floor catch-up with or without the leash attached.
+- Stages vehicle exit and Door Pop through the opened rear door with an animal-safe jump to a collision-safe exterior position, preventing Rex from phasing through the vehicle body.
 
-- Replaces the generic gunfire stand task with an explicit looping K9 sitting animation, preventing GTA from selecting a human-compatible stand pose for the animal skeleton.
-- Replaces direct-to-handler indoor routing with a 120-point handler breadcrumb trail so Rex follows the route actually walked through FIB doors, halls and corners instead of cutting toward an unreachable corner.
+### Building search, tracking and recall
 
-- Stages K9 unloading through the opened rear door with a visible animal jump to a collision-safe exterior point, preventing Rex from visibly phasing through the vehicle body during Exit Vehicle or Door Pop.
+- Rebuilds Building Search as a live handler-led sweep. Rex works ahead and alternates across the handler's route through doors, rooms and corridors.
+- Requires close range and clear line of sight before Rex alerts on a building-search subject, preventing false runs toward pedestrians through walls, glass or inaccessible corners.
+- Recall, Follow or another replacement command immediately cancels the current search fiber and prevents an old search point or animation from taking control again.
+- Makes Rex lead approximately 4.5–6 meters ahead during active tracking while blending scent direction with the handler's recent walking direction.
+- Paces leashed and off-leash tracking to the handler, retains each recorded scent point until Rex reaches it and prevents distant trail-point skipping or corner fixation.
 
-- Adds a tactical gunfire hold for ordinary Follow/Heel: Rex receives one animal-safe stand task at the start of handler fire, cannot ragdoll or deform during the firing window, and automatically resumes Follow when firing stops. No per-shot animation replay occurs.
-- Upgrades interior following for future callout interiors with frequent navmesh routing plus elevator/teleport catch-up when the handler changes floors, interiors or distant lobby positions.
+### Injury, first aid and carrying
 
-- Removes the task-level event blocker that could compete with Follow and distort the animal skeleton. Gunfire immunity now uses only the non-task ped event flag.
-- Adds a Follow recovery path that uses the navigation mesh through doors, corridors and rooms whenever Rex becomes stopped or falls behind, including custom FIB lobby/MLO spaces that may not report an interior ID.
+- Places an injured or downed K9 in a stable animal side-lying pose instead of ragdolling, standing or twisting.
+- Correctly transitions first aid from downed to stabilized condition and allows veterinary care to recognize the stabilized dog.
+- Prevents the previous loop in which veterinary care repeatedly requested first aid after first aid had already succeeded.
+- Allows the handler to carry Rex whenever he is injured or downed and keeps the dog flat in an animal-safe carried pose.
+- Restores collision, health, movement, gunfire protection and the appropriate injured or follow state after treatment or set-down.
 
-- Replaces all per-shot K9 animation manipulation with GTA's paired persistent/task event blockers. AdvancedK9 no longer clears secondary animations, resets clipsets, disables the animal's ambient animation system or reissues movement tasks while the handler fires.
+### HUD, localization and controls
 
-- Prevents handler gunfire from applying human ambient/gesture reactions to the K9. Gunfire suppression now clears only the secondary reaction animation and no longer resets animal movement clipsets or replaces active K9 tasks.
-- Adds user-defined voice-command phrases through `[CommandPhrases]`; custom alternatives supplement built-in phrases and are supplied to transcription for improved recognition.
-- Makes every AdvancedK9 shortcut configurable while preserving existing defaults, and accepts `Modifier=None`/`Off`/`Disabled` for optional modifier-free shortcuts.
+- Corrects the HUD field toggles so Food, Water, Certifications, Trust, Training and Injury appear when enabled.
+- Adds selectable menu and voice-command localization for English, Spanish, French, Chinese, Portuguese, Russian, Thai, Turkish, Vietnamese, German, Czech, Italian, Japanese and Polish.
+- Supplies localized labels, wake words and spoken alternatives for all 49 commands, including detection, tactical, medical, vehicle and training actions.
+- Adds an in-game language selector that saves to `AdvancedK9.ini` and rebuilds voice recognition immediately.
+- Supports user-defined voice alternatives through `[CommandPhrases]` without removing built-in phrases.
+- Makes every shortcut key and modifier configurable while retaining the existing defaults; `None`, `Off` or `Disabled` permits modifier-free shortcuts.
+
+### Patrol XP and confidence
+
+- Adds random patrol-command training rewards using base ranges of 0–10 XP at Levels 1–2, 0–20 XP at Levels 3–4 and 0–30 XP at Level 5.
+- Applies the approved 50% live-action XP markup to eligible patrol rewards.
+- Awards a separate random 1–3 confidence with a successful patrol reward; genuine hesitation or disobedience can randomly reduce confidence by 1–3.
+- Allows command farming: the first two consecutive successful uses retain full reward potential, while the third and later identical commands receive progressively smaller XP.
+- Continued nonproductive repetition can randomly remove general-training XP and 1–3 confidence, with the penalty chance increasing from the fifth repetition onward.
+- Exempts genuine active Search and Track work from repetition penalties.
+
+### Release, documentation and compatibility
+
+- Updates the full future roadmap with simultaneous narcotics, weapons and explosives detection; BLR, PD Comp and Damage Tracker Framework compatibility; persistent K9 profiles; evidence markers; vehicle-specific searches; and complete K9 evacuation priorities.
+- Keeps the roadmap in the source repository and excludes it from the public LSPDFR archive.
+- Packages `AdvancedK9-v0.23.0-beta.zip` as a direct install archive with no nested ZIP, executable, or executable launcher.
+- Excludes Policing Redefined, CommonDataFramework, NexusMDT, NPCI and Stop The Ped files; AdvancedK9 uses only its own optional compatibility bridge and documented/public integration surfaces.
+- Preserves both AdvancedK9 assemblies at version `0.23.0.0` and retains existing user `AdvancedK9.ini` settings during drag-and-drop updates.
 
 All published AdvancedK9 versions are beta builds.
 
