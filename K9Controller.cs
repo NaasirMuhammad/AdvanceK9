@@ -130,6 +130,7 @@ namespace AdvancedK9
         public K9Controller(ModConfig config)
         {
             _config = config;
+            Localization.SetLanguage(config.MenuLanguage);
             CommandRegistry.Configure(config.CustomCommandPhrases);
             _pr = new PolicingRedefinedBridge(config.CompatibilityMode,config.CompatibilityShareResults,config.CompatibilityUseCdfInventory,config.CompatibilityShareWithNexusMdt);
             _trust = new TrustProfile(config.StartingTrust,config.ShowActionNotifications);
@@ -286,7 +287,7 @@ namespace AdvancedK9
 
         private void ShowCommandMenu()
         {
-            CloseSeatCalibrationDoor();_menuMode="commands_root";_menu.Open("ADVANCED K9 — COMMANDS",new[]{"Partner Control","Search & Detection","Tracking & Scent","Tactical Deployment","Vehicle & Equipment","Care & Medical","Training & Certifications","Deploy / Dismiss",VoiceMenuLabel()});
+            CloseSeatCalibrationDoor();_menuMode="commands_root";_menu.Open("ADVANCED K9 — "+L("Commands").ToUpperInvariant(),new[]{L("Partner Control"),L("Search & Detection"),L("Tracking & Scent"),L("Tactical Deployment"),L("Vehicle & Equipment"),L("Care & Medical"),L("Training & Certifications"),L("Deploy / Dismiss"),VoiceMenuLabel()});
         }
 
         private static readonly K9Command[][] CommandGroups={
@@ -298,16 +299,17 @@ namespace AdvancedK9
             new[]{K9Command.Feed,K9Command.Drink,K9Command.Rest,K9Command.Inspect,K9Command.FirstAid,K9Command.CarryK9,K9Command.VeterinaryCare},
             new[]{K9Command.Training,K9Command.TrainNarcotics,K9Command.TrainExplosives,K9Command.TrainWeapons}};
         private static readonly string[] CommandGroupTitles={"PARTNER CONTROL","SEARCH & DETECTION","TRACKING & SCENT","TACTICAL DEPLOYMENT","VEHICLE & EQUIPMENT","CARE & MEDICAL","TRAINING & CERTIFICATIONS"};
-        private void OpenCommandGroup(int group){_menuMode="commands_group_"+group;var labels=CommandGroups[group].Select(CommandLabel).Concat(new[]{"← Back to Command Categories"});_menu.Open("ADVANCED K9 — "+CommandGroupTitles[group],labels);}
-        private static string CommandLabel(K9Command command){var definition=CommandRegistry.All.FirstOrDefault(x=>x.Command==command);return definition==null?command.ToString():definition.Label;}
+        private void OpenCommandGroup(int group){_menuMode="commands_group_"+group;var labels=CommandGroups[group].Select(CommandLabel).Concat(new[]{"← "+L("Back to Command Categories")});_menu.Open("ADVANCED K9 — "+L(CommandGroupTitles[group]),labels);}
+        private static string CommandLabel(K9Command command){var definition=CommandRegistry.All.FirstOrDefault(x=>x.Command==command);return definition==null?command.ToString():Localization.CommandLabel(command,definition.Label);}
+        private static string L(string text)=>Localization.T(text);
 
         private void ShowKennelMenu()
         {
             CloseSeatCalibrationDoor();_menuMode="profile"; RefreshProfileMenu();
         }
 
-        private void RefreshProfileMenu(){_menu.Update("K9 PROFILE — "+_profile.Name,new[]{"Identity & Appearance","HUD & Display","Kennel Location Editor","Vehicle Seat Configuration","Profile, Health & Certifications",VoiceMenuLabel()});}
-        private void OpenAppearanceMenu(){_menuMode="profile_appearance";_menu.Open("K9 PROFILE — APPEARANCE",new[]{"Edit name: "+_profile.Name,"Breed/model: "+_profile.Breed,"Skin/coat: "+(_profile.CoatVariation+1),"Equipment/vest: "+_profile.Vest,"Vest texture: "+_profile.VestTextureName(_dog),"← Back to K9 Profile"});}
+        private void RefreshProfileMenu(){_menu.Update("K9 PROFILE — "+_profile.Name,new[]{L("Language")+": "+Localization.LanguageName,L("Identity & Appearance"),L("HUD & Display"),L("Kennel Location Editor"),L("Vehicle Seat Configuration"),L("Profile, Health & Certifications"),VoiceMenuLabel()});}
+        private void OpenAppearanceMenu(){_menuMode="profile_appearance";_menu.Open("K9 PROFILE — "+L("Appearance").ToUpperInvariant(),new[]{L("Edit name")+": "+_profile.Name,L("Breed/model")+": "+_profile.Breed,L("Skin/coat")+": "+(_profile.CoatVariation+1),L("Equipment/vest")+": "+_profile.Vest,L("Vest texture")+": "+_profile.VestTextureName(_dog),"← "+L("Back to K9 Profile")});}
         private void OnMenuSelected(int index)
         {
             if(_menuMode=="commands_root"){if(index>=0&&index<7){OpenCommandGroup(index);return;}if(index==7){_menu.Close();Execute(K9Command.SpawnDismiss);return;}if(index==8)ToggleVoice();return;}
@@ -323,14 +325,15 @@ namespace AdvancedK9
                 OpenAppearanceMenu();return;
             }
             if(_menuMode!="profile")return;
-            if(index==0)OpenAppearanceMenu();else if(index==1)OpenHudConfiguration();else if(index==2)OpenKennelLocationMenu();else if(index==3)OpenSeatConfiguration();else if(index==4)Inspect();else if(index==5)ToggleVoice();
+            if(index==0){ChangeLanguage(1);return;}if(index==1)OpenAppearanceMenu();else if(index==2)OpenHudConfiguration();else if(index==3)OpenKennelLocationMenu();else if(index==4)OpenSeatConfiguration();else if(index==5)Inspect();else if(index==6)ToggleVoice();
         }
 
-        private void InitializeVoice(){_voice=new VoiceCommandService(_config.VoiceProvider,_config.VoiceModel,_config.VoiceLanguage,_config.VoiceApiKey,_config.VoiceApiKeyEnvironmentVariable,_profile.Name,_config.ShowVoiceStatusText);_voice.CommandRecognized+=c=>_voiceQueue.Enqueue(c);_voice.StatusChanged+=s=>_voiceStatus=s;_voiceActive=_config.VoiceEnabled&&_voice.IsAvailable;_voiceStatus=_voice.IsAvailable?"Ready (hold V)":"Key missing";}
+        private void InitializeVoice(){_voice=new VoiceCommandService(_config.VoiceProvider,_config.VoiceModel,Localization.Code,_config.VoiceApiKey,_config.VoiceApiKeyEnvironmentVariable,_profile.Name,_config.ShowVoiceStatusText);_voice.CommandRecognized+=c=>_voiceQueue.Enqueue(c);_voice.StatusChanged+=s=>_voiceStatus=s;_voiceActive=_config.VoiceEnabled&&_voice.IsAvailable;_voiceStatus=_voice.IsAvailable?"Ready (hold V)":"Key missing";}
+        private void ChangeLanguage(int delta){string code=Localization.NextLanguage(delta);_config.SaveLanguage(code);if(_voice!=null){_voice.Dispose();_voice=null;}_voiceActive=false;InitializeVoice();Game.LogTrivial("AdvancedK9 language changed to "+Localization.LanguageName+" ("+code+").");RefreshProfileMenu();}
         private string VoiceMenuLabel()=>"Voice microphone: "+(_voice==null||!_voice.IsAvailable?"UNAVAILABLE — add ApiKey in INI":_voiceActive?"ON — hold "+_config.PushToTalkKey:"OFF — select to activate");
         private void ToggleVoice(){if(_voice==null)InitializeVoice();if(!_voice.IsAvailable){Game.DisplayNotification("~r~Voice cannot activate.~s~~n~Add your provider key after ~y~ApiKey=~s~ in AdvancedK9.ini, then reload the plugin.");return;}_voiceActive=!_voiceActive;if(_voiceActive){_voiceStatus="Ready (hold V)";ActionNotification("~g~K9 push-to-talk activated.~s~ Hold "+_config.PushToTalkKey+" while speaking.");}else{_voice.StopListening();_voiceStatus="Off";ActionNotification("~y~K9 voice microphone disabled.");}}
 
-        private void OnMenuAdjusted(int index,int delta){if(_menuMode=="hud_config"){AdjustHudMenu(index,delta);return;}if(_menuMode=="kennel_edit"){AdjustKennel(index,delta);return;}if(_menuMode=="seat_config"){AdjustSeat(index,delta);return;}if(_menuMode!="profile_appearance")return;if(index==1)PreviewBreed(delta);else if(index==2)_profile.AdjustSkin(_dog,delta);else if(index==3)_profile.AdjustEquipment(_dog,delta);else if(index==4)_profile.AdjustEquipmentTexture(_dog,delta);else return;OpenAppearanceMenu();}
+        private void OnMenuAdjusted(int index,int delta){if(_menuMode=="profile"&&index==0){ChangeLanguage(delta);return;}if(_menuMode=="hud_config"){AdjustHudMenu(index,delta);return;}if(_menuMode=="kennel_edit"){AdjustKennel(index,delta);return;}if(_menuMode=="seat_config"){AdjustSeat(index,delta);return;}if(_menuMode!="profile_appearance")return;if(index==1)PreviewBreed(delta);else if(index==2)_profile.AdjustSkin(_dog,delta);else if(index==3)_profile.AdjustEquipment(_dog,delta);else if(index==4)_profile.AdjustEquipmentTexture(_dog,delta);else return;OpenAppearanceMenu();}
 
         private static string OnOff(bool value)=>value?"ON":"OFF";
         private void OpenHudConfiguration(){_menuMode="hud_config";RefreshHudMenu();}
@@ -341,7 +344,7 @@ namespace AdvancedK9
         private void OpenKennelLocationMenu()
         {
             _hudDragMode=false;_kennelDragMode=false;_activeKennel=null;_menuMode="kennel_list";
-            _menu.Open("K9 KENNEL LOCATIONS",_stationKennels.Select(k=>k.Name).Concat(new[]{"← Back to K9 Profile"}));
+            _menu.Open("K9 "+L("Kennel Locations").ToUpperInvariant(),_stationKennels.Select(k=>k.Name).Concat(new[]{"← "+L("Back to K9 Profile")}));
         }
 
         private void HandleKennelList(int index)
@@ -470,7 +473,7 @@ namespace AdvancedK9
             if(!DogExists()||_state!=K9State.InVehicle||_dogVehicle==null||!_dogVehicle.Exists()){Game.DisplayNotification("~y~Load the K9 into the vehicle before calibrating its seat.");return;}
             _activeSeatProfile=_seatProfiles.Get(_dogVehicle);NativeFunction.Natives.SET_VEHICLE_DOOR_OPEN(_dogVehicle,_dogVehicleDoor,false,false);_seatCalibrationDoorOpen=true;_menuMode="seat_config";RefreshSeatMenu();
         }
-        private void RefreshSeatMenu(){if(_activeSeatProfile==null)return;_menu.Update("SEAT — "+_seatProfiles.VehicleName(_dogVehicle),new[]{"X left/right: "+_activeSeatProfile.X.ToString("0.000"),"Y forward/back: "+_activeSeatProfile.Y.ToString("0.000"),"Z up/down: "+_activeSeatProfile.Z.ToString("0.000"),"Save for this vehicle model","Reset to global defaults","← Back to K9 Profile"});}
+        private void RefreshSeatMenu(){if(_activeSeatProfile==null)return;_menu.Update("SEAT — "+_seatProfiles.VehicleName(_dogVehicle),new[]{"X left/right: "+_activeSeatProfile.X.ToString("0.000"),"Y forward/back: "+_activeSeatProfile.Y.ToString("0.000"),"Z up/down: "+_activeSeatProfile.Z.ToString("0.000"),L("Save for this vehicle model"),L("Reset to global defaults"),"← "+L("Back to K9 Profile")});}
         private void AdjustSeat(int index,int delta){if(index<0||index>2||_activeSeatProfile==null)return;float step=.02f*delta;if(index==0)_activeSeatProfile.X+=step;else if(index==1)_activeSeatProfile.Y+=step;else _activeSeatProfile.Z+=step;ApplySeatCalibration();Game.DisplaySubtitle("~b~Live K9 seat~s~  X "+_activeSeatProfile.X.ToString("0.000")+"  Y "+_activeSeatProfile.Y.ToString("0.000")+"  Z "+_activeSeatProfile.Z.ToString("0.000"),1000);RefreshSeatMenu();}
         private void HandleSeatMenu(int index){if(index==3){_seatProfiles.Save(_dogVehicle,_activeSeatProfile);Game.DisplayNotification("~g~Seat position saved for "+_seatProfiles.VehicleName(_dogVehicle)+".~s~~n~This model will use the calibration automatically.");RefreshSeatMenu();}else if(index==4){_activeSeatProfile=new VehicleSeatProfile(_config.VehicleSeatOffsetX,_config.VehicleSeatOffsetY,_config.VehicleSeatOffsetZ);ApplySeatCalibration();RefreshSeatMenu();}else if(index==5){CloseSeatCalibrationDoor();_menuMode="profile";RefreshProfileMenu();}}
         private void CloseSeatCalibrationDoor(){if(_seatCalibrationDoorOpen&&_dogVehicle!=null&&_dogVehicle.Exists())NativeFunction.Natives.SET_VEHICLE_DOOR_SHUT(_dogVehicle,_dogVehicleDoor,false);_seatCalibrationDoorOpen=false;}

@@ -116,11 +116,11 @@ namespace AdvancedK9
                     audio.Headers.ContentType = new MediaTypeHeaderValue("audio/wav");
                     form.Add(audio, "file", "k9-command.wav");
                     form.Add(new StringContent(_model), "model");
-                    form.Add(new StringContent(_language), "language");
+                    form.Add(new StringContent(Localization.NormalizeCode(_language)), "language");
                     form.Add(new StringContent("text"), "response_format");
                     form.Add(new StringContent("0"), "temperature");
                     string custom=CommandRegistry.VoicePromptPhrases;
-                    form.Add(new StringContent("Police K9 handler command audio. The dog is named " + _dogName + ". Preserve the wake word and command exactly. K9 may be spoken as K-9, K nine, kay nine, canine, or " + _dogName + ". Likely commands include deploy, dismiss, sit, down, stay, follow, heel, recall, vehicle search, area search, building search, clear the building, narcotics search, drug search, bomb search, explosives search, weapons search, gun search, track, reacquire trail, find the scent, K9 warning, warn the suspect, apprehend, attack, engage, arrest handoff, request perimeter, prisoner transport, request EMS, request bomb squad, release, guard, bark, fetch, enter vehicle, exit vehicle, leash, camera, inspect, first aid, feed, treat, give water, drink, hydrate, pet, praise, core training, narcotics training, explosives training, weapons training, academy, and certification."+(string.IsNullOrWhiteSpace(custom)?"":" User-defined command phrases include: "+custom+".")), "prompt");
+                    form.Add(new StringContent("Police K9 handler command audio in " + Localization.VoicePromptLanguage + ". The dog is named " + _dogName + ". Preserve the wake word and spoken command exactly. Valid localized commands include: " + custom + "."), "prompt");
                     request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey);
                     request.Content = form;
                     using (var response = await _client.SendAsync(request).ConfigureAwait(false))
@@ -192,7 +192,7 @@ namespace AdvancedK9
             public static VoiceResult Log(string log) => new VoiceResult { LogText = log };
             public static VoiceResult Status(string status, string subtitle) => new VoiceResult { StatusText = status, Subtitle = subtitle };
             public static VoiceResult Failure(string log) => new VoiceResult { LogText = log, StatusText = "Request failed", Notification = "~r~AI voice unavailable.~s~ Keyboard commands remain available.", IsError = true };
-            public static VoiceResult Command(K9Command command, string text) => new VoiceResult { HasCommand = true, RecognizedCommand = command, StatusText = "Recognized: " + CommandRegistry.All.First(x => x.Command == command).Label, Notification = "~b~AI heard:~s~ “" + text + "”" };
+            public static VoiceResult Command(K9Command command, string text) { var item=CommandRegistry.All.First(x => x.Command == command); return new VoiceResult { HasCommand = true, RecognizedCommand = command, StatusText = "Recognized: " + Localization.CommandLabel(command,item.Label), Notification = "~b~AI heard:~s~ “" + text + "”" }; }
             public static VoiceResult NotRecognized(string text) => new VoiceResult { StatusText = "Not recognized", Notification = "~o~AI command not recognized:~s~ “" + text + "”" };
         }
 

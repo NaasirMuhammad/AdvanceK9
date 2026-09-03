@@ -25,6 +25,7 @@ namespace AdvancedK9
         public string VoiceProvider = "Groq";
         public string VoiceModel = "whisper-large-v3-turbo";
         public string VoiceLanguage = "en";
+        public string MenuLanguage = "en";
         public string VoiceApiKey = "";
         public string VoiceApiKeyEnvironmentVariable = "GROQ_API_KEY";
         public string DogName = "Rex";
@@ -89,6 +90,7 @@ namespace AdvancedK9
             result.VoiceProvider = ini.ReadString("Voice", "Provider", result.VoiceProvider);
             result.VoiceModel = ini.ReadString("Voice", "Model", result.VoiceModel);
             result.VoiceLanguage = ini.ReadString("Voice", "Language", result.VoiceLanguage);
+            result.MenuLanguage = Localization.NormalizeCode(ini.ReadString("Localization", "Language", result.MenuLanguage));
             result.VoiceApiKey = ini.ReadString("Voice", "ApiKey", result.VoiceApiKey);
             result.VoiceApiKeyEnvironmentVariable = ini.ReadString("Voice", "ApiKeyEnvironmentVariable", result.VoiceApiKeyEnvironmentVariable);
             result.DogName = ini.ReadString("Dog", "Name", result.DogName);
@@ -206,5 +208,26 @@ namespace AdvancedK9
         }
 
         private static float Clamp(float value, float min, float max) => Math.Max(min, Math.Min(max, value));
+
+        public void SaveLanguage(string code)
+        {
+            code=Localization.NormalizeCode(code);MenuLanguage=code;
+            try
+            {
+                var lines=File.Exists(_configPath)?new List<string>(File.ReadAllLines(_configPath)):new List<string>();
+                int section=-1,end=lines.Count,keyLine=-1;
+                for(int i=0;i<lines.Count;i++)
+                {
+                    string value=lines[i].Trim();
+                    if(value.Equals("[Localization]",StringComparison.OrdinalIgnoreCase)){section=i;continue;}
+                    if(section>=0&&i>section&&value.StartsWith("[")&&value.EndsWith("]")){end=i;break;}
+                    if(section>=0&&i>section&&value.StartsWith("Language=",StringComparison.OrdinalIgnoreCase))keyLine=i;
+                }
+                if(section<0){if(lines.Count>0&&lines[lines.Count-1].Length>0)lines.Add("");lines.Add("[Localization]");section=lines.Count-1;end=lines.Count;}
+                if(keyLine>=0)lines[keyLine]="Language="+code;else lines.Insert(end,"Language="+code);
+                string temporary=_configPath+".tmp";File.WriteAllLines(temporary,lines);File.Copy(temporary,_configPath,true);File.Delete(temporary);
+            }
+            catch(Exception ex){Game.LogTrivial("AdvancedK9 language save failed: "+ex.Message);}
+        }
     }
 }

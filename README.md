@@ -182,6 +182,19 @@ Fetch attaches the ball to the dog head/mouth bone. Custom models with different
 
 ## AI voice setup
 
+### Language selection
+
+AdvancedK9 includes menu and voice-command support for English (`en`), Spanish (`es`), French (`fr`), Chinese (`zh`), Portuguese (`pt`), Russian (`ru`), Thai (`th`), Turkish (`tr`), Vietnamese (`vi`), German (`de`), Czech (`cs`), Italian (`it`), Japanese (`ja`) and Polish (`pl`). Open **K9 Profile** and use the first **Language** row to change it in game. The selection is saved automatically and the voice service restarts in the selected language.
+
+You can also set it manually:
+
+```ini
+[Localization]
+Language=es
+```
+
+Every language contains translated labels and spoken aliases for all 49 commands. Say the configured dog name, `K9`, or the language-specific K9 wake word before the command. Personal alternatives under `[CommandPhrases]` remain active in every language. If a translation is unavailable, AdvancedK9 safely displays the English text without affecting command execution.
+
 The default provider is Groq with `whisper-large-v3-turbo`. Put the key directly in `Plugins\LSPDFR\AdvancedK9\AdvancedK9.ini`:
 
 ```ini

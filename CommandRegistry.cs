@@ -60,17 +60,17 @@ namespace AdvancedK9
             D(K9Command.TrainWeapons,"Weapons Training",true,"start weapons training","weapons certification","gun detection training","firearm training","weapons academy")};
         static CommandDefinition D(K9Command c,string l,bool r,params string[] p)=>new CommandDefinition(c,l,r,p);
         public static void Configure(IDictionary<K9Command,string[]> custom){CustomPhrases.Clear();if(custom==null)return;foreach(var pair in custom)if(pair.Value!=null&&pair.Value.Length>0)CustomPhrases[pair.Key]=pair.Value;}
-        public static string VoicePromptPhrases=>string.Join(", ",CustomPhrases.SelectMany(x=>x.Value).Where(x=>!string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase));
+        public static string VoicePromptPhrases=>string.Join(", ",All.SelectMany(x=>Localization.CommandPhrases(x.Command)).Concat(CustomPhrases.SelectMany(x=>x.Value)).Where(x=>!string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase));
         public static bool TryMatch(string text,string dogName,out K9Command command)
         {
             command=default(K9Command);if(string.IsNullOrWhiteSpace(text))return false;
             string t=Normalize(text),wake=Normalize(dogName??"");
-            bool hasWake=HasPhrase(t,wake)||HasPhrase(t,"k9")||HasPhrase(t,"k 9")||HasPhrase(t,"k nine")||HasPhrase(t,"kay nine")||HasPhrase(t,"canine");
+            bool hasWake=HasPhrase(t,wake)||Localization.WakeWords.Any(x=>HasPhrase(t,Normalize(x)))||HasPhrase(t,"k9")||HasPhrase(t,"k 9")||HasPhrase(t,"k nine")||HasPhrase(t,"kay nine")||HasPhrase(t,"canine");
             if(!hasWake)return false;
             // Spoken "sit down" means sit; do not let the generic word "down" turn it
             // into the separate lie-down command.
             if(HasPhrase(t,"sit down")||HasPhrase(t,"take a seat")){command=K9Command.Sit;return true;}
-            var phrases=All.SelectMany(x=>x.Phrases.Select(p=>new{Item=x,Phrase=Normalize(p)}));
+            var phrases=All.SelectMany(x=>x.Phrases.Concat(Localization.CommandPhrases(x.Command)).Select(p=>new{Item=x,Phrase=Normalize(p)}));
             phrases=phrases.Concat(CustomPhrases.SelectMany(x=>x.Value.Select(p=>new{Item=All.First(d=>d.Command==x.Key),Phrase=Normalize(p)})));
             foreach(var item in phrases.OrderByDescending(x=>x.Phrase.Length))
                 if(HasPhrase(t,item.Phrase)){command=item.Item.Command;return true;}
