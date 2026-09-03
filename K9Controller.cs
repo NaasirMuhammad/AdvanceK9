@@ -55,6 +55,7 @@ namespace AdvancedK9
         private uint _nextLeashVisualUpdate;
         private uint _nextIndoorFollowUpdate;
         private bool _handlerWasShooting;
+        private uint _k9RelationshipGroup;
         private Vector3 _lastHandlerNavigationPosition;
         private bool _handlerNavigationPositionReady;
         private readonly Queue<Vector3> _handlerBreadcrumbs=new Queue<Vector3>();
@@ -726,7 +727,7 @@ namespace AdvancedK9
             _dog.Health = Math.Max(100, (int)(_dog.MaxHealth * _profile.Health / 100f));
             _dog.IsPersistent = true;
             _dog.BlockPermanentEvents = true;
-            _dog.RelationshipGroup = officer.RelationshipGroup;
+            ConfigureK9RelationshipGroup(officer);
             ApplyAnimalPedSafeguards();
             ConfigureAmbientGunfireImmunity();
             NativeFunction.Natives.SET_CAN_ATTACK_FRIENDLY(_dog, false, false);
@@ -1524,7 +1525,22 @@ namespace AdvancedK9
                 _dog.Position = Game.LocalPlayer.Character.GetOffsetPosition(new Vector3(-1f, -2f, 0f));
         }
 
-        private void ApplyAnimalPedSafeguards(){if(!DogEntityExists())return;_dog.BlockPermanentEvents=true;NativeFunction.Natives.SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(_dog,true);NativeFunction.Natives.SET_PED_FLEE_ATTRIBUTES(_dog,0,false);NativeFunction.Natives.SET_PED_CAN_EVASIVE_DIVE(_dog,false);}
+        private void ConfigureK9RelationshipGroup(Ped handler)
+        {
+            if(handler==null||!handler.Exists()||!DogEntityExists())return;
+            if(_k9RelationshipGroup==0)
+            {
+                uint created=0;NativeFunction.Natives.ADD_RELATIONSHIP_GROUP("ADVANCEDK9",out created);_k9RelationshipGroup=created!=0?created:NativeFunction.Natives.GET_HASH_KEY<uint>("ADVANCEDK9");
+            }
+            uint handlerGroup=NativeFunction.Natives.GET_PED_RELATIONSHIP_GROUP_HASH<uint>(handler),playerGroup=NativeFunction.Natives.GET_HASH_KEY<uint>("PLAYER"),copGroup=NativeFunction.Natives.GET_HASH_KEY<uint>("COP");
+            NativeFunction.Natives.SET_PED_RELATIONSHIP_GROUP_HASH(_dog,_k9RelationshipGroup);
+            NativeFunction.Natives.SET_RELATIONSHIP_BETWEEN_GROUPS(0,_k9RelationshipGroup,handlerGroup);NativeFunction.Natives.SET_RELATIONSHIP_BETWEEN_GROUPS(0,handlerGroup,_k9RelationshipGroup);
+            NativeFunction.Natives.SET_RELATIONSHIP_BETWEEN_GROUPS(0,_k9RelationshipGroup,playerGroup);NativeFunction.Natives.SET_RELATIONSHIP_BETWEEN_GROUPS(0,playerGroup,_k9RelationshipGroup);
+            NativeFunction.Natives.SET_RELATIONSHIP_BETWEEN_GROUPS(1,_k9RelationshipGroup,copGroup);NativeFunction.Natives.SET_RELATIONSHIP_BETWEEN_GROUPS(1,copGroup,_k9RelationshipGroup);
+            Game.LogTrivial("AdvancedK9 relationship isolation configured: K9=0x"+_k9RelationshipGroup.ToString("X8")+", handler=0x"+handlerGroup.ToString("X8")+", COP=0x"+copGroup.ToString("X8")+". Rex will not be classified as a police ped by ambient combat presentation.");
+        }
+
+        private void ApplyAnimalPedSafeguards(){if(!DogEntityExists())return;_dog.BlockPermanentEvents=true;NativeFunction.Natives.SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(_dog,true);NativeFunction.Natives.SET_PED_FLEE_ATTRIBUTES(_dog,0,false);NativeFunction.Natives.SET_PED_CAN_EVASIVE_DIVE(_dog,false);if(_k9RelationshipGroup!=0)NativeFunction.Natives.SET_PED_RELATIONSHIP_GROUP_HASH(_dog,_k9RelationshipGroup);}
 
         private void ConfigureAmbientGunfireImmunity()
         {
@@ -1734,7 +1750,7 @@ namespace AdvancedK9
             if (NativeFunction.Natives.IS_PED_IN_COMBAT<bool>(_dog, handler))
             {
                 _dog.Tasks.ClearImmediately();
-                _dog.RelationshipGroup = handler.RelationshipGroup;
+                ConfigureK9RelationshipGroup(handler);
                 NativeFunction.Natives.SET_CAN_ATTACK_FRIENDLY(_dog, false, false);
                 _state = K9State.Following;
                 NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(_dog, handler, -0.7f, -1.15f, 0f, 2.2f, -1, 1.2f, true);

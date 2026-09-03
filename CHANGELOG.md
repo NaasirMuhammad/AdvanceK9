@@ -1,5 +1,8 @@
 # Changelog
 
+- Places the deployed K9 in a dedicated `ADVANCEDK9` companion relationship group instead of copying the handler's police relationship group. The latest test log showed LSPDFR `AmbientCombatControl` active while Rex shared the officer group, allowing external cop-combat presentation to target the animal skeleton when the handler fired.
+- Defines friendly two-way relationships between the K9, handler, player, and police groups, and continuously preserves only the K9 group assignment. Rex remains a police companion without being classified as a human police ped by ambient combat systems.
+
 - Blocks temporary shocking events on the deployed K9 in addition to permanent events. The supplied test log proved handler shots were still reaching the native shepherd brain despite hearing range being zero.
 - Blocks GTA's group-member aimed-at response and disables human upper-body gesture animations for the K9 skeleton. These are persistent spawn-time safeguards and do not clear tasks, replay poses, or interfere with explicit AdvancedK9 movement and apprehension commands.
 
