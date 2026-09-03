@@ -23,7 +23,7 @@ jobs:
           New-Item -ItemType Directory -Force artifact-bin | Out-Null
           dotnet restore AdvancedK9.csproj
           dotnet build AdvancedK9.csproj -c Release --no-restore /p:ContinuousIntegrationBuild=true -o build/main
-          Copy-Item 'build/main/AdvancedK9.dll','build/main/LemonUI.RagePluginHook.dll' artifact-bin
+          Copy-Item 'build/main/AdvancedK9.dll' artifact-bin
           dotnet restore Bridge/LspdfrApiShim/LspdfrApiShim.csproj
           dotnet build Bridge/LspdfrApiShim/LspdfrApiShim.csproj -c Release --no-restore /p:ContinuousIntegrationBuild=true -o build/shim
           dotnet restore AdvancedK9.LSPDFRBridge.csproj
