@@ -119,8 +119,9 @@ namespace AdvancedK9
                     form.Add(new StringContent(Localization.NormalizeCode(_language)), "language");
                     form.Add(new StringContent("text"), "response_format");
                     form.Add(new StringContent("0"), "temperature");
-                    string custom=CommandRegistry.VoicePromptPhrases;
-                    form.Add(new StringContent("Police K9 handler command audio in " + Localization.VoicePromptLanguage + ". The dog is named " + _dogName + ". Preserve the wake word and spoken command exactly. Valid localized commands include: " + custom + "."), "prompt");
+                    string prompt=BuildPrompt();
+                    form.Add(new StringContent(prompt), "prompt");
+                    Game.LogTrivial("AdvancedK9 AI voice request: prompt length="+prompt.Length+".");
                     request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey);
                     request.Content = form;
                     using (var response = await _client.SendAsync(request).ConfigureAwait(false))
@@ -171,6 +172,17 @@ namespace AdvancedK9
 
         private static string Short(string text) => text.Length > 300 ? text.Substring(0, 300) : text;
 
+        private string BuildPrompt()
+        {
+            const int maxPromptLength=800;
+            string prefix="Police K9 command audio in "+Localization.VoicePromptLanguage+". Dog name: "+_dogName+". Preserve the wake word and command. Commands: ";
+            string phrases=CommandRegistry.VoicePromptPhrases??"";
+            int available=Math.Max(0,maxPromptLength-prefix.Length);
+            if(phrases.Length>available)phrases=phrases.Substring(0,available);
+            string prompt=prefix+phrases;
+            return prompt.Length<=maxPromptLength?prompt:prompt.Substring(0,maxPromptLength);
+        }
+
         private void Cleanup()
         {
             lock (_captureSync)
@@ -191,7 +203,7 @@ namespace AdvancedK9
             public K9Command RecognizedCommand;
             public static VoiceResult Log(string log) => new VoiceResult { LogText = log };
             public static VoiceResult Status(string status, string subtitle) => new VoiceResult { StatusText = status, Subtitle = subtitle };
-            public static VoiceResult Failure(string log) => new VoiceResult { LogText = log, StatusText = "Request failed", Notification = "~r~AI voice unavailable.~s~ Keyboard commands remain available.", IsError = true };
+            public static VoiceResult Failure(string log) => new VoiceResult { LogText = log, StatusText = "Request failed", Notification = "~r~AI voice request failed.~s~ Check RagePluginHook.log; keyboard commands remain available.", IsError = true };
             public static VoiceResult Command(K9Command command, string text) { var item=CommandRegistry.All.First(x => x.Command == command); return new VoiceResult { HasCommand = true, RecognizedCommand = command, StatusText = "Recognized: " + Localization.CommandLabel(command,item.Label), Notification = "~b~AI heard:~s~ “" + text + "”" }; }
             public static VoiceResult NotRecognized(string text) => new VoiceResult { StatusText = "Not recognized", Notification = "~o~AI command not recognized:~s~ “" + text + "”" };
         }
