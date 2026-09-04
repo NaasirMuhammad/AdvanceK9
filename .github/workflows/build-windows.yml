@@ -47,8 +47,12 @@ jobs:
           $main = Get-ChildItem 'bin' -Recurse -Filter 'AdvancedK9.dll' | Select-Object -First 1
           $bridge = Resolve-Path 'artifact-bridge/AdvancedK9.LSPDFRBridge.dll'
           $lemon = Get-ChildItem 'bin' -Recurse -Filter 'LemonUI.RagePluginHook.dll' | Select-Object -First 1
+          $naudioCore = Get-ChildItem 'bin' -Recurse -Filter 'NAudio.Core.dll' | Select-Object -First 1
+          $naudioWinMM = Get-ChildItem 'bin' -Recurse -Filter 'NAudio.WinMM.dll' | Select-Object -First 1
           if (-not $main) { throw 'Compiled AdvancedK9.dll was not found.' }
           if (-not $lemon) { throw 'LemonUI.RagePluginHook.dll was not found.' }
+          if (-not $naudioCore) { throw 'Required AI voice runtime NAudio.Core.dll was not found.' }
+          if (-not $naudioWinMM) { throw 'Required AI voice runtime NAudio.WinMM.dll was not found.' }
           if ([System.Reflection.AssemblyName]::GetAssemblyName($main.FullName).Version -ne [Version]'0.23.1.0') { throw 'AdvancedK9.dll version is not 0.23.1.0.' }
           if ([System.Reflection.AssemblyName]::GetAssemblyName($bridge).Version -ne [Version]'0.23.1.0') { throw 'AdvancedK9.LSPDFRBridge.dll version is not 0.23.1.0.' }
           $package = Join-Path $pwd 'release-package'
@@ -59,18 +63,30 @@ jobs:
           Copy-Item $main.FullName (Join-Path $pluginRoot 'AdvancedK9.dll')
           Copy-Item $bridge (Join-Path $lspdfrRoot 'AdvancedK9.LSPDFRBridge.dll')
           Copy-Item $lemon.FullName (Join-Path $package 'LemonUI.RagePluginHook.dll')
+          Copy-Item $naudioCore.FullName (Join-Path $pluginRoot 'NAudio.Core.dll')
+          Copy-Item $naudioWinMM.FullName (Join-Path $pluginRoot 'NAudio.WinMM.dll')
           Copy-Item 'Config/AdvancedK9.ini' (Join-Path $configRoot 'AdvancedK9.default.ini')
           Copy-Item 'Config/AcademyCourses.json','Config/CompatibilityPresets.json' $configRoot
           Copy-Item 'Config/Portraits' $configRoot -Recurse
           Copy-Item 'INSTALL.txt','README.md','CHANGELOG.md','LICENSE' $package
           $forbidden = Get-ChildItem $package -Recurse -File | Where-Object {
-            $_.Name -match '^(NAudio|Microsoft\.Win32\.Registry|System\.Security).*\.dll$' -or
+            $_.Name -match '^(Microsoft\.Win32\.Registry|System\.Security).*\.dll$' -or
             $_.FullName -match '(?i)(Policing.?Redefined|CommonDataFramework|NexusMDT|NPCI|Stop.?The.?Ped)'
           }
           if ($forbidden) { throw "Forbidden release content: $($forbidden.FullName -join ', ')" }
-          Compress-Archive -Path (Join-Path $package '*') -DestinationPath (Join-Path $pwd 'AdvancedK9-v0.23.1-beta-voice-fix.zip') -Force
+          $requiredVoiceRuntime = @(
+            (Join-Path $pluginRoot 'NAudio.Core.dll'),
+            (Join-Path $pluginRoot 'NAudio.WinMM.dll')
+          )
+          foreach ($runtimeFile in $requiredVoiceRuntime) {
+            if (-not (Test-Path $runtimeFile)) { throw "Release is missing required AI voice runtime: $runtimeFile" }
+            if ([System.Reflection.AssemblyName]::GetAssemblyName($runtimeFile).Version -ne [Version]'2.2.1.0') {
+              throw "Unexpected AI voice runtime version: $runtimeFile"
+            }
+          }
+          Compress-Archive -Path (Join-Path $package '*') -DestinationPath (Join-Path $pwd 'AdvancedK9-v0.23.1-beta.zip') -Force
       - uses: actions/upload-artifact@v4
         with:
           name: AdvancedK9-v0.23.1-beta-voice-fix-release
-          path: AdvancedK9-v0.23.1-beta-voice-fix.zip
+          path: AdvancedK9-v0.23.1-beta.zip
           if-no-files-found: error
