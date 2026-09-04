@@ -1,20 +1,20 @@
-# AdvancedK9 Future Roadmap — Updated After v0.23.1-beta
+# AdvancedK9 Future Roadmap — Updated Through v0.23.2-beta
 
-This roadmap tracks completed work through AdvancedK9 v0.23.1-beta and the active next-beta development batch.
+This roadmap tracks completed work through AdvancedK9 v0.23.2-beta.
 
 Status key:
 
-- ✅ Implemented through v0.23.1-beta
+- ✅ Implemented through v0.23.2-beta
 - 🟨 Partially implemented; expansion remains
 - ⬜ Not yet implemented
 
 Current verified baseline:
 
-- AdvancedK9 core assembly `0.23.1.0`
-- LSPDFR companion bridge assembly `0.23.1.0`
-- Windows build 404 passed
-- Release branch `codex/advancedk9-v0.23.1-beta` at `d5d68ed8a76eecc111ce1c63a385c14868518ee7`
-- Release artifact `AdvancedK9-v0.23.1-beta.zip`
+- AdvancedK9 core assembly `0.23.2.0`
+- LSPDFR companion bridge assembly `0.23.2.0`
+- Windows release build pending
+- Release branch `codex/advancedk9-next-beta`
+- Release artifact `AdvancedK9-v0.23.2-beta.zip`
 - PR #18 remains open and unmerged
 - Drag-and-drop updates preserve an existing `AdvancedK9.ini`
 

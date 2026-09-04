@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased — next beta development
+## 0.23.2-beta
 
 ### Persistent roster and kennels
 
@@ -468,4 +468,3 @@ All published AdvancedK9 versions are beta builds.
 - Removed the nonfunctional cross-AppDomain reflection duty gate.
 - Starts the K9 controller directly from the RPH plugin entry point.
 - Corrected the kennel/profile shortcut documentation to Left Ctrl + U.
-
