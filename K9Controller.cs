@@ -318,7 +318,6 @@ namespace AdvancedK9
             new[]{K9Command.CollectScent,K9Command.Track,K9Command.FindTrail},
             new[]{K9Command.K9Warning,K9Command.Apprehend,K9Command.HandoffArrest,K9Command.RequestPerimeter,K9Command.HoldPerimeter,K9Command.ContainSuspect,K9Command.RequestTransport,K9Command.RequestMedical,K9Command.RequestBombSquad,K9Command.DoorPop,K9Command.Release,K9Command.Guard,K9Command.Bark},
             new[]{K9Command.EnterVehicle,K9Command.ExitVehicle,K9Command.ToggleLeash,K9Command.ToggleCamera,K9Command.Restock},
-            new[]{K9Command.Feed,K9Command.Drink,K9Command.Rest,K9Command.Inspect,K9Command.FirstAid,K9Command.CarryK9,K9Command.VeterinaryCare},
             new[]{K9Command.Feed,K9Command.Drink,K9Command.Rest,K9Command.Inspect,K9Command.FirstAid,K9Command.CarryK9,K9Command.EmergencyLoadK9,K9Command.VeterinaryTransport,K9Command.Rehabilitation,K9Command.VeterinaryCare},
             new[]{K9Command.Training,K9Command.TrainNarcotics,K9Command.TrainExplosives,K9Command.TrainWeapons}};
         private static readonly string[] CommandGroupTitles={"PARTNER CONTROL","SEARCH & DETECTION","TRACKING & SCENT","TACTICAL DEPLOYMENT","VEHICLE & EQUIPMENT","CARE & MEDICAL","TRAINING & CERTIFICATIONS"};
@@ -331,7 +330,6 @@ namespace AdvancedK9
             CloseSeatCalibrationDoor();_menuMode="profile"; RefreshProfileMenu();
         }
 
-        private void RefreshProfileMenu(){_menu.Update("K9 PROFILE — "+_profile.Name,new[]{L("Language")+": "+Localization.LanguageName,L("Identity & Appearance"),L("HUD & Display"),L("Kennel Location Editor"),L("Vehicle Seat Configuration"),L("Profile, Health & Certifications"),VoiceMenuLabel()});}
         private void RefreshProfileMenu(){_menu.Update("K9 PROFILE — "+_profile.Name,new[]{L("Language")+": "+Localization.LanguageName,"K9 Roster ("+_roster.Entries.Count+")",L("Identity & Appearance"),L("HUD & Display"),L("Kennel Location Editor"),L("Vehicle Seat Configuration"),L("Profile, Health & Certifications"),VoiceMenuLabel()});}
         private void OpenAppearanceMenu(){_menuMode="profile_appearance";_menu.Open("K9 PROFILE — "+L("Appearance").ToUpperInvariant(),new[]{L("Edit name")+": "+_profile.Name,L("Breed/model")+": "+_profile.Breed,L("Skin/coat")+": "+(_profile.CoatVariation+1),L("Equipment/vest")+": "+_profile.Vest,L("Vest texture")+": "+_profile.VestTextureName(_dog),"← "+L("Back to K9 Profile")});}
         private void OnMenuSelected(int index)
@@ -350,9 +348,6 @@ namespace AdvancedK9
                 OpenAppearanceMenu();return;
             }
             if(_menuMode!="profile")return;
-            if(index==0){ChangeLanguage(1);return;}if(index==1)OpenAppearanceMenu();else if(index==2)OpenHudConfiguration();else if(index==3)OpenKennelLocationMenu();else if(index==4)OpenSeatConfiguration();else if(index==5)Inspect();else if(index==6)ToggleVoice();
-        }
-
             if(index==0){ChangeLanguage(1);return;}if(index==1)OpenRosterMenu();else if(index==2)OpenAppearanceMenu();else if(index==3)OpenHudConfiguration();else if(index==4)OpenKennelLocationMenu();else if(index==5)OpenSeatConfiguration();else if(index==6)Inspect();else if(index==7)ToggleVoice();
         }
 
@@ -626,7 +621,6 @@ namespace AdvancedK9
             return command==K9Command.Follow||command==K9Command.Heel||command==K9Command.Sit||command==K9Command.LieDown||command==K9Command.Stay||command==K9Command.Recall||command==K9Command.SearchArea||command==K9Command.SearchBuilding||command==K9Command.SearchVehicle||command==K9Command.SearchNarcotics||command==K9Command.SearchExplosives||command==K9Command.SearchWeapons||command==K9Command.Track||command==K9Command.FindTrail||command==K9Command.Fetch||command==K9Command.Apprehend||command==K9Command.HoldPerimeter||command==K9Command.ContainSuspect;
         }
 
-        private static bool RequiresLeashRelease(K9Command command){return command==K9Command.Apprehend||command==K9Command.Fetch||command==K9Command.EnterVehicle||command==K9Command.CarryK9||command==K9Command.VeterinaryCare;}
         private static bool RequiresLeashRelease(K9Command command){return command==K9Command.Apprehend||command==K9Command.Fetch||command==K9Command.EnterVehicle||command==K9Command.CarryK9||command==K9Command.EmergencyLoadK9||command==K9Command.VeterinaryTransport||command==K9Command.VeterinaryCare;}
         private static bool IsWorkingLeashCommand(K9Command command){return command==K9Command.SearchArea||command==K9Command.SearchBuilding||command==K9Command.SearchVehicle||command==K9Command.SearchNarcotics||command==K9Command.SearchExplosives||command==K9Command.SearchWeapons||command==K9Command.Track||command==K9Command.FindTrail||command==K9Command.HoldPerimeter||command==K9Command.ContainSuspect;}
 
@@ -922,7 +916,6 @@ namespace AdvancedK9
             else{PlayDogAnimation("creatures@rottweiler@amb@world_dog_sitting@base","base",3000,0);SpawnDogWaste(reliefPoint);_bowel=100;K9IncidentLog.Write(_profile.Name,"Care","Defecated automatically",reliefPoint);}Follow();
         }
         private void SpawnDogWaste(Vector3 position){try{var model=new Model("prop_big_shit_02");if(!model.IsValid)model=new Model("prop_big_shit_01");if(!model.IsValid)return;model.LoadAndWait();var waste=new Rage.Object(model,position);model.Dismiss();if(waste==null||!waste.Exists())return;waste.IsPersistent=true;GameFiber.StartNew(()=>{GameFiber.Wait(180000);if(waste.Exists())waste.Delete();});}catch(Exception ex){Game.LogTrivial("AdvancedK9 dog waste prop: "+ex.Message);}}
-        private void VeterinaryCare(){if(!DogEntityExists())return;if(_carryingDog)SetDownCarriedK9(false);var handler=Game.LocalPlayer.Character;Vector3 p=handler.Position;float h=handler.Heading;NativeFunction.Natives.DO_SCREEN_FADE_OUT(450);GameFiber.Wait(550);handler.Position=new Vector3(306.7f,-595.2f,43.3f);RestoreDogAfterTreatment(100);_dog.Position=handler.GetOffsetPosition(new Vector3(1f,0f,0f));GameFiber.Wait(1800);_profile.VeterinaryTreat();RestoreDogAfterTreatment(100);_downed=false;if(_blip!=null&&_blip.Exists()){_blip.Color=Color.DodgerBlue;_blip.Name="K9 "+_profile.Name;}handler.Position=p;handler.Heading=h;_dog.Position=handler.GetOffsetPosition(new Vector3(-1f,-1f,0f));NativeFunction.Natives.DO_SCREEN_FADE_IN(450);K9IncidentLog.Write(_profile.Name,"Medical","Veterinary cleared",p);Game.DisplayNotification("~g~Veterinary clearance complete.~s~ K9 returned to service.");Follow();}
         private void VeterinaryCare(){if(!DogEntityExists())return;if(Game.LocalPlayer.Character.Position.DistanceTo(_veterinaryHospital)>25f){BeginVeterinaryTransport();return;}CompleteVeterinaryIntake();}
 
         private void RestoreDogAfterTreatment(int healthPercent){if(!DogEntityExists())return;NativeFunction.Natives.FREEZE_ENTITY_POSITION(_dog,false);NativeFunction.Natives.SET_PED_CAN_RAGDOLL(_dog,true);if(_dog.IsDead)NativeFunction.Natives.RESURRECT_PED(_dog);NativeFunction.Natives.REVIVE_INJURED_PED(_dog);NativeFunction.Natives.CLEAR_PED_TASKS_IMMEDIATELY(_dog);int health=Math.Max(1,(int)(_dog.MaxHealth*Math.Max(1,Math.Min(100,healthPercent))/100f));_dog.Health=health;NativeFunction.Natives.SET_ENTITY_HEALTH(_dog,health);_dog.IsInvincible=false;_dog.BlockPermanentEvents=true;ConfigureAmbientGunfireImmunity();}
@@ -2084,4 +2077,3 @@ namespace AdvancedK9
         }
     }
 }
-
