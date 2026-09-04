@@ -1919,7 +1919,37 @@ namespace AdvancedK9
         private void UpdateNeeds(){if(Game.GameTime<_nextNeedsUpdate)return;_nextNeedsUpdate=Game.GameTime+180000;bool working=_state==K9State.Searching||_state==K9State.Tracking||_state==K9State.Apprehending||_state==K9State.Fetching;_profile.UseNeeds(working?1:0,working?2:1);if((_profile.Food<=25||_profile.Water<=25)&&Game.GameTime>=_nextNeedsWarning){_nextNeedsWarning=Game.GameTime+180000;Game.DisplayNotification("~o~K9 care needed:~s~~n~Food "+_profile.Food+"%  Water "+_profile.Water+"%~n~Use Feed or Give Water from the command menu.");}}
         private void UpdateReliefNeeds(){if(Game.GameTime<_nextReliefUpdate)return;_nextReliefUpdate=Game.GameTime+180000;_bladder=Math.Max(0,_bladder-_random.Next(6,11));_bowel=Math.Max(0,_bowel-_random.Next(3,8));if((_bladder<=30||_bowel<=30)&&_state!=K9State.InVehicle&&_state!=K9State.Searching&&_state!=K9State.Tracking&&_state!=K9State.Apprehending&&_random.Next(100)<45)Bathroom();}
 
-        private void UpdateEnvironment(){if(Game.GameTime<_nextEnvironmentUpdate)return;_nextEnvironmentUpdate=Game.GameTime+60000;float rain=NativeFunction.Natives.GET_RAIN_LEVEL<float>();int hour=World.DateTime.Hour;bool hot=rain<.1f&&hour>=11&&hour<=18;if(hot)_profile.UseNeeds(0,2);if(hot&&_state==K9State.InVehicle&&_dogVehicle!=null&&_dogVehicle.Exists()&&!NativeFunction.Natives.GET_IS_VEHICLE_ENGINE_RUNNING<bool>(_dogVehicle)){_profile.UseNeeds(0,5);if(Game.GameTime>=_nextHeatWarning){_nextHeatWarning=Game.GameTime+90000;Game.DisplayNotification("~r~K9 VEHICLE HEAT WARNING~s~~n~Engine is off during peak heat. Remove the K9 or provide water.");K9IncidentLog.Write(_profile.Name,"Safety","Vehicle heat warning",_dogVehicle.Position);}}}
+        private void UpdateEnvironment()
+        {
+            if(Game.GameTime<_nextEnvironmentUpdate)return;
+            _nextEnvironmentUpdate=Game.GameTime+60000;
+            try
+            {
+                float rain=NativeFunction.Natives.GET_RAIN_LEVEL<float>();
+                int hour=NativeFunction.Natives.GET_CLOCK_HOURS<int>();
+                if(hour<0||hour>23)
+                {
+                    Game.LogTrivial("AdvancedK9 environment update skipped: GTA clock returned invalid hour "+hour+".");
+                    return;
+                }
+                bool hot=rain<.1f&&hour>=11&&hour<=18;
+                if(hot)_profile.UseNeeds(0,2);
+                if(hot&&_state==K9State.InVehicle&&_dogVehicle!=null&&_dogVehicle.Exists()&&!NativeFunction.Natives.GET_IS_VEHICLE_ENGINE_RUNNING<bool>(_dogVehicle))
+                {
+                    _profile.UseNeeds(0,5);
+                    if(Game.GameTime>=_nextHeatWarning)
+                    {
+                        _nextHeatWarning=Game.GameTime+90000;
+                        Game.DisplayNotification("~r~K9 VEHICLE HEAT WARNING~s~~n~Engine is off during peak heat. Remove the K9 or provide water.");
+                        K9IncidentLog.Write(_profile.Name,"Safety","Vehicle heat warning",_dogVehicle.Position);
+                    }
+                }
+            }
+            catch(Exception ex)
+            {
+                Game.LogTrivial("AdvancedK9 environment update skipped; controller remains active: "+ex.Message);
+            }
+        }
 
         private void DrawHud()
         {
