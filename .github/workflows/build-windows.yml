@@ -5,7 +5,7 @@ on:
   pull_request:
     branches: [ main ]
   push:
-    branches: [ main, codex/advancedk9-v0.23.1-beta ]
+    branches: [ main, codex/advancedk9-v0.23.1-beta, codex/advancedk9-next-beta ]
 jobs:
   build:
     runs-on: windows-latest
@@ -40,4 +40,3 @@ jobs:
           name: AdvancedK9-v0.23.1-beta-bridge
           path: artifact-bridge/AdvancedK9.LSPDFRBridge.dll
           if-no-files-found: error
-
