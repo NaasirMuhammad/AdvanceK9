@@ -9,3 +9,4 @@ using Rage.Attributes;
 [assembly: AssemblyFileVersion("0.23.1.0")]
 [assembly: AssemblyInformationalVersion("0.23.1-beta")]
 [assembly: Plugin("Advanced K9 Beta", Description = "Advanced police K9 partner beta", Author = "AdvancedK9 Community Project")]
+

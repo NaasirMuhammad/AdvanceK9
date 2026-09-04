@@ -7,7 +7,7 @@ namespace AdvancedK9
     internal sealed class CommandDefinition { public K9Command Command{get;} public string Label{get;} public string[] Phrases{get;} public bool RequiresDog{get;} public CommandDefinition(K9Command c,string l,bool r,params string[] p){Command=c;Label=l;RequiresDog=r;Phrases=p;} }
     internal static class CommandRegistry
     {
-        private static readonly Dictionary<K9Command,string[]> CustomPhrases=new Dictionary<K9Command,string[]>();
+        private static readonly Dictionary<K9Command,string[]> Custom=new Dictionary<K9Command,string[]>();
         public static readonly IReadOnlyList<CommandDefinition> All=new[]{
             D(K9Command.SpawnDismiss,"Deploy / Dismiss",false,"deploy k9","deploy the dog","bring out the dog","partner up","send out the dog","dismiss k9","kennel up","end shift","dismiss"),
             D(K9Command.Follow,"Follow",true,"follow me","stay with me","move with me","on me","with me","follow"),
@@ -25,6 +25,7 @@ namespace AdvancedK9
             D(K9Command.SearchNarcotics,"Narcotics Search",true,"search for narcotics","narcotics search","search for drugs","drug search","find the drugs","check for narcotics","narcotics sweep","find dope"),
             D(K9Command.SearchExplosives,"Explosives Search",true,"search for explosives","explosives search","bomb search","search for a bomb","find the bomb","check for explosives","explosive sweep","bomb sweep"),
             D(K9Command.SearchWeapons,"Weapons Search",true,"search for weapons","weapons search","gun search","search for a gun","find the weapon","check for firearms","firearm sweep","weapons sweep"),
+            D(K9Command.ClearEvidenceMarkers,"Clear Evidence Markers",true,"clear evidence markers","remove evidence markers","clear k9 markers"),
             D(K9Command.CollectScent,"Collect Scent Article",true,"collect scent article","bag the scent","take scent sample","collect scent"),
             D(K9Command.Track,"Track",true,"start tracking","pick up the scent","follow the scent","find the trail","track the suspect","locate them","find him","find her","find them","track"),
             D(K9Command.FindTrail,"Reacquire Trail",true,"reacquire the trail","find the trail again","pick the trail back up","recover the scent","find scent","reacquire scent"),
@@ -49,7 +50,10 @@ namespace AdvancedK9
             D(K9Command.Rest,"Rest K9",true,"rest the dog","take a rest","sleep","rest"),
             D(K9Command.Inspect,"Inspect K9",true,"inspect the dog","check the dog","check status","check injury","check health","medical check","inspect"),
             D(K9Command.FirstAid,"Field First Aid",true,"give first aid","apply first aid","provide treatment","field treatment","treat the injury","treat injury","first aid"),
-            D(K9Command.CarryK9,"Carry / Set Down K9",true,"carry the dog","carry k9","pick up the dog","pick up k9","set the dog down","set k9 down","put the dog down","evacuate k9"),
+            D(K9Command.CarryK9,"Carry / Set Down K9",true,"carry k9","carry the dog","pick up the dog","set down k9","put the dog down"),
+            D(K9Command.EmergencyLoadK9,"Emergency Load K9",true,"emergency load k9","load injured k9","load the injured dog","emergency load"),
+            D(K9Command.VeterinaryTransport,"Veterinary Transport",true,"veterinary transport","route to the vet","transport k9 to vet","emergency vet transport"),
+            D(K9Command.Rehabilitation,"Rehabilitation Session",true,"rehabilitation session","rehab k9","k9 rehabilitation","recovery session"),
             D(K9Command.VeterinaryCare,"Veterinary Care",true,"go to the vet","veterinary care","vet treatment","visit veterinarian","vet"),
             D(K9Command.Restock,"Restock Equipment",true,"restock equipment","reload k9 gear","replenish supplies","restock"),
             D(K9Command.ToggleLeash,"Toggle Leash",true,"attach the leash","put on the leash","take off the leash","remove the leash","leash on","leash off","attach leash","remove leash","leash"),
@@ -59,20 +63,20 @@ namespace AdvancedK9
             D(K9Command.TrainExplosives,"Explosives Training",true,"start explosives training","bomb certification","bomb detection training","train for explosives","explosives academy"),
             D(K9Command.TrainWeapons,"Weapons Training",true,"start weapons training","weapons certification","gun detection training","firearm training","weapons academy")};
         static CommandDefinition D(K9Command c,string l,bool r,params string[] p)=>new CommandDefinition(c,l,r,p);
-        public static void Configure(IDictionary<K9Command,string[]> custom){CustomPhrases.Clear();if(custom==null)return;foreach(var pair in custom)if(pair.Value!=null&&pair.Value.Length>0)CustomPhrases[pair.Key]=pair.Value;}
-        public static string VoicePromptPhrases=>string.Join(", ",All.SelectMany(x=>Localization.CommandPhrases(x.Command)).Concat(CustomPhrases.SelectMany(x=>x.Value)).Where(x=>!string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase));
+        public static void Configure(IDictionary<K9Command,string[]> phrases){Custom.Clear();if(phrases==null)return;foreach(var pair in phrases)Custom[pair.Key]=(pair.Value??new string[0]).Where(x=>!string.IsNullOrWhiteSpace(x)).Select(x=>x.Trim()).ToArray();}
+        public static IEnumerable<string> PhrasesFor(CommandDefinition item){string[] custom;IEnumerable<string> values=item.Phrases.Concat(Localization.CommandPhrases(item.Command));if(Custom.TryGetValue(item.Command,out custom))values=values.Concat(custom);return values.Where(x=>!string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase);}
+        public static string PromptPhrases()=>string.Join(", ",All.SelectMany(PhrasesFor).Distinct(StringComparer.OrdinalIgnoreCase).Take(180));
+        public static string VoicePromptPhrases=>PromptPhrases();
         public static bool TryMatch(string text,string dogName,out K9Command command)
         {
             command=default(K9Command);if(string.IsNullOrWhiteSpace(text))return false;
             string t=Normalize(text),wake=Normalize(dogName??"");
-            bool hasWake=HasPhrase(t,wake)||Localization.WakeWords.Any(x=>HasPhrase(t,Normalize(x)))||HasPhrase(t,"k9")||HasPhrase(t,"k 9")||HasPhrase(t,"k nine")||HasPhrase(t,"kay nine")||HasPhrase(t,"canine");
+            bool hasWake=HasPhrase(t,wake)||HasPhrase(t,"k9")||HasPhrase(t,"k 9")||HasPhrase(t,"k nine")||HasPhrase(t,"kay nine")||HasPhrase(t,"canine");
             if(!hasWake)return false;
             // Spoken "sit down" means sit; do not let the generic word "down" turn it
             // into the separate lie-down command.
             if(HasPhrase(t,"sit down")||HasPhrase(t,"take a seat")){command=K9Command.Sit;return true;}
-            var phrases=All.SelectMany(x=>x.Phrases.Concat(Localization.CommandPhrases(x.Command)).Select(p=>new{Item=x,Phrase=Normalize(p)}));
-            phrases=phrases.Concat(CustomPhrases.SelectMany(x=>x.Value.Select(p=>new{Item=All.First(d=>d.Command==x.Key),Phrase=Normalize(p)})));
-            foreach(var item in phrases.OrderByDescending(x=>x.Phrase.Length))
+            foreach(var item in All.SelectMany(x=>PhrasesFor(x).Select(p=>new{Item=x,Phrase=Normalize(p)})).OrderByDescending(x=>x.Phrase.Length))
                 if(HasPhrase(t,item.Phrase)){command=item.Item.Command;return true;}
             return false;
         }

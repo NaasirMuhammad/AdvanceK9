@@ -18,6 +18,12 @@ The compiled release includes AdvancedK9, its configuration, and the MIT-license
 
 ## Features
 
+- Persistent kennel roster for up to eight K9 partners, each with separate appearance, certifications, health, rehabilitation, care, trust, confidence, training, equipment, statistics, status, and kennel assignment
+- Exact positive-alert evidence markers with named search zones, world coordinates, and persistent CSV records
+- Vehicle-model-aware search routes built from real door, wheel, bumper, trunk, cargo, and seat-area bones with motorcycle, standard, utility, and long-body fallbacks
+- Complete injury evacuation workflow: flat carry, stopped-vehicle emergency loading, driven veterinary transport, clinic intake, staged rehabilitation, and return-to-duty clearance
+- Expanded scent collection from vehicle seats/doors, dropped clothing, weapons, blood, personal property, and last-known-location pads, each with a distinct starting quality
+- Full-circle opening direction tests, variable wrong-direction chances, strong leash/body indication, and water/obstacle/terrain/traffic effects on trail quality, speed, and direction checks
 - Deploy/dismiss and follow/heel
 - Sit, lie down, pet, feed, physical rope leash with handler-follow movement, and dog-mounted camera
 - Persistent food and water care HUD, low-need warnings, separate feed/drink interactions and working-dog consumption
@@ -141,6 +147,10 @@ Hold `V`, begin with the configured dog name or `K9`, and then say one of the ph
 | Rest | rest the dog; take a rest; sleep; rest |
 | Inspect | inspect the dog; check the dog; check status; check injury; check health; medical check; inspect |
 | First aid | give first aid; apply first aid; provide treatment; field treatment; treat the injury; treat injury; first aid |
+| Carry / set down K9 | carry K9; carry the dog; pick up the dog; set down K9; put the dog down |
+| Emergency load K9 | emergency load K9; load injured K9; load the injured dog; emergency load |
+| Veterinary transport | veterinary transport; route to the vet; transport K9 to vet; emergency vet transport |
+| Rehabilitation | rehabilitation session; rehab K9; K9 rehabilitation; recovery session |
 | Veterinary care | go to the vet; veterinary care; vet treatment; visit veterinarian; vet |
 | Restock equipment | restock equipment; reload K9 gear; replenish supplies; restock |
 | Toggle leash | attach the leash; put on the leash; take off the leash; remove the leash; leash on; leash off; attach leash; remove leash; leash |
@@ -287,3 +297,4 @@ Vehicle searches visit all four exterior corners before the result is determined
 - `K9Profile.cs` — persistent breed, coat, vest and name profile
 - `DogCamera.cs` — scripted K9 camera
 - `AcademySession.cs` — guided training evaluation
+

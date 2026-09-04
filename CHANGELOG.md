@@ -1,5 +1,35 @@
 # Changelog
 
+## Unreleased — next beta development
+
+### Persistent roster and kennels
+
+- Adds an eight-dog kennel roster with separately persisted identity, appearance, certifications, health, injuries, trust, confidence, care needs, equipment, training, rehabilitation, and deployment statistics.
+- Adds safe migration of the existing single `profile.dat`/`trust.dat` data into Rex's roster profile, active-profile selection, per-dog kennel assignment, and duty/rehabilitation status.
+
+### Searches and evidence
+
+- Adds vehicle-model-aware sweep paths using actual bumper, wheel, door, trunk, cargo, and seat-area bones when available, with category-specific fallbacks for motorcycles, standard vehicles, utility vehicles, and long-body vehicles.
+- Adds exact positive-alert coordinates and named alert zones, temporary evidence map markers, and `SearchEvidenceMarkers.csv` records.
+- Adds explosive-first safety behavior: silent positive indication, automatic handler-side recall, exact evidence marker, and close-search lockout for the indicated entity.
+
+### Medical evacuation and rehabilitation
+
+- Extends the existing flat K9 carry with emergency loading into a stopped vehicle while retaining a side-lying animal pose.
+- Adds a driven veterinary-transport route and automatic stopped-vehicle intake at the clinic instead of instant treatment teleportation.
+- Adds persistent staged rehabilitation, clinic/kennel recovery sessions, saved health/stamina progress, roster status, preserved certifications, and explicit return-to-duty clearance.
+
+### Tracking, scent, obstacles, and pursuit cleanup
+
+- Adds vehicle seat and exterior door/handle scent collection plus dropped clothing, weapons, blood, personal property, and last-known-location scent pads.
+- Assigns distinct base quality to every scent source and combines it with trail age, distance, rain, vehicle travel, fatigue, training, and trust.
+- Adds a visible full-circle direction test at the beginning of every track, variable wrong-direction selection, environmental rechecks, and a strong leash-pull/body-line indication toward the chosen route.
+- Water, steep terrain, heavy traffic, railroad crossings, fences/gates, construction sites, alleys, and obstacle fields now affect scent quality, movement speed, or direction-check probability.
+- Cleans stale scent, vehicle, track, containment, and apprehension state when a pursuit changes vehicles, ends, or reaches arrest/restraint.
+- Persists handler containment locations and restores a nearby saved position on later perimeter deployments.
+
+The shared callout API and the Lost Child, Fugitive Trail from an Abandoned Vehicle, and Armed Burglary Suspect Hiding controlled tests are intentionally deferred from this batch.
+
 ## 0.23.1-beta
 
 ### K9 behavior and handler gunfire
@@ -438,3 +468,4 @@ All published AdvancedK9 versions are beta builds.
 - Removed the nonfunctional cross-AppDomain reflection duty gate.
 - Starts the K9 controller directly from the RPH plugin entry point.
 - Corrected the kennel/profile shortcut documentation to Left Ctrl + U.
+
