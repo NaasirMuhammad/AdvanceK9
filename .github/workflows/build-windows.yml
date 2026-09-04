@@ -63,8 +63,8 @@ jobs:
           Copy-Item $main.FullName (Join-Path $pluginRoot 'AdvancedK9.dll')
           Copy-Item $bridge (Join-Path $lspdfrRoot 'AdvancedK9.LSPDFRBridge.dll')
           Copy-Item $lemon.FullName (Join-Path $package 'LemonUI.RagePluginHook.dll')
-          Copy-Item $naudioCore.FullName (Join-Path $pluginRoot 'NAudio.Core.dll')
-          Copy-Item $naudioWinMM.FullName (Join-Path $pluginRoot 'NAudio.WinMM.dll')
+          Copy-Item $naudioCore.FullName (Join-Path $package 'NAudio.Core.dll')
+          Copy-Item $naudioWinMM.FullName (Join-Path $package 'NAudio.WinMM.dll')
           Copy-Item 'Config/AdvancedK9.ini' (Join-Path $configRoot 'AdvancedK9.default.ini')
           Copy-Item 'Config/AcademyCourses.json','Config/CompatibilityPresets.json' $configRoot
           Copy-Item 'Config/Portraits' $configRoot -Recurse
@@ -75,8 +75,8 @@ jobs:
           }
           if ($forbidden) { throw "Forbidden release content: $($forbidden.FullName -join ', ')" }
           $requiredVoiceRuntime = @(
-            (Join-Path $pluginRoot 'NAudio.Core.dll'),
-            (Join-Path $pluginRoot 'NAudio.WinMM.dll')
+            (Join-Path $package 'NAudio.Core.dll'),
+            (Join-Path $package 'NAudio.WinMM.dll')
           )
           foreach ($runtimeFile in $requiredVoiceRuntime) {
             if (-not (Test-Path $runtimeFile)) { throw "Release is missing required AI voice runtime: $runtimeFile" }
