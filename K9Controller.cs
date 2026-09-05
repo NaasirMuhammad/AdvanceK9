@@ -58,6 +58,8 @@ namespace AdvancedK9
         private uint _nextLeashVisualUpdate;
         private uint _nextIndoorFollowUpdate;
         private int _followSpeedBand=-1;
+        private uint _handlerSprintUntil;
+        private uint _handlerMoveUntil;
         private bool _handlerWasShooting;
         private uint _k9RelationshipGroup;
         private Vector3 _lastHandlerNavigationPosition;
@@ -1837,21 +1839,29 @@ namespace AdvancedK9
                 Game.LogTrivial("AdvancedK9 interior transition: K9 caught up after elevator/teleport change; leash="+leashed+".");return;
             }
 
-            float handlerSpeed=0f;bool handlerRunning=false,handlerMoving=false;
+            float handlerSpeed=0f;bool runningNow=false,movingNow=false;
             try
             {
                 handlerSpeed=NativeFunction.Natives.GET_ENTITY_SPEED<float>(handler);
-                handlerRunning=NativeFunction.Natives.IS_PED_RUNNING<bool>(handler)||NativeFunction.Natives.IS_PED_SPRINTING<bool>(handler);
-                handlerMoving=handlerSpeed>.35f;
+                bool sprintHeld=NativeFunction.Natives.IS_CONTROL_PRESSED<bool>(0,21);
+                runningNow=sprintHeld||NativeFunction.Natives.IS_PED_RUNNING<bool>(handler)||NativeFunction.Natives.IS_PED_SPRINTING<bool>(handler)||handlerSpeed>=2.3f;
+                movingNow=handlerSpeed>.3f;
             }
-            catch{handlerMoving=handlerSpeed>.35f;}
-            int desiredBand=handlerRunning||handlerSpeed>=2.3f||distance>=5f?2:handlerMoving||distance>=2.5f?1:0;
-            float followSpeed=desiredBand==2?(distance>=8f?12f:10f):desiredBand==1?4.8f:2.6f;
+            catch{movingNow=handlerSpeed>.3f;runningNow=handlerSpeed>=2.3f;}
+            if(runningNow)_handlerSprintUntil=Game.GameTime+1200;
+            if(movingNow)_handlerMoveUntil=Game.GameTime+700;
+            bool handlerSprinting=Game.GameTime<_handlerSprintUntil;
+            bool handlerMoving=Game.GameTime<_handlerMoveUntil;
+            int desiredBand=handlerSprinting||distance>=5f?2:handlerMoving||distance>=2.5f?1:0;
+            // GTA task speeds are movement modes rather than metres per second.
+            // Keep them in the stable animal range and use the forward offset plus
+            // move-rate override to let the canine outpace a sprinting handler.
+            float followSpeed=desiredBand==2?3f:desiredBand==1?2f:1.35f;
             bool dogStopped=false;try{dogStopped=NativeFunction.Natives.IS_PED_STOPPED<bool>(_dog);}catch{}
             bool speedChanged=desiredBand!=_followSpeedBand;
             bool movingRecovery=handlerMoving&&dogStopped&&Game.GameTime>=_nextIndoorFollowUpdate;
             bool badlyBehind=distance>6f&&Game.GameTime>=_nextIndoorFollowUpdate;
-            float moveRate=_profile.Health<=55?.65f:desiredBand==2?1.25f:1f;
+            float moveRate=_profile.Health<=55?.65f:desiredBand==2?1.2f:1f;
             NativeFunction.Natives.SET_PED_MOVE_RATE_OVERRIDE(_dog,moveRate);
             if(speedChanged||movingRecovery||badlyBehind)
             {
@@ -1864,10 +1874,10 @@ namespace AdvancedK9
         {
             if(handler==null||!handler.Exists()||!DogExists())return;
             _followSpeedBand=speedBand;
-            _nextIndoorFollowUpdate=Game.GameTime+(speedBand==2?1200u:2500u);
-            float side=leashed?-.65f:speedBand==2?-1.15f:-.7f;
-            float forward=leashed?(speedBand==2?0f:-.75f):speedBand==2?1.25f:speedBand==1?-.2f:-1.05f;
-            float stoppingRange=speedBand==2?.15f:.35f;
+            _nextIndoorFollowUpdate=Game.GameTime+(speedBand==2?1800u:2800u);
+            float side=leashed?-.7f:speedBand==2?-1.35f:-.75f;
+            float forward=leashed?(speedBand==2?.35f:-.7f):speedBand==2?3f:speedBand==1?.15f:-1.05f;
+            float stoppingRange=speedBand==2?.1f:.35f;
             NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(_dog,handler,side,forward,0f,speed,-1,stoppingRange,true);
             NativeFunction.Natives.SET_PED_KEEP_TASK(_dog,true);
         }
