@@ -1840,7 +1840,7 @@ namespace AdvancedK9
             float handlerSpeed=0f;
             try{handlerSpeed=NativeFunction.Natives.GET_ENTITY_SPEED<float>(handler);}catch{}
             int desiredBand=handlerSpeed>=4.2f||distance>=7f?2:handlerSpeed>=1.7f||distance>=3.5f?1:0;
-            float followSpeed=desiredBand==2?6f:desiredBand==1?3.6f:2.2f;
+            float followSpeed=desiredBand==2?(distance>=10f?10f:8.5f):desiredBand==1?4.5f:2.4f;
             bool dogStopped=false;try{dogStopped=NativeFunction.Natives.IS_PED_STOPPED<bool>(_dog);}catch{}
             bool speedChanged=desiredBand!=_followSpeedBand;
             bool needsRecovery=distance>2.2f&&dogStopped;
