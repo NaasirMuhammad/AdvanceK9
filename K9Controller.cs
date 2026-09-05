@@ -57,6 +57,7 @@ namespace AdvancedK9
         private uint _nextLeashFollow;
         private uint _nextLeashVisualUpdate;
         private uint _nextIndoorFollowUpdate;
+        private int _followSpeedBand=-1;
         private bool _handlerWasShooting;
         private uint _k9RelationshipGroup;
         private Vector3 _lastHandlerNavigationPosition;
@@ -812,7 +813,8 @@ namespace AdvancedK9
             if (!DogExists()) return;
             ResetFollowBreadcrumbs();
             _dog.Tasks.Clear();
-            NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(_dog, Game.LocalPlayer.Character, -0.7f, -1.15f, 0f, 2.2f, -1, 1.2f, true);
+            _followSpeedBand=-1;
+            IssuePersistentFollow(Game.LocalPlayer.Character,_leashRope>=0,2.2f,0);
             _state = _leashRope >= 0 ? K9State.Leashed : K9State.Following;
             Acknowledge("Following.");
         }
@@ -1627,8 +1629,8 @@ namespace AdvancedK9
             _dog.Tasks.Clear();
             CreateLeashRope();
             _state = K9State.Leashed;
-            _nextLeashFollow=Game.GameTime+1800;
-            NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(_dog,Game.LocalPlayer.Character,-.55f,-.85f,0f,1.8f,-1,1.15f,true);
+            _followSpeedBand=-1;
+            IssuePersistentFollow(Game.LocalPlayer.Character,true,2.2f,0);
             Game.LogTrivial("AdvancedK9 leash: attached visual leash and issued persistent animal follow task.");
             ActionNotification("~b~K9 leash attached.~s~ The K9 will walk at the handler's left side.");
         }
@@ -1707,16 +1709,9 @@ namespace AdvancedK9
             if(Game.GameTime>=_nextVitalsUpdate){_nextVitalsUpdate=Game.GameTime+5000;int liveHealth=(int)(100f*_dog.Health/Math.Max(1,_dog.MaxHealth));if(liveHealth<_profile.Health){string injury=liveHealth<=25?"Serious — veterinary treatment required":liveHealth<=55?"Moderate":"Minor";_profile.SetInjury(injury,liveHealth);K9IncidentLog.Write(_profile.Name,"Injury",injury,_dog.Position);}NativeFunction.Natives.SET_PED_MOVE_RATE_OVERRIDE(_dog,_profile.Health<=55?.65f:1f);if(_state==K9State.Searching||_state==K9State.Tracking||_state==K9State.Apprehending)_profile.UseStamina(2);else _profile.Recover(1);}
             if (_state == K9State.Leashed)
             {
-                var officer = Game.LocalPlayer.Character;
-                float distance=_dog.DistanceTo(officer);
                 NativeFunction.Natives.FREEZE_ENTITY_POSITION(_dog,false);
                 NativeFunction.Natives.SET_ENTITY_COLLISION(_dog,true,true);
                 NativeFunction.Natives.SET_PED_CAN_RAGDOLL(_dog,true);
-                if(distance>1.35f&&Game.GameTime>=_nextLeashFollow)
-                {
-                    _nextLeashFollow=Game.GameTime+1800;
-                    NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(_dog,officer,-.55f,-.85f,0f,2.2f,-1,1.15f,true);
-                }
             }
             if(_leashRope>=0)PinLeashEndpoints();
             if (_dog.DistanceTo(Game.LocalPlayer.Character) > 150f && _state == K9State.Following)
@@ -1835,27 +1830,35 @@ namespace AdvancedK9
             int handlerInterior=NativeFunction.Natives.GET_INTERIOR_FROM_ENTITY<int>(handler),dogInterior=NativeFunction.Natives.GET_INTERIOR_FROM_ENTITY<int>(_dog);
             if(distance>8f&&(verticalJump>4.5f||handlerJump>22f||(handlerInterior!=dogInterior&&distance>18f)))
             {
-                if(leashed)
-                {
-                    _dog.Position=handler.GetOffsetPosition(new Vector3(-.55f,-.85f,.1f));_dog.Heading=handler.Heading;ResetFollowBreadcrumbs();
-                    NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(_dog,handler,-.55f,-.85f,0f,2.2f,-1,1.2f,true);
-                }
-                else
-                {
-                    _dog.Position=handler.GetOffsetPosition(new Vector3(-.8f,-1.4f,.1f));_dog.Heading=handler.Heading;ResetFollowBreadcrumbs();
-                    NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(_dog,handler,-.7f,-1.15f,0f,2.2f,-1,1.2f,true);
-                }
+                Vector3 offset=leashed?new Vector3(-.55f,-.85f,.1f):new Vector3(-.8f,-1.4f,.1f);
+                _dog.Position=handler.GetOffsetPosition(offset);_dog.Heading=handler.Heading;ResetFollowBreadcrumbs();
+                _followSpeedBand=-1;IssuePersistentFollow(handler,leashed,2.2f,0);
                 ApplyAnimalPedSafeguards();
                 Game.LogTrivial("AdvancedK9 interior transition: K9 caught up after elevator/teleport change; leash="+leashed+".");return;
             }
-            if(leashed)return;
-            if(distance<=1.45f||Game.GameTime<_nextIndoorFollowUpdate)return;
-            bool stopped=NativeFunction.Natives.IS_PED_STOPPED<bool>(_dog);if(!stopped&&distance<4f)return;
-            // Leashed follow already proves entity-follow can traverse this interior. Reuse that
-            // task off leash instead of repeatedly targeting a stale/unreachable navmesh crumb.
-            _nextIndoorFollowUpdate=Game.GameTime+1800;
-            NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(_dog,handler,-.7f,-1.15f,0f,2.2f,-1,1.2f,true);
-            ApplyAnimalPedSafeguards();
+
+            float handlerSpeed=0f;
+            try{handlerSpeed=NativeFunction.Natives.GET_ENTITY_SPEED<float>(handler);}catch{}
+            int desiredBand=handlerSpeed>=4.2f||distance>=7f?2:handlerSpeed>=1.7f||distance>=3.5f?1:0;
+            float followSpeed=desiredBand==2?6f:desiredBand==1?3.6f:2.2f;
+            bool dogStopped=false;try{dogStopped=NativeFunction.Natives.IS_PED_STOPPED<bool>(_dog);}catch{}
+            bool speedChanged=desiredBand!=_followSpeedBand;
+            bool needsRecovery=distance>2.2f&&dogStopped;
+            bool badlyBehind=distance>6f;
+            if(speedChanged||needsRecovery||(badlyBehind&&Game.GameTime>=_nextIndoorFollowUpdate))
+            {
+                IssuePersistentFollow(handler,leashed,followSpeed,desiredBand);
+                ApplyAnimalPedSafeguards();
+            }
+        }
+
+        private void IssuePersistentFollow(Ped handler,bool leashed,float speed,int speedBand)
+        {
+            if(handler==null||!handler.Exists()||!DogExists())return;
+            _followSpeedBand=speedBand;
+            _nextIndoorFollowUpdate=Game.GameTime+4000;
+            float side=leashed?-.55f:-.7f,behind=leashed?-.85f:-1.15f;
+            NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(_dog,handler,side,behind,0f,speed,-1,.45f,true);
         }
 
         private void CaptureHandlerWalkingLine()
