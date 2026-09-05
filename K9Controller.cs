@@ -57,10 +57,10 @@ namespace AdvancedK9
         private uint _nextLeashFollow;
         private uint _nextLeashVisualUpdate;
         private uint _nextIndoorFollowUpdate;
-        private int _followSpeedBand=-1;
-        private uint _handlerSprintUntil;
-        private uint _handlerMoveUntil;
-        private uint _nextSprintFollowRefresh;
+        private Vector3 _followMotionSamplePosition;
+        private bool _followMotionSampleReady;
+        private uint _nextFollowMotionSample;
+        private uint _followStuckSince;
         private bool _handlerWasShooting;
         private uint _k9RelationshipGroup;
         private Vector3 _lastHandlerNavigationPosition;
@@ -816,8 +816,7 @@ namespace AdvancedK9
             if (!DogExists()) return;
             ResetFollowBreadcrumbs();
             _dog.Tasks.Clear();
-            _followSpeedBand=-1;
-            IssuePersistentFollow(Game.LocalPlayer.Character,_leashRope>=0,2.2f,0);
+            IssuePersistentFollow(Game.LocalPlayer.Character,_leashRope>=0);
             _state = _leashRope >= 0 ? K9State.Leashed : K9State.Following;
             Acknowledge("Following.");
         }
@@ -1632,8 +1631,7 @@ namespace AdvancedK9
             _dog.Tasks.Clear();
             CreateLeashRope();
             _state = K9State.Leashed;
-            _followSpeedBand=-1;
-            IssuePersistentFollow(Game.LocalPlayer.Character,true,2.2f,0);
+            IssuePersistentFollow(Game.LocalPlayer.Character,true);
             Game.LogTrivial("AdvancedK9 leash: attached visual leash and issued persistent animal follow task.");
             ActionNotification("~b~K9 leash attached.~s~ The K9 will walk at the handler's left side.");
         }
@@ -1835,74 +1833,49 @@ namespace AdvancedK9
             {
                 Vector3 offset=leashed?new Vector3(-.55f,-.85f,.1f):new Vector3(-.8f,-1.4f,.1f);
                 _dog.Position=handler.GetOffsetPosition(offset);_dog.Heading=handler.Heading;ResetFollowBreadcrumbs();
-                _followSpeedBand=-1;IssuePersistentFollow(handler,leashed,2.2f,0);
+                IssuePersistentFollow(handler,leashed);
                 ApplyAnimalPedSafeguards();
                 Game.LogTrivial("AdvancedK9 interior transition: K9 caught up after elevator/teleport change; leash="+leashed+".");return;
             }
 
-            float handlerSpeed=0f;bool runningNow=false,movingNow=false;
-            try
+            // TASK_FOLLOW_TO_OFFSET_OF_ENTITY is persistent and tracks the moving handler itself.
+            // Reissuing it on a timer interrupts the animal locomotion cycle, producing the
+            // few-steps-then-stop behavior. Leave the task untouched unless measured movement
+            // proves that the dog has actually been stuck for several seconds.
+            NativeFunction.Natives.SET_PED_MAX_MOVE_BLEND_RATIO(_dog,3f);
+            if(Game.GameTime<_nextFollowMotionSample)return;
+            _nextFollowMotionSample=Game.GameTime+1000;
+            Vector3 dogPosition=_dog.Position;
+            if(!_followMotionSampleReady)
             {
-                handlerSpeed=NativeFunction.Natives.GET_ENTITY_SPEED<float>(handler);
-                bool sprintHeld=NativeFunction.Natives.IS_CONTROL_PRESSED<bool>(0,21);
-                runningNow=sprintHeld||NativeFunction.Natives.IS_PED_RUNNING<bool>(handler)||NativeFunction.Natives.IS_PED_SPRINTING<bool>(handler)||handlerSpeed>=2.3f;
-                movingNow=handlerSpeed>.3f;
+                _followMotionSamplePosition=dogPosition;_followMotionSampleReady=true;return;
             }
-            catch{movingNow=handlerSpeed>.3f;runningNow=handlerSpeed>=2.3f;}
-            if(runningNow)_handlerSprintUntil=Game.GameTime+1200;
-            if(movingNow)_handlerMoveUntil=Game.GameTime+700;
-            bool handlerSprinting=Game.GameTime<_handlerSprintUntil;
-            bool handlerMoving=Game.GameTime<_handlerMoveUntil;
-            int desiredBand=handlerSprinting||distance>=5f?2:handlerMoving||distance>=2.5f?1:0;
-            // GTA task speeds are movement modes rather than metres per second.
-            // Keep them in the stable animal range and use the forward offset plus
-            // move-rate override to let the canine outpace a sprinting handler.
-            float followSpeed=desiredBand==2?3f:desiredBand==1?2f:1.35f;
-            bool dogStopped=false;try{dogStopped=NativeFunction.Natives.IS_PED_STOPPED<bool>(_dog);}catch{}
-            bool speedChanged=desiredBand!=_followSpeedBand;
-            bool movingRecovery=handlerMoving&&dogStopped&&Game.GameTime>=_nextIndoorFollowUpdate;
-            bool badlyBehind=distance>6f&&Game.GameTime>=_nextIndoorFollowUpdate;
-            float moveRate=_profile.Health<=55?.65f:desiredBand==2?1.2f:1f;
-            NativeFunction.Natives.SET_PED_MOVE_RATE_OVERRIDE(_dog,moveRate);
-            if(desiredBand==2)
+            float dogMovement=dogPosition.DistanceTo(_followMotionSamplePosition);_followMotionSamplePosition=dogPosition;
+            float handlerSpeed=0f;try{handlerSpeed=NativeFunction.Natives.GET_ENTITY_SPEED<float>(handler);}catch{}
+            bool shouldBeFollowing=handlerSpeed>.5f&&distance>4f;
+            if(!shouldBeFollowing||dogMovement>.3f)
             {
-                MaintainSprintFollow(handler,leashed,distance,speedChanged||dogStopped);
-                ApplyAnimalPedSafeguards();
-                return;
+                _followStuckSince=0;return;
             }
-            if(speedChanged||movingRecovery||badlyBehind)
-            {
-                IssuePersistentFollow(handler,leashed,followSpeed,desiredBand);
-                ApplyAnimalPedSafeguards();
-            }
+            if(_followStuckSince==0){_followStuckSince=Game.GameTime;return;}
+            if(Game.GameTime-_followStuckSince<2500)return;
+            IssuePersistentFollow(handler,leashed);
+            ApplyAnimalPedSafeguards();
+            Game.LogTrivial("AdvancedK9 follow recovery: persistent task reissued after K9 moved less than 0.3m for 2.5 seconds while handler was moving.");
         }
 
-        private void MaintainSprintFollow(Ped handler,bool leashed,float distance,bool force)
+        private void IssuePersistentFollow(Ped handler,bool leashed)
         {
             if(handler==null||!handler.Exists()||!DogExists())return;
-            if(!force&&Game.GameTime<_nextSprintFollowRefresh)return;
-            _followSpeedBand=2;
-            _nextSprintFollowRefresh=Game.GameTime+550;
-            _nextIndoorFollowUpdate=Game.GameTime+1800;
-            // Keep the destination far enough ahead that the animal never reaches a stale
-            // follow offset and returns to idle between handler strides.
-            float lead=leashed?3.25f:distance>=12f?14f:10f;
-            float side=leashed?-.7f:-1.35f;
-            Vector3 sprintTarget=handler.GetOffsetPosition(new Vector3(side,lead,0f));
-            _dog.Tasks.FollowNavigationMeshToPosition(sprintTarget,handler.Heading,3f);
+            float side=leashed?-.55f:-.8f;
+            float behind=leashed?-.85f:-1.15f;
+            NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(_dog,handler,side,behind,0f,3f,-1,.35f,true);
             NativeFunction.Natives.SET_PED_KEEP_TASK(_dog,true);
-        }
-
-        private void IssuePersistentFollow(Ped handler,bool leashed,float speed,int speedBand)
-        {
-            if(handler==null||!handler.Exists()||!DogExists())return;
-            _followSpeedBand=speedBand;
-            _nextIndoorFollowUpdate=Game.GameTime+(speedBand==2?1800u:2800u);
-            float side=leashed?-.7f:speedBand==2?-1.35f:-.75f;
-            float forward=leashed?(speedBand==2?.35f:-.7f):speedBand==2?3f:speedBand==1?.15f:-1.05f;
-            float stoppingRange=speedBand==2?.1f:.35f;
-            NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(_dog,handler,side,forward,0f,speed,-1,stoppingRange,true);
-            NativeFunction.Natives.SET_PED_KEEP_TASK(_dog,true);
+            NativeFunction.Natives.SET_PED_MAX_MOVE_BLEND_RATIO(_dog,3f);
+            _followMotionSamplePosition=_dog.Position;
+            _followMotionSampleReady=true;
+            _nextFollowMotionSample=Game.GameTime+1000;
+            _followStuckSince=0;
         }
 
         private void CaptureHandlerWalkingLine()
