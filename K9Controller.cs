@@ -60,6 +60,7 @@ namespace AdvancedK9
         private int _followSpeedBand=-1;
         private uint _handlerSprintUntil;
         private uint _handlerMoveUntil;
+        private uint _nextSprintFollowRefresh;
         private bool _handlerWasShooting;
         private uint _k9RelationshipGroup;
         private Vector3 _lastHandlerNavigationPosition;
@@ -1863,11 +1864,33 @@ namespace AdvancedK9
             bool badlyBehind=distance>6f&&Game.GameTime>=_nextIndoorFollowUpdate;
             float moveRate=_profile.Health<=55?.65f:desiredBand==2?1.2f:1f;
             NativeFunction.Natives.SET_PED_MOVE_RATE_OVERRIDE(_dog,moveRate);
+            if(desiredBand==2)
+            {
+                MaintainSprintFollow(handler,leashed,distance,speedChanged||dogStopped);
+                ApplyAnimalPedSafeguards();
+                return;
+            }
             if(speedChanged||movingRecovery||badlyBehind)
             {
                 IssuePersistentFollow(handler,leashed,followSpeed,desiredBand);
                 ApplyAnimalPedSafeguards();
             }
+        }
+
+        private void MaintainSprintFollow(Ped handler,bool leashed,float distance,bool force)
+        {
+            if(handler==null||!handler.Exists()||!DogExists())return;
+            if(!force&&Game.GameTime<_nextSprintFollowRefresh)return;
+            _followSpeedBand=2;
+            _nextSprintFollowRefresh=Game.GameTime+550;
+            _nextIndoorFollowUpdate=Game.GameTime+1800;
+            // Keep the destination far enough ahead that the animal never reaches a stale
+            // follow offset and returns to idle between handler strides.
+            float lead=leashed?3.25f:distance>=12f?14f:10f;
+            float side=leashed?-.7f:-1.35f;
+            Vector3 sprintTarget=handler.GetOffsetPosition(new Vector3(side,lead,0f));
+            _dog.Tasks.FollowNavigationMeshToPosition(sprintTarget,handler.Heading,3f);
+            NativeFunction.Natives.SET_PED_KEEP_TASK(_dog,true);
         }
 
         private void IssuePersistentFollow(Ped handler,bool leashed,float speed,int speedBand)
