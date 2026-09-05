@@ -815,8 +815,14 @@ namespace AdvancedK9
         {
             if (!DogExists()) return;
             ResetFollowBreadcrumbs();
+            var handler=Game.LocalPlayer.Character;
+            // A sit/stay can leave the navigation transition sample stale while the handler
+            // moves away. Reset it before recall so normal distance is not mistaken for a
+            // teleport/elevator transition that snaps the K9 to the handler.
+            _lastHandlerNavigationPosition=handler.Position;
+            _handlerNavigationPositionReady=true;
             _dog.Tasks.Clear();
-            IssuePersistentFollow(Game.LocalPlayer.Character,_leashRope>=0);
+            IssuePersistentFollow(handler,_leashRope>=0);
             _state = _leashRope >= 0 ? K9State.Leashed : K9State.Following;
             Acknowledge("Following.");
         }
