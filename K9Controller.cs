@@ -2027,7 +2027,7 @@ namespace AdvancedK9
                         {
                             _scentTarget=apiTarget;_scentCollectedAt=Game.GameTime;
                             _scentRainAtCollection=NativeFunction.Natives.GET_RAIN_LEVEL<float>();
-                            _activeScentSample=NewScentSample(ScentArticleType.LastKnownLocation,"callout assignment",request.Details);
+                            _activeScentSample=NewScentSample(ScentArticleType.LastKnownLocationPad,"callout assignment",request.Details);
                             _activeScentSource="Callout — "+request.Details;_trailLost=false;
                         }
                     }
