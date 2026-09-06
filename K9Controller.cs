@@ -15,6 +15,7 @@ namespace AdvancedK9
     {
         private readonly ModConfig _config;
         private readonly PolicingRedefinedBridge _pr;
+        private readonly OperationalFrameworkAdapters _operations;
         private readonly DogCamera _camera = new DogCamera();
         private readonly GlassTacticalHud _hud = new GlassTacticalHud();
         private readonly ConcurrentQueue<K9Command> _voiceQueue = new ConcurrentQueue<K9Command>();
@@ -160,6 +161,7 @@ namespace AdvancedK9
             Localization.SetLanguage(config.MenuLanguage);
             CommandRegistry.Configure(config.CustomCommandPhrases);
             _pr = new PolicingRedefinedBridge(config.CompatibilityMode,config.CompatibilityShareResults,config.CompatibilityUseCdfInventory,config.CompatibilityShareWithNexusMdt);
+            _operations = new OperationalFrameworkAdapters(config.CompatibilityBlr,config.CompatibilityPdComp,config.CompatibilityDamageTracker);
             _roster = new K9Roster(config.DogName);
             _profile = new K9Profile(config,_roster.ActiveId);
             _trust = new TrustProfile(config.StartingTrust,config.ShowActionNotifications,_roster.ActiveId);
@@ -184,6 +186,7 @@ namespace AdvancedK9
                 if (!_onDuty) continue;
                 DrainSharedApiRequests();
                 _pr.TickDiagnostics();
+                _operations.Tick(Game.LocalPlayer.Character,DogEntityExists()?_dog:null);
                 _voice?.Tick();
                 _menu.Tick();
                 HandleLiveMenuEditors();
@@ -1015,7 +1018,7 @@ namespace AdvancedK9
                 if(_compatibilityPursuitSuspect!=null){if(_scentTarget==_compatibilityPursuitSuspect){_scentTarget=null;_activeScentSample=null;_activeScentSource="None";_trailLost=false;}if(DogExists()&&(_state==K9State.Tracking||_state==K9State.Containing||_state==K9State.Apprehending))Follow();Game.LogTrivial("AdvancedK9 pursuit cleanup: pursuit ended or subject unavailable; track, containment and target references cleared.");}
                 _compatibilityPursuitSuspect=null;_pursuitLastVehicle=null;_pursuitTrackStarted=false;_automaticTrackRequested=false;return;
             }
-            if(_pr.IsProtectedPed(suspect)){if(_scentTarget==suspect){_scentTarget=null;_activeScentSample=null;}_compatibilityPursuitSuspect=null;_pursuitLastVehicle=null;_pursuitTrackStarted=false;if(DogExists())Follow();Game.LogTrivial("AdvancedK9 pursuit cleanup: suspect arrested/restrained; K9 recalled.");return;}
+            if(IsProtectedOperationalPed(suspect)){if(_scentTarget==suspect){_scentTarget=null;_activeScentSample=null;}_compatibilityPursuitSuspect=null;_pursuitLastVehicle=null;_pursuitTrackStarted=false;if(DogExists())Follow();Game.LogTrivial("AdvancedK9 pursuit cleanup: suspect arrested/restrained; K9 recalled.");return;}
             if(_compatibilityPursuitSuspect!=suspect){_compatibilityPursuitSuspect=suspect;_pursuitLastVehicle=suspect.CurrentVehicle;_pursuitTrackStarted=false;Game.LogTrivial("AdvancedK9 pursuit integration: suspect assigned without requiring a PR/STP stop.");}
             var current=suspect.CurrentVehicle;
             if(current!=null&&current.Exists()){if(_pursuitLastVehicle!=null&&_pursuitLastVehicle.Exists()&&_pursuitLastVehicle.Handle!=current.Handle)Game.LogTrivial("AdvancedK9 pursuit cleanup: suspect changed vehicles; stale vehicle scent reference replaced.");_pursuitLastVehicle=current;}
@@ -1287,9 +1290,11 @@ namespace AdvancedK9
             K9IncidentLog.Write(_profile.Name,"K9 warning",outcome,target.Position);
         }
 
+        private bool IsProtectedOperationalPed(Ped ped)=>_pr.IsProtectedPed(ped)||_operations.IsProtected(ped);
+
         private Ped CompatibilitySubject()
         {
-            var handler=Game.LocalPlayer.Character;return GetValidAimedSuspect(false)??(_config.CompatibilityUseActiveTargets?_pr.GetActivePed(handler,250f):null)??CurrentPursuitSuspect()??(_scentTarget!=null&&_scentTarget.Exists()?_scentTarget:null);
+            var handler=Game.LocalPlayer.Character;return GetValidAimedSuspect(false)??(_config.CompatibilityUseActiveTargets?_pr.GetActivePed(handler,250f)??_operations.GetActivePed():null)??CurrentPursuitSuspect()??(_scentTarget!=null&&_scentTarget.Exists()?_scentTarget:null);
         }
         private void CompatibilityArrestHandoff()
         {
@@ -1316,7 +1321,7 @@ namespace AdvancedK9
             if(!DogExists())return;
             var target=CompatibilitySubject();
             if(target==null||!target.Exists()||target.IsDead){Game.DisplayNotification("~y~No valid suspect identified for containment.~s~~n~Aim at the suspect or use the active pursuit target.");return;}
-            if(_pr.IsProtectedPed(target)){Game.DisplayNotification("~y~That suspect is already restrained or surrendering.~s~ K9 containment is unnecessary.");return;}
+            if(IsProtectedOperationalPed(target)){Game.DisplayNotification("~y~That suspect is already restrained or surrendering.~s~ K9 containment is unnecessary.");return;}
             _containTarget=target;_perimeterCenter=target.Position;_perimeterRadius=_leashRope>=0?4f:5f;_perimeterPoint=0;_nextPerimeterMove=0;_state=K9State.Containing;
             Game.DisplayNotification("~o~K9 containment active.~s~~n~"+_profile.Name+" will block and alert without biting. APPREHEND remains a separate aimed command.");
             K9IncidentLog.Write(_profile.Name,"Containment","Suspect containment started",target.Position);
@@ -1363,7 +1368,7 @@ namespace AdvancedK9
         private void MaintainContainment()
         {
             if(_state!=K9State.Containing||!DogExists())return;
-            if(_containTarget!=null&&(!_containTarget.Exists()||_containTarget.IsDead||_pr.IsProtectedPed(_containTarget))){Sit();_containTarget=null;Game.DisplayNotification("~g~K9 containment complete.~s~ Suspect is no longer an active threat.");return;}
+            if(_containTarget!=null&&(!_containTarget.Exists()||_containTarget.IsDead||IsProtectedOperationalPed(_containTarget))){Sit();_containTarget=null;Game.DisplayNotification("~g~K9 containment complete.~s~ Suspect is no longer an active threat.");return;}
             if(_containTarget!=null)_perimeterCenter=_containTarget.Position;
             if(Game.GameTime<_nextPerimeterMove)return;
             _nextPerimeterMove=Game.GameTime+3500;
@@ -1588,7 +1593,7 @@ namespace AdvancedK9
             _voiceAimedTarget=null;
             if(target==null){Game.DisplayNotification("~y~No valid target identified.~s~~n~Aim your taser or firearm directly at a non-officer, then issue APPREHEND. No ped stop is required.");return;}
             if(_warnedTarget==target&&_warningSurrendered){Game.DisplayNotification("~r~K9 safety interlock: the warned suspect surrendered.~s~~n~Move in for arrest; apprehension was not deployed.");return;}
-            if(_config.CompatibilityProtectManagedPeds&&_pr.IsProtectedPed(target)){Game.DisplayNotification("~r~K9 safety interlock: restrained or surrendered suspect rejected.~s~~n~PR/STP stop status is not required for deployment, but protected peds cannot be bitten.");return;}
+            if(_config.CompatibilityProtectManagedPeds&&IsProtectedOperationalPed(target)){Game.DisplayNotification("~r~K9 safety interlock: restrained or surrendered suspect rejected.~s~~n~PR/STP stop status is not required for deployment, but protected peds cannot be bitten.");return;}
             if(_state==K9State.InVehicle)DoorPop(false);
             _state = K9State.Apprehending;
             _dog.Tasks.Clear();
