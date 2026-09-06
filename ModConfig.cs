@@ -52,6 +52,9 @@ namespace AdvancedK9
         public bool CompatibilityUseCdfInventory = true;
         public bool CompatibilityShareWithNexusMdt = true;
         public bool CompatibilityProtectManagedPeds = true;
+        public bool CompatibilityBlr = true;
+        public bool CompatibilityPdComp = true;
+        public bool CompatibilityDamageTracker = true;
         public string PortraitFile = "";
         public readonly Dictionary<K9Command,string[]> CustomCommandPhrases=new Dictionary<K9Command,string[]>();
         private readonly Dictionary<string,string> _kennelLocations=new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase);
@@ -117,6 +120,9 @@ namespace AdvancedK9
             result.CompatibilityUseCdfInventory = ini.ReadBoolean("Compatibility", "UseCdfInventory", result.CompatibilityUseCdfInventory);
             result.CompatibilityShareWithNexusMdt = ini.ReadBoolean("Compatibility", "ShareWithNexusMDT", result.CompatibilityShareWithNexusMdt);
             result.CompatibilityProtectManagedPeds = ini.ReadBoolean("Compatibility", "ProtectRestrainedPeds", result.CompatibilityProtectManagedPeds);
+            result.CompatibilityBlr = ini.ReadBoolean("Compatibility", "EnableBLR", result.CompatibilityBlr);
+            result.CompatibilityPdComp = ini.ReadBoolean("Compatibility", "EnablePDComp", result.CompatibilityPdComp);
+            result.CompatibilityDamageTracker = ini.ReadBoolean("Compatibility", "EnableDamageTracker", result.CompatibilityDamageTracker);
             result.PortraitFile = ini.ReadString("HUD", "PortraitFile", result.PortraitFile);
             foreach(var definition in CommandRegistry.All)
             {
