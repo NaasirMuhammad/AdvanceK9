@@ -2,6 +2,7 @@ using System;
 using AdvancedK9.API;
 using LSPD_First_Response.Mod.Callouts;
 using Rage;
+using Rage.Native;
 
 namespace AdvancedK9.Callouts
 {
@@ -43,8 +44,7 @@ namespace AdvancedK9.Callouts
 
         protected Vector3 StreetOffset(float forward,float side)
         {
-            var player=Game.LocalPlayer.Character;
-            return player.GetOffsetPosition(new Vector3(side,forward,0f));
+            return Game.LocalPlayer.Character.GetOffsetPosition(new Vector3(side,forward,0f));
         }
 
         protected Ped SpawnPed(string modelName,Vector3 position,float heading)
@@ -59,17 +59,59 @@ namespace AdvancedK9.Callouts
             if(vehicle!=null&&vehicle.Exists())vehicle.IsPersistent=true;return vehicle;
         }
 
-        protected void StagePoliceScene()
+        private Vehicle SpawnPoliceVehicle(Vector3 position,float heading)
         {
-            Vector3 cruiserPosition=World.GetNextPositionOnStreet(new Vector3(Scene.X-14f,Scene.Y-8f,Scene.Z));
-            PoliceVehicle=SpawnVehicle("police3",cruiserPosition,Game.LocalPlayer.Character.Heading);
-            Vector3 officerOnePosition=World.GetNextPositionOnStreet(new Vector3(Scene.X-7f,Scene.Y-3f,Scene.Z));
-            Vector3 officerTwoPosition=World.GetNextPositionOnStreet(new Vector3(Scene.X+6f,Scene.Y-4f,Scene.Z));
-            OfficerOne=SpawnPed("s_m_y_cop_01",officerOnePosition,0f);
-            OfficerTwo=SpawnPed("s_m_y_cop_01",officerTwoPosition,180f);
-            if(OfficerOne!=null&&OfficerOne.Exists())Rage.Native.NativeFunction.Natives.TASK_STAND_STILL(OfficerOne,-1);
-            if(OfficerTwo!=null&&OfficerTwo.Exists())Rage.Native.NativeFunction.Natives.TASK_STAND_STILL(OfficerTwo,-1);
-            Game.LogTrivial("AdvancedK9 Callouts: staged police scene for "+GetType().Name+".");
+            string[] models={"police3","police","sheriff"};
+            foreach(string model in models)
+            {
+                var vehicle=SpawnVehicle(model,position,heading);
+                if(vehicle!=null&&vehicle.Exists())return vehicle;
+            }
+            return null;
+        }
+
+        private Ped SpawnPoliceOfficer(Vector3 position,float heading)
+        {
+            string[] models={"s_m_y_cop_01","s_m_y_sheriff_01","s_f_y_cop_01"};
+            foreach(string model in models)
+            {
+                var officer=SpawnPed(model,position,heading);
+                if(officer!=null&&officer.Exists())return officer;
+            }
+            return null;
+        }
+
+        protected bool StagePoliceScene()
+        {
+            Vector3 cruiserPosition=SceneVehicle!=null&&SceneVehicle.Exists()
+                ?SceneVehicle.GetOffsetPosition(new Vector3(-4f,-9f,0f))
+                :new Vector3(Scene.X-10f,Scene.Y-7f,Scene.Z);
+            Vector3 officerOnePosition=SceneVehicle!=null&&SceneVehicle.Exists()
+                ?SceneVehicle.GetOffsetPosition(new Vector3(-2.5f,-2.5f,0f))
+                :new Vector3(Scene.X-4f,Scene.Y-3f,Scene.Z);
+            Vector3 officerTwoPosition=SceneVehicle!=null&&SceneVehicle.Exists()
+                ?SceneVehicle.GetOffsetPosition(new Vector3(2.5f,-3.5f,0f))
+                :new Vector3(Scene.X+4f,Scene.Y-3f,Scene.Z);
+            if(PoliceVehicle==null||!PoliceVehicle.Exists())PoliceVehicle=SpawnPoliceVehicle(cruiserPosition,Game.LocalPlayer.Character.Heading);
+            if(OfficerOne==null||!OfficerOne.Exists())OfficerOne=SpawnPoliceOfficer(officerOnePosition,0f);
+            if(OfficerTwo==null||!OfficerTwo.Exists())OfficerTwo=SpawnPoliceOfficer(officerTwoPosition,180f);
+            if(OfficerOne!=null&&OfficerOne.Exists())NativeFunction.Natives.TASK_STAND_STILL(OfficerOne,-1);
+            if(OfficerTwo!=null&&OfficerTwo.Exists())NativeFunction.Natives.TASK_STAND_STILL(OfficerTwo,-1);
+            bool vehicleReady=PoliceVehicle!=null&&PoliceVehicle.Exists();
+            bool officersReady=OfficerOne!=null&&OfficerOne.Exists()&&OfficerTwo!=null&&OfficerTwo.Exists();
+            Game.LogTrivial("AdvancedK9 Callouts: police scene verification for "+GetType().Name+
+                ": cruiser="+vehicleReady+", officer1="+(OfficerOne!=null&&OfficerOne.Exists())+
+                ", officer2="+(OfficerTwo!=null&&OfficerTwo.Exists())+".");
+            return vehicleReady&&officersReady;
+        }
+
+        protected float K9DistanceTo(Vector3 position)
+        {
+            K9ApiSnapshot snapshot;
+            if(!AdvancedK9Api.TryGetSnapshot(out snapshot)||snapshot.DogHandle<=0)return float.MaxValue;
+            if(!NativeFunction.Natives.DOES_ENTITY_EXIST<bool>(snapshot.DogHandle))return float.MaxValue;
+            Vector3 dogPosition=NativeFunction.Natives.GET_ENTITY_COORDS<Vector3>(snapshot.DogHandle,true);
+            return dogPosition.DistanceTo(position);
         }
 
         protected void RouteToScene(string instruction)
