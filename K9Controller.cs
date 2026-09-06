@@ -2147,28 +2147,39 @@ namespace AdvancedK9
             }
             try
             {
+                Ped apiTarget=null;
                 if(request.TargetHandle!=0)
+                    apiTarget=World.GetAllPeds().FirstOrDefault(p=>p!=null&&p.Exists()&&ApiHandleOf(p)==request.TargetHandle);
+                if((apiTarget==null||!apiTarget.Exists())&&command==K9Command.AssignScent)
                 {
-                    Ped apiTarget=World.GetAllPeds().FirstOrDefault(p=>p!=null&&p.Exists()&&ApiHandleOf(p)==request.TargetHandle);
-                    if(apiTarget!=null&&!apiTarget.IsDead&&!LspdfrBridge.IsPedCop(apiTarget))
+                    Vector3 targetPosition=new Vector3(request.TargetX,request.TargetY,request.TargetZ);
+                    apiTarget=World.GetAllPeds()
+                        .Where(p=>p!=null&&p.Exists()&&!p.IsDead&&!LspdfrBridge.IsPedCop(p))
+                        .OrderBy(p=>p.DistanceTo(targetPosition))
+                        .FirstOrDefault(p=>p.DistanceTo(targetPosition)<=15f);
+                    Game.LogTrivial("AdvancedK9 API scent target fallback: requested="+targetPosition+
+                        ", resolved="+(apiTarget!=null&&apiTarget.Exists()?apiTarget.Position.ToString():"none")+".");
+                }
+                if(apiTarget!=null&&apiTarget.Exists()&&!apiTarget.IsDead&&!LspdfrBridge.IsPedCop(apiTarget))
+                {
+                    if(command==K9Command.AssignScent)
                     {
-                        if(command==K9Command.AssignScent)
-                        {
-                            _pendingCalloutScentTarget=apiTarget;
-                            _pendingCalloutScentPosition=new Vector3(request.X,request.Y,request.Z);
-                            _pendingCalloutScentDetails=request.Details??"callout vehicle scent";
-                            AdvancedK9ApiHost.PublishResult(request.RequestId,true,"Callout scent source registered; awaiting handler command.");
-                            Game.LogTrivial("AdvancedK9 API scent source assigned: context="+_activeSharedApiContextId+", source="+_pendingCalloutScentDetails+".");
-                            return;
-                        }
-                        _voiceAimedTarget=apiTarget;
-                        if(command==K9Command.Track||command==K9Command.CollectScent)
-                        {
-                            _scentTarget=apiTarget;_scentCollectedAt=Game.GameTime;
-                            _scentRainAtCollection=NativeFunction.Natives.GET_RAIN_LEVEL<float>();
-                            _activeScentSample=NewScentSample(ScentArticleType.LastKnownLocationPad,"callout assignment",request.Details);
-                            _activeScentSource="Callout — "+request.Details;_trailLost=false;
-                        }
+                        _pendingCalloutScentTarget=apiTarget;
+                        _pendingCalloutScentPosition=new Vector3(request.X,request.Y,request.Z);
+                        _pendingCalloutScentDetails=request.Details??"callout vehicle scent";
+                        AdvancedK9ApiHost.PublishResult(request.RequestId,true,"Callout scent source registered; awaiting handler command.");
+                        Game.LogTrivial("AdvancedK9 API scent source assigned: context="+_activeSharedApiContextId+
+                            ", collection="+_pendingCalloutScentPosition+", target="+apiTarget.Position+
+                            ", source="+_pendingCalloutScentDetails+".");
+                        return;
+                    }
+                    _voiceAimedTarget=apiTarget;
+                    if(command==K9Command.Track||command==K9Command.CollectScent)
+                    {
+                        _scentTarget=apiTarget;_scentCollectedAt=Game.GameTime;
+                        _scentRainAtCollection=NativeFunction.Natives.GET_RAIN_LEVEL<float>();
+                        _activeScentSample=NewScentSample(ScentArticleType.LastKnownLocationPad,"callout assignment",request.Details);
+                        _activeScentSource="Callout — "+request.Details;_trailLost=false;
                     }
                 }
                 if(command==K9Command.AssignScent)
