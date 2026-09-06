@@ -53,6 +53,7 @@ namespace AdvancedK9.API
         public static readonly string SnapshotPath=Path.Combine(DirectoryPath,"AdvancedK9Api.state");
         public static readonly string RequestPath=Path.Combine(DirectoryPath,"AdvancedK9Api.request");
         public static readonly string ResultPath=Path.Combine(DirectoryPath,"AdvancedK9Api.result");
+        public static readonly string CalloutRequestPath=Path.Combine(DirectoryPath,"AdvancedK9Callout.request");
 
         public static bool TryGetSnapshot(out K9ApiSnapshot snapshot)
         {
@@ -93,6 +94,26 @@ namespace AdvancedK9.API
                 Pair("TargetType",request.TargetType),Pair("X",request.X),Pair("Y",request.Y),Pair("Z",request.Z),Pair("Details",request.Details)
             });
             return request.RequestId;
+        }
+
+        public static void RequestCallout(string calloutName)
+        {
+            WriteValues(CalloutRequestPath,new[]{Pair("RequestedUtcTicks",DateTime.UtcNow.Ticks),Pair("CalloutName",calloutName??"")});
+        }
+
+        public static bool TryTakeCalloutRequest(out string calloutName)
+        {
+            calloutName="";
+            try
+            {
+                if(!File.Exists(CalloutRequestPath))return false;
+                var values=ReadValues(CalloutRequestPath);
+                File.Delete(CalloutRequestPath);
+                long requested=ReadLong(values,"RequestedUtcTicks");
+                calloutName=Read(values,"CalloutName");
+                return !string.IsNullOrWhiteSpace(calloutName)&&requested>0&&DateTime.UtcNow.Ticks-requested<TimeSpan.FromSeconds(15).Ticks;
+            }
+            catch{return false;}
         }
 
         public static bool TryGetResult(string requestId,out K9ApiCommandResult result)
