@@ -1163,6 +1163,7 @@ namespace AdvancedK9
             if(compatibility!=null&&compatibility.Inconclusive){SetHudAlert("INCONCLUSIVE — INVENTORY UNAVAILABLE");Sit();_hudSearchProgress=100;_hudSearchLabel="";Game.LogTrivial("AdvancedK9 search result: inconclusive on "+TargetLabel(target)+"; no positive or negative K9 indication was recorded.");return;}
             var positive=compatibility!=null?compatibility.Positive:(_pr.IsAvailable?false:_random.NextDouble()<_config.PositiveChance);
             var resultSpecialty=compatibility!=null&&compatibility.Specialty!=DetectionSpecialty.General?compatibility.Specialty:positive&&specialty==DetectionSpecialty.General?CertifiedGeneralSearchSpecialty():specialty;
+            var presentedOdors=compatibility!=null&&compatibility.Odors.Count>0?compatibility.Odors.Distinct().ToList():positive&&resultSpecialty!=DetectionSpecialty.General?new List<DetectionSpecialty>{resultSpecialty}:new List<DetectionSpecialty>();
             if (positive && _random.NextDouble() > _trust.DetectionReliability)
             {
                 Game.DisplayNotification("~o~Uncertain K9 response.~s~ Build trust and repeat the search.");
@@ -1171,19 +1172,28 @@ namespace AdvancedK9
             }
             if (positive)
             {
-                SetHudAlert(SpecialtyLabel(resultSpecialty).ToUpperInvariant());
+                string odorPresentation=string.Join(" + ",presentedOdors.Select(s=>SpecialtyLabel(s).ToUpperInvariant()));
+                SetHudAlert(odorPresentation);
                 Sit();
-                if(resultSpecialty==DetectionSpecialty.Explosives)
+                bool explosivePresent=presentedOdors.Contains(DetectionSpecialty.Explosives);
+                if(explosivePresent)
                 {
                     _explosiveSearchLockouts.Add(target.Handle);_dog.Tasks.Clear();NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(_dog,Game.LocalPlayer.Character,-.8f,-1.2f,0f,2.4f,-1,1f,true);GameFiber.Wait(1200);Sit();
-                    Game.DisplayNotification("~r~EXPLOSIVE ODOR — SILENT ALERT.~s~~n~K9 recalled to safety. Evidence marked; establish a perimeter and request bomb squad. Search lockout enabled.");
+                    Game.DisplayNotification("~r~MULTI-ODOR ALERT — EXPLOSIVE SAFETY.~s~~n~Detected: "+odorPresentation+"~n~K9 recalled silently. Evidence marked; establish a perimeter and request bomb squad.");
                 }
-                else Bark(3);
+                else
+                {
+                    Bark(3);
+                    Game.DisplayNotification("~r~K9 POSITIVE ALERT~s~~n~Detected trained odors: "+odorPresentation);
+                }
                 _trust.Change(1, "successful detection");
                 _profile.RecordSearch();
-                _pr.RecordK9Indication(target,true,resultSpecialty,_profile.Name);
-                _evidenceMarkers.Add(_profile.Name,TargetLabel(target),SpecialtyLabel(resultSpecialty),_lastSearchAlertZone,_lastSearchAlertPosition);
-                Game.LogTrivial("AdvancedK9 search result: positive "+SpecialtyLabel(resultSpecialty)+" indication on "+TargetLabel(target)+" at "+_lastSearchAlertZone+"; "+(resultSpecialty==DetectionSpecialty.Explosives?"silent recall and lockout":"three-bark alert")+" authorized.");
+                foreach(var detectedOdor in presentedOdors)
+                {
+                    _pr.RecordK9Indication(target,true,detectedOdor,_profile.Name);
+                    _evidenceMarkers.Add(_profile.Name,TargetLabel(target),SpecialtyLabel(detectedOdor),_lastSearchAlertZone,_lastSearchAlertPosition);
+                }
+                Game.LogTrivial("AdvancedK9 search result: simultaneous positive indications ["+string.Join(",",presentedOdors)+"] on "+TargetLabel(target)+" at "+_lastSearchAlertZone+"; "+(explosivePresent?"silent recall and lockout":"three-bark alert")+" authorized.");
             }
             else
             {
