@@ -2,15 +2,18 @@
   <PropertyGroup>
     <TargetFramework>net48</TargetFramework>
     <LangVersion>latest</LangVersion>
-    <AssemblyName>LSPD First Response</AssemblyName>
-    <RootNamespace>LSPD_First_Response.Mod.API</RootNamespace>
+    <AssemblyName>AdvancedK9.Callouts</AssemblyName>
+    <RootNamespace>AdvancedK9.Callouts</RootNamespace>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
-    <BaseIntermediateOutputPath>obj\LspdfrApiShim\</BaseIntermediateOutputPath>
-    <OutputPath>..\..\..\bin\$(Configuration)\net48\shim\</OutputPath>
+    <BaseIntermediateOutputPath>obj\Callouts\</BaseIntermediateOutputPath>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="Plugin.cs" />
+    <Compile Include="Callouts/**/*.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="AdvancedK9.API.csproj" Private="false" />
+    <ProjectReference Include="Bridge/LspdfrApiShim/LspdfrApiShim.csproj" Private="false" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="RagePluginHook" Version="1.124.0" ExcludeAssets="runtime" />

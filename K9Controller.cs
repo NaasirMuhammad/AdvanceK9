@@ -2017,6 +2017,21 @@ namespace AdvancedK9
             }
             try
             {
+                if(request.TargetHandle!=0)
+                {
+                    Ped apiTarget=World.GetAllPeds().FirstOrDefault(p=>p!=null&&p.Exists()&&ApiHandleOf(p)==request.TargetHandle);
+                    if(apiTarget!=null&&!apiTarget.IsDead&&!LspdfrBridge.IsPedCop(apiTarget))
+                    {
+                        _voiceAimedTarget=apiTarget;
+                        if(command==K9Command.Track||command==K9Command.CollectScent)
+                        {
+                            _scentTarget=apiTarget;_scentCollectedAt=Game.GameTime;
+                            _scentRainAtCollection=NativeFunction.Natives.GET_RAIN_LEVEL<float>();
+                            _activeScentSample=NewScentSample(ScentArticleType.LastKnownLocation,"callout assignment",request.Details);
+                            _activeScentSource="Callout — "+request.Details;_trailLost=false;
+                        }
+                    }
+                }
                 Execute(command);
                 AdvancedK9ApiHost.PublishResult(request.RequestId,true,_profile.Name+" accepted "+command+".");
                 Game.LogTrivial("AdvancedK9 API command accepted: context="+_activeSharedApiContextId+", command="+command+".");
