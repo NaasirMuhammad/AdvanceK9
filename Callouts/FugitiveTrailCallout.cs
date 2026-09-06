@@ -9,6 +9,7 @@ namespace AdvancedK9.Callouts
     public sealed class FugitiveTrailCallout : AdvancedK9Callout
     {
         private int _outcome;
+        private bool _sceneBriefed;
         private bool _scentPresented;
         private bool _suspectLocated;
         private uint _locatedAt;
@@ -27,6 +28,7 @@ namespace AdvancedK9.Callouts
             }
             SceneVehicle=SpawnVehicle("primo",Scene,Random.Next(360));
             StagePoliceScene();
+            ControlSceneTraffic();
             return SceneVehicle!=null&&SceneVehicle.Exists();
         }
 
@@ -51,20 +53,21 @@ namespace AdvancedK9.Callouts
                 (PoliceVehicle==null||!PoliceVehicle.Exists()||OfficerOne==null||!OfficerOne.Exists()||OfficerTwo==null||!OfficerTwo.Exists()))
                 StagePoliceScene();
 
-            if(!_scentPresented&&player.DistanceTo(Scene)<28f)
+            if(!_sceneBriefed&&player.DistanceTo(Scene)<28f)
             {
-                _scentPresented=true;
-                Game.DisplayNotification("~b~On-scene officer:~s~ The suspect fled on foot. I preserved their scent from the driver seat. Bring Rex beside the vehicle to begin the trail.");
+                _sceneBriefed=true;
+                Game.DisplayNotification("~b~On-scene officer:~s~ The suspect fled on foot. I preserved their scent from the driver seat.~n~~y~Deploy Rex and bring him beside me before requesting the article.");
             }
 
-            if(!ApiRequested&&_scentPresented)
+            if(!ApiRequested&&_sceneBriefed&&K9ReadyOnFoot()&&K9DistanceTo(Scene)<24f)
             {
+                _scentPresented=true;
                 RequestK9("Track",Subject,"officer-presented scent article collected from abandoned vehicle driver seat");
                 if(ApiRequested)
                 {
                     ClearSceneRoute();
-                    Game.DisplayNotification("~b~AdvancedK9:~s~ The officer handed over the scent article and Rex has the assigned scent. Follow Rex and watch his body language; repeating TRACK will retain this callout target.");
-                    Game.LogTrivial("AdvancedK9 Callouts: officer scent handoff submitted for FugitiveTrail subject.");
+                    Game.DisplayNotification("~b~AdvancedK9:~s~ Rex is out of the vehicle. The officer presents the scent article now; Rex has the assigned trail.");
+                    Game.LogTrivial("AdvancedK9 Callouts: on-foot officer scent handoff submitted for FugitiveTrail subject.");
                 }
             }
 
