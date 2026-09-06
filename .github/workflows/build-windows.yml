@@ -78,8 +78,9 @@ jobs:
           $configRoot = Join-Path $lspdfrRoot 'AdvancedK9'
           New-Item -ItemType Directory -Force -Path $configRoot | Out-Null
           Copy-Item $main.FullName (Join-Path $pluginRoot 'AdvancedK9.dll')
-          Copy-Item $api.FullName (Join-Path $pluginRoot 'AdvancedK9.API.dll')
+          Copy-Item $api.FullName (Join-Path $lspdfrRoot 'AdvancedK9.API.dll')
           Copy-Item $bridge (Join-Path $lspdfrRoot 'AdvancedK9.LSPDFRBridge.dll')
+          if (Test-Path (Join-Path $pluginRoot 'AdvancedK9.API.dll')) { throw 'AdvancedK9.API.dll must not be placed in Plugins root because RPH will try to execute it as a plugin.' }
           Copy-Item $callouts (Join-Path $lspdfrRoot 'AdvancedK9.Callouts.dll')
           Copy-Item $lemon.FullName (Join-Path $package 'LemonUI.RagePluginHook.dll')
           Copy-Item $naudioCore.FullName (Join-Path $package 'NAudio.Core.dll')
