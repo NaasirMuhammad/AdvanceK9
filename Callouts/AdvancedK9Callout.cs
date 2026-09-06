@@ -17,6 +17,9 @@ namespace AdvancedK9.Callouts
         protected Vehicle PoliceVehicle;
         protected Ped OfficerOne;
         protected Ped OfficerTwo;
+        protected Ped ParentTwo;
+        protected Rage.Object EvidenceProp;
+        protected Rage.Object CoverProp;
         protected Blip SubjectBlip;
         protected Blip SceneBlip;
         protected bool ApiRequested;
@@ -24,6 +27,7 @@ namespace AdvancedK9.Callouts
         protected bool Finished;
         private bool _cleanupCompleted;
         private bool _trafficControlled;
+        private uint _nextSupportMove;
 
         protected bool Prepare(string message,Vector3 scene,float radius,bool snapToStreet=true)
         {
@@ -58,6 +62,12 @@ namespace AdvancedK9.Callouts
         {
             var model=new Model(modelName);if(!model.IsValid)return null;model.LoadAndWait();var vehicle=new Vehicle(model,position,heading);model.Dismiss();
             if(vehicle!=null&&vehicle.Exists())vehicle.IsPersistent=true;return vehicle;
+        }
+
+        protected Rage.Object SpawnProp(string modelName,Vector3 position)
+        {
+            var model=new Model(modelName);if(!model.IsValid)return null;model.LoadAndWait();var prop=new Rage.Object(model,position);model.Dismiss();
+            if(prop!=null&&prop.Exists()){prop.IsPersistent=true;NativeFunction.Natives.PLACE_OBJECT_ON_GROUND_PROPERLY(prop);}return prop;
         }
 
         private Vehicle SpawnPoliceVehicle(Vector3 position,float heading)
@@ -160,6 +170,45 @@ namespace AdvancedK9.Callouts
             Game.DisplayNotification("~b~AdvancedK9 callout:~s~ preserved vehicle scent is ready. Command Rex to COLLECT SCENT or TRACK beside the abandoned vehicle.");
         }
 
+        protected void AssignCalloutScent(Ped target,Vector3 collectionPosition,string details,string instruction)
+        {
+            if(ApiRequested||target==null||!target.Exists())return;
+            ApiRequested=true;
+            AdvancedK9Api.SendCommand("AssignScent",ContextId,HandleOf(target),"Ped",collectionPosition.X,collectionPosition.Y,collectionPosition.Z,details,target.Position.X,target.Position.Y,target.Position.Z);
+            Game.DisplayNotification("~b~AdvancedK9 callout:~s~ "+instruction);
+        }
+
+        protected void SupportOfficersFollowK9()
+        {
+            if(Game.GameTime<_nextSupportMove)return;
+            K9ApiSnapshot snapshot;
+            if(!AdvancedK9Api.TryGetSnapshot(out snapshot)||!string.Equals(snapshot.State,"Tracking",StringComparison.OrdinalIgnoreCase)||snapshot.DogHandle<=0)return;
+            if(!NativeFunction.Natives.DOES_ENTITY_EXIST<bool>(snapshot.DogHandle))return;
+            _nextSupportMove=Game.GameTime+3500;
+            Vector3 dogPosition=NativeFunction.Natives.GET_ENTITY_COORDS<Vector3>(snapshot.DogHandle,true);
+            if(OfficerOne!=null&&OfficerOne.Exists()&&OfficerOne.DistanceTo(dogPosition)>7f)OfficerOne.Tasks.FollowNavigationMeshToPosition(dogPosition,OfficerOne.Heading,3.4f);
+            if(OfficerTwo!=null&&OfficerTwo.Exists()&&OfficerTwo.DistanceTo(dogPosition)>10f)OfficerTwo.Tasks.FollowNavigationMeshToPosition(dogPosition,OfficerTwo.Heading,3.2f);
+        }
+
+        protected void BeginAutomaticTransport(string completionMessage)
+        {
+            if(Subject==null||!Subject.Exists()||PoliceVehicle==null||!PoliceVehicle.Exists()){Resolve(completionMessage);return;}
+            Game.DisplayNotification("~b~On-scene units:~s~ Suspect secured. We will handle transport.");
+            var suspect=Subject;var officer=OfficerOne;var transport=PoliceVehicle;
+            GameFiber.StartNew(delegate
+            {
+                try
+                {
+                    if(officer!=null&&officer.Exists())officer.Tasks.EnterVehicle(transport,-1).WaitForCompletion(7000);
+                    if(suspect.Exists())suspect.Tasks.EnterVehicle(transport,1).WaitForCompletion(7000);
+                    if(officer!=null&&officer.Exists()&&transport.Exists())NativeFunction.Natives.TASK_VEHICLE_DRIVE_WANDER(officer,transport,20f,786603);
+                    GameFiber.Wait(1800);
+                }
+                catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: automatic transport fallback contained: "+ex);}
+                Resolve(completionMessage);
+            },"AdvancedK9 automatic prisoner transport");
+        }
+
         protected void RequestK9(string command,Ped target,string details)
         {
             if(ApiRequested||!K9Available())return;ApiRequested=true;
@@ -179,8 +228,11 @@ namespace AdvancedK9.Callouts
             ClearSceneRoute();
             if(SubjectBlip!=null&&SubjectBlip.Exists())SubjectBlip.Delete();
             if(Reporter!=null&&Reporter.Exists())Reporter.Dismiss();
+            if(ParentTwo!=null&&ParentTwo.Exists())ParentTwo.Dismiss();
             if(Subject!=null&&Subject.Exists())Subject.Dismiss();
             if(SceneVehicle!=null&&SceneVehicle.Exists())SceneVehicle.Dismiss();
+            if(EvidenceProp!=null&&EvidenceProp.Exists())EvidenceProp.Dismiss();
+            if(CoverProp!=null&&CoverProp.Exists())CoverProp.Dismiss();
             if(OfficerOne!=null&&OfficerOne.Exists())OfficerOne.Dismiss();
             if(OfficerTwo!=null&&OfficerTwo.Exists())OfficerTwo.Dismiss();
             if(PoliceVehicle!=null&&PoliceVehicle.Exists())PoliceVehicle.Dismiss();
