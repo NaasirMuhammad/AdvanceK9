@@ -1,4 +1,4 @@
-ADVANCED K9 v0.23.2-beta — DRAG-AND-DROP INSTALL
+ADVANCED K9 v0.24.0-beta — DRAG-AND-DROP INSTALL
 
 1. Close GTA V and RAGE Plugin Hook.
 2. Open the compiled release ZIP.
@@ -14,10 +14,18 @@ Correct file locations
   LemonUI.RagePluginHook.dll
   Plugins\AdvancedK9.dll
   Plugins\LSPDFR\AdvancedK9.LSPDFRBridge.dll
+  Plugins\LSPDFR\AdvancedK9.Callouts.dll
+  Plugins\LSPDFR\AdvancedK9\AdvancedK9.API.dll
   Plugins\LSPDFR\AdvancedK9\AdvancedK9.default.ini
 
 The default file is copied to AdvancedK9.ini only on a first installation.
 Existing AdvancedK9.ini files and user settings are never replaced by updates.
+
+Before installing this update, remove either obsolete API location if present:
+  Plugins\AdvancedK9.API.dll
+  Plugins\LSPDFR\AdvancedK9.API.dll
+The supported API location is Plugins\LSPDFR\AdvancedK9\AdvancedK9.API.dll.
+This prevents RPH and LSPDFR ForceDuty from scanning or locking the library.
 
 Remove any older copy at Plugins\LSPDFR\AdvancedK9.dll. AdvancedK9 is a
 RAGE Plugin Hook plugin that monitors LSPDFR duty state; it is not loaded by
