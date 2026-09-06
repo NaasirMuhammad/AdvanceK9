@@ -62,12 +62,12 @@ namespace AdvancedK9.Callouts
             if(!ApiRequested&&_sceneBriefed&&K9ReadyOnFoot()&&K9DistanceTo(Scene)<24f)
             {
                 _scentPresented=true;
-                RequestK9("Track",Subject,"officer-presented scent article collected from abandoned vehicle driver seat");
+                AssignCalloutScent(Subject,"preserved scent article from abandoned vehicle driver seat");
                 if(ApiRequested)
                 {
                     ClearSceneRoute();
-                    Game.DisplayNotification("~b~AdvancedK9:~s~ Rex is out of the vehicle. The officer presents the scent article now; Rex has the assigned trail.");
-                    Game.LogTrivial("AdvancedK9 Callouts: on-foot officer scent handoff submitted for FugitiveTrail subject.");
+                    Game.DisplayNotification("~b~On-scene officer:~s~ The scent article is inside the driver area. Stand beside the abandoned vehicle and command Rex to COLLECT SCENT or TRACK.");
+                    Game.LogTrivial("AdvancedK9 Callouts: fugitive vehicle scent source registered; awaiting handler command.");
                 }
             }
 
