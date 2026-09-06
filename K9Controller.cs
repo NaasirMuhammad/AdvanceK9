@@ -595,7 +595,11 @@ namespace AdvancedK9
                     case K9Command.SearchNarcotics: BeginSearch(false,DetectionSpecialty.Narcotics); break;
                     case K9Command.SearchExplosives: BeginSearch(false,DetectionSpecialty.Explosives); break;
                     case K9Command.SearchWeapons: BeginSearch(false,DetectionSpecialty.Weapons); break;
-                    case K9Command.ClearEvidenceMarkers: _evidenceMarkers.ClearSession();Game.DisplayNotification("~g~K9 evidence map markers cleared.~s~~n~CSV records remain available for reports.");break;
+                    case K9Command.ClearEvidenceMarkers:
+                        _evidenceMarkers.ClearSession();
+                        _pendingCalloutScentTarget=null;_pendingCalloutScentDetails="";
+                        Game.DisplayNotification("~g~K9 evidence map markers cleared.~s~~n~CSV records remain available for reports.");
+                        break;
                     case K9Command.CollectScent: CollectScent(); break;
                     case K9Command.Track: Track(); break;
                     case K9Command.FindTrail: ReacquireTrail(); break;
