@@ -11,7 +11,16 @@ namespace AdvancedK9.Callouts
         private int _outcome;
         public override bool OnBeforeCalloutDisplayed()
         {
-            return Prepare("Fugitive trail from abandoned vehicle",StreetOffset(520f,Random.Next(-160,161)),110f)&&base.OnBeforeCalloutDisplayed();
+            try
+            {
+                return Prepare("Fugitive trail from abandoned vehicle",StreetOffset(520f,Random.Next(-160,161)),110f);
+            }
+            catch(System.Exception ex)
+            {
+                Game.LogTrivial("AdvancedK9 Callouts: "+GetType().Name+" primary scene calculation failed; using safe fallback: "+ex);
+                var playerPosition=Game.LocalPlayer.Character.Position;
+                return Prepare("Fugitive trail from abandoned vehicle",new Vector3(playerPosition.X+260f,playerPosition.Y,playerPosition.Z),110f);
+            }
         }
         public override bool OnCalloutAccepted()
         {
