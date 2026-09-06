@@ -1,22 +1,37 @@
-# AdvancedK9 Future Roadmap — Updated Through v0.23.2-beta
+# AdvancedK9 Future Roadmap — Updated Through v0.24.0-beta
 
-This roadmap tracks completed work through AdvancedK9 v0.23.2-beta.
+This roadmap tracks completed work through AdvancedK9 v0.24.0-beta.
 
 Status key:
 
-- ✅ Implemented through v0.23.2-beta
+- ✅ Implemented through v0.24.0-beta
 - 🟨 Partially implemented; expansion remains
 - ⬜ Not yet implemented
 
 Current verified baseline:
 
-- AdvancedK9 core assembly `0.23.2.0`
-- LSPDFR companion bridge assembly `0.23.2.0`
-- Windows release build pending
+- AdvancedK9 core assembly `0.24.0.0`
+- LSPDFR companion bridge assembly `0.24.0.0`
+- Windows release build verified by GitHub Actions
 - Release branch `codex/advancedk9-next-beta`
-- Release artifact `AdvancedK9-v0.23.2-beta.zip`
+- Release artifact `AdvancedK9-v0.24.0-beta.zip`
 - PR #18 remains open and unmerged
 - Drag-and-drop updates preserve an existing `AdvancedK9.ini`
+
+## Completed in v0.24.0-beta
+
+- ✅ Shared versioned callout API and independently loadable callout assembly
+- ✅ Lost Child dynamic test callout
+- ✅ Fugitive Trail from an Abandoned Vehicle
+- ✅ Armed Burglary Suspect Hiding
+- ✅ Simultaneous multi-odor detection presentation and per-category evidence sharing
+- ✅ Persistent multi-position containment commands
+- ✅ Optional BLR, PD Comp, and Damage Tracker Framework adapters
+- ✅ Guided shift lifecycle, saved duty hours, and shift summaries
+- ✅ Operational outcome XP expansion with duplicate suppression
+- ✅ Lost-visual/hidden pursuit tracking and configurable explosive-safety options
+- ✅ Preserved v0.23.2 movement, leash, seated recall, vehicle, and elevator-transition fixes
+
 
 ## Completed in v0.22-beta
 
