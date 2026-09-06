@@ -2,7 +2,7 @@ using System.Reflection;
 
 [assembly: AssemblyTitle("AdvancedK9 LSPDFR Bridge")]
 [assembly: AssemblyDescription("LSPDFR AppDomain companion for AdvancedK9 Beta")]
-[assembly: AssemblyCompany("Naasir Muhammad")]
+[assembly: AssemblyCompany("mtennekten")]
 [assembly: AssemblyProduct("AdvancedK9 LSPDFR Bridge Beta")]
 [assembly: AssemblyVersion("0.24.0.0")]
 [assembly: AssemblyFileVersion("0.24.0.0")]
