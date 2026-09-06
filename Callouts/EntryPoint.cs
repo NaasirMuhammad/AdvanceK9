@@ -56,7 +56,7 @@ namespace AdvancedK9.Callouts
             try
             {
                 Game.LogTrivial("AdvancedK9 Callouts: menu requested "+name+".");
-                Functions.StartCallout(name);
+                var start=typeof(Functions).GetMethod("StartCallout",BindingFlags.Public|BindingFlags.Static,null,new[]{typeof(string)},null);\n                if(start==null)throw new MissingMethodException("LSPDFR Functions.StartCallout(string) is unavailable.");\n                start.Invoke(null,new object[]{name});
                 Game.DisplayNotification("~b~AdvancedK9 Callouts:~s~ requested "+name+". Accept it through your normal LSPDFR/dispatch control.");
             }
             catch(Exception ex)
