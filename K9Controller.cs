@@ -1456,6 +1456,11 @@ namespace AdvancedK9
 
         private void Track()
         {
+            if(_state==K9State.InVehicle)
+            {
+                Game.DisplayNotification("~y~Tracking cannot begin while the K9 is secured in the vehicle.~s~~n~Stop, deploy Rex, return to the scent source, then command TRACK.");
+                return;
+            }
             var handler=Game.LocalPlayer.Character;
             if((_scentTarget==null||!_scentTarget.Exists()||_scentTarget.IsDead)&&
                 _pendingCalloutScentTarget!=null&&_pendingCalloutScentTarget.Exists()&&!_pendingCalloutScentTarget.IsDead&&
