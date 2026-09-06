@@ -1,7 +1,6 @@
 using System;
 using System.IO;
 using System.Reflection;
-using System.Windows.Forms;
 using AdvancedK9.API;
 using LSPD_First_Response.Mod.API;
 using Rage;
@@ -12,7 +11,6 @@ namespace AdvancedK9.Callouts
     {
         private static bool _registered;
         private static bool _running;
-        private static bool _menuOpen;
         private static ResolveEventHandler _dependencyResolver;
 
         public override void Initialize()
@@ -29,30 +27,21 @@ namespace AdvancedK9.Callouts
                 _registered=count>0;
                 Game.LogTrivial("AdvancedK9 Callouts: registered "+count+"/3 callouts after LSPDFR duty initialization.");
             },"AdvancedK9 delayed callout registration");
-            GameFiber.StartNew(CalloutMenuLoop,"AdvancedK9 callout menu");
+            GameFiber.StartNew(CalloutRequestLoop,"AdvancedK9 callout request listener");
         }
 
-        private static void CalloutMenuLoop()
+        private static void CalloutRequestLoop()
         {
             while(_running)
             {
-                GameFiber.Yield();
-                if(Game.IsKeyDown(Keys.F7))
-                {
-                    _menuOpen=!_menuOpen;
-                    GameFiber.Wait(250);
-                }
-                if(!_menuOpen)continue;
-                Game.DisplayHelp("~b~AdvancedK9 Callouts~s~~n~~y~1~s~ Lost Child~n~~y~2~ Fugitive Trail~n~~y~3~ Armed Burglary~n~~y~F7~s~ Close",10);
-                if(Game.IsKeyDown(Keys.D1)){StartSelectedCallout("AdvancedK9: Lost Child");GameFiber.Wait(250);}
-                else if(Game.IsKeyDown(Keys.D2)){StartSelectedCallout("AdvancedK9: Fugitive Trail");GameFiber.Wait(250);}
-                else if(Game.IsKeyDown(Keys.D3)){StartSelectedCallout("AdvancedK9: Armed Burglary");GameFiber.Wait(250);}
+                GameFiber.Wait(100);
+                string name;
+                if(AdvancedK9Api.TryTakeCalloutRequest(out name))StartSelectedCallout(name);
             }
         }
 
         private static void StartSelectedCallout(string name)
         {
-            _menuOpen=false;
             try
             {
                 Game.LogTrivial("AdvancedK9 Callouts: menu requested "+name+".");
@@ -93,7 +82,6 @@ namespace AdvancedK9.Callouts
         public override void Finally()
         {
             _running=false;
-            _menuOpen=false;
             _registered=false;
             if(_dependencyResolver!=null){AppDomain.CurrentDomain.AssemblyResolve-=_dependencyResolver;_dependencyResolver=null;}
             Game.LogTrivial("AdvancedK9 Callouts: unloaded.");
