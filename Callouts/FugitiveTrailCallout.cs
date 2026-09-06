@@ -37,7 +37,8 @@ namespace AdvancedK9.Callouts
         {
             if(Finished||Subject==null||!Subject.Exists()){if(!Finished)Resolve("~r~Fugitive Trail ended: suspect unavailable.");return;}
             var player=Game.LocalPlayer.Character;
-            if(!ApiRequested&&player.DistanceTo(Scene)<35f)RequestK9("Track",Subject,"fugitive scent from abandoned vehicle door");\n            if(ApiRequested)ClearSceneRoute();
+            if(!ApiRequested&&player.DistanceTo(Scene)<35f)RequestK9("Track",Subject,"fugitive scent from abandoned vehicle door");
+            if(ApiRequested)ClearSceneRoute();
             if(ApiRequested&&player.DistanceTo(Subject)<28f)
             {
                 if(_outcome==0)NativeFunction.Natives.TASK_HANDS_UP(Subject,120000,player,-1,true);
