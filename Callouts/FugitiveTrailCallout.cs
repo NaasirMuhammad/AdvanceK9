@@ -84,7 +84,7 @@ namespace AdvancedK9.Callouts
             if(_suspectLocated)
             {
                 if(Subject.IsDead)Resolve("~o~Fugitive Trail concluded: suspect is deceased.");
-                else if(Functions.IsPedArrested(Subject))Resolve("~g~Fugitive Trail complete: suspect arrested.");
+                else if(NativeFunction.Natives.IS_PED_CUFFED<bool>(Subject))Resolve("~g~Fugitive Trail complete: suspect arrested.");
                 else if(Game.GameTime-_locatedAt>300000)Resolve("~o~Fugitive Trail concluded after suspect location.");
             }
             else if(Game.GameTime-StartedAt>480000)Resolve("~r~Fugitive Trail: scent trail expired.");
