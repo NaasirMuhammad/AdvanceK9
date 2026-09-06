@@ -37,6 +37,7 @@ namespace AdvancedK9.Callouts
             hidePosition=World.GetNextPositionOnStreet(hidePosition);
             CoverProp=SpawnProp(Random.Next(2)==0?"prop_dumpster_01a":"prop_bush_med_03",new Vector3(hidePosition.X+2f,hidePosition.Y,hidePosition.Z));
             Subject=SpawnPed("g_m_y_mexgoon_02",hidePosition,Random.Next(360));if(Subject==null)return false;
+            Subject.MaxHealth=250;Subject.Health=250;
             NativeFunction.Natives.GIVE_WEAPON_TO_PED(Subject,NativeFunction.Natives.GET_HASH_KEY<uint>("WEAPON_PISTOL"),36,false,false);
             NativeFunction.Natives.TASK_STAND_STILL(Subject,-1);
             Functions.PlayScannerAudioUsingPosition("WE_HAVE CRIME_BURGLARY IN_OR_ON_POSITION UNITS_RESPOND_CODE_3",Scene);
