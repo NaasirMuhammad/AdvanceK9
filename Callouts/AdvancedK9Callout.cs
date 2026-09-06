@@ -13,6 +13,9 @@ namespace AdvancedK9.Callouts
         protected Ped Subject;
         protected Ped Reporter;
         protected Vehicle SceneVehicle;
+        protected Vehicle PoliceVehicle;
+        protected Ped OfficerOne;
+        protected Ped OfficerTwo;
         protected Blip SubjectBlip;
         protected Blip SceneBlip;
         protected bool ApiRequested;
@@ -58,6 +61,17 @@ namespace AdvancedK9.Callouts
             if(vehicle!=null&&vehicle.Exists())vehicle.IsPersistent=true;return vehicle;
         }
 
+        protected void StagePoliceScene()
+        {
+            Vector3 cruiserPosition=World.GetNextPositionOnStreet(new Vector3(Scene.X-14f,Scene.Y-8f,Scene.Z));
+            PoliceVehicle=SpawnVehicle("police3",cruiserPosition,Game.LocalPlayer.Character.Heading);
+            OfficerOne=SpawnPed("s_m_y_cop_01",new Vector3(Scene.X-7f,Scene.Y-3f,Scene.Z),0f);
+            OfficerTwo=SpawnPed("s_m_y_cop_01",new Vector3(Scene.X+6f,Scene.Y-4f,Scene.Z),180f);
+            if(OfficerOne!=null&&OfficerOne.Exists())Rage.Native.NativeFunction.Natives.TASK_STAND_STILL(OfficerOne,-1);
+            if(OfficerTwo!=null&&OfficerTwo.Exists())Rage.Native.NativeFunction.Natives.TASK_STAND_STILL(OfficerTwo,-1);
+            Game.LogTrivial("AdvancedK9 Callouts: staged police scene for "+GetType().Name+".");
+        }
+
         protected void RouteToScene(string instruction)
         {
             if(SceneBlip!=null&&SceneBlip.Exists())SceneBlip.Delete();
@@ -98,6 +112,10 @@ namespace AdvancedK9.Callouts
             if(Reporter!=null&&Reporter.Exists())Reporter.Dismiss();
             if(Subject!=null&&Subject.Exists())Subject.Dismiss();
             if(SceneVehicle!=null&&SceneVehicle.Exists())SceneVehicle.Dismiss();
+            if(OfficerOne!=null&&OfficerOne.Exists())OfficerOne.Dismiss();
+            if(OfficerTwo!=null&&OfficerTwo.Exists())OfficerTwo.Dismiss();
+            if(PoliceVehicle!=null&&PoliceVehicle.Exists())PoliceVehicle.Dismiss();
+            if(!string.IsNullOrWhiteSpace(ContextId))AdvancedK9Api.SendCommand("ClearEvidenceMarkers",ContextId,0,"Scene",Scene.X,Scene.Y,Scene.Z,"callout scene cleared");
             base.End();
         }
 
