@@ -14,6 +14,7 @@ namespace AdvancedK9.Callouts
         protected Ped Reporter;
         protected Vehicle SceneVehicle;
         protected Blip SubjectBlip;
+        protected Blip SceneBlip;
         protected bool ApiRequested;
         protected uint StartedAt;
         protected bool Finished;
@@ -57,6 +58,20 @@ namespace AdvancedK9.Callouts
             if(vehicle!=null&&vehicle.Exists())vehicle.IsPersistent=true;return vehicle;
         }
 
+        protected void RouteToScene(string instruction)
+        {
+            if(SceneBlip!=null&&SceneBlip.Exists())SceneBlip.Delete();
+            SceneBlip=new Blip(Scene);SceneBlip.IsRouteEnabled=true;
+            Game.DisplayNotification("~b~AdvancedK9 callout:~s~ "+instruction+"~n~Follow the GPS route to the investigation start point.");
+            Game.LogTrivial("AdvancedK9 Callouts: routed player to "+GetType().Name+" start at "+Scene+".");
+        }
+
+        protected void ClearSceneRoute()
+        {
+            if(SceneBlip!=null&&SceneBlip.Exists()){SceneBlip.IsRouteEnabled=false;SceneBlip.Delete();}
+            SceneBlip=null;
+        }
+
         protected int HandleOf(Entity entity){int value;return entity!=null&&entity.Exists()&&int.TryParse(entity.Handle.ToString(),out value)?value:0;}
 
         protected bool K9Available()
@@ -78,6 +93,7 @@ namespace AdvancedK9.Callouts
 
         public override void End()
         {
+            ClearSceneRoute();
             if(SubjectBlip!=null&&SubjectBlip.Exists())SubjectBlip.Delete();
             if(Reporter!=null&&Reporter.Exists())Reporter.Dismiss();
             if(Subject!=null&&Subject.Exists())Subject.Dismiss();
