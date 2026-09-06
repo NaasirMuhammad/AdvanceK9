@@ -9,6 +9,10 @@ namespace AdvancedK9.Callouts
     public sealed class FugitiveTrailCallout : AdvancedK9Callout
     {
         private int _outcome;
+        private bool _scentPresented;
+        private bool _suspectLocated;
+        private uint _locatedAt;
+
         public override bool OnBeforeCalloutDisplayed()
         {
             try
@@ -25,32 +29,66 @@ namespace AdvancedK9.Callouts
             StagePoliceScene();
             return SceneVehicle!=null&&SceneVehicle.Exists();
         }
+
         public override bool OnCalloutAccepted()
         {
             StartedAt=Game.GameTime;_outcome=Random.Next(4);
-            Vector3 suspectPosition=new Vector3(Scene.X+Random.Next(260,430),Scene.Y+Random.Next(-260,261),Scene.Z);
+            StagePoliceScene();
+            Vector3 suspectPosition=World.GetNextPositionOnStreet(new Vector3(Scene.X+Random.Next(260,430),Scene.Y+Random.Next(-260,261),Scene.Z));
             Subject=SpawnPed("a_m_m_hillbilly_01",suspectPosition,Random.Next(360));if(Subject==null)return false;
-            NativeFunction.Natives.TASK_WANDER_STANDARD(Subject,10f,10);
+            NativeFunction.Natives.TASK_COWER(Subject,-1);
             Functions.PlayScannerAudioUsingPosition("WE_HAVE CRIME_RESIST_ARREST IN_OR_ON_POSITION",Scene);
-            RouteToScene("Respond to the abandoned vehicle and inspect the last occupied door.");
+            RouteToScene("Respond to the abandoned vehicle. The on-scene officer has preserved a scent article from the driver seat.");
             return base.OnCalloutAccepted();
         }
+
         public override void Process()
         {
             if(Finished||Subject==null||!Subject.Exists()){if(!Finished)Resolve("~r~Fugitive Trail ended: suspect unavailable.");return;}
             var player=Game.LocalPlayer.Character;
-            if(!ApiRequested&&player.DistanceTo(Scene)<35f)RequestK9("Track",Subject,"fugitive scent from abandoned vehicle door");
-            if(ApiRequested)ClearSceneRoute();
-            if(ApiRequested&&player.DistanceTo(Subject)<28f)
+
+            if(player.DistanceTo(Scene)<180f&&
+                (PoliceVehicle==null||!PoliceVehicle.Exists()||OfficerOne==null||!OfficerOne.Exists()||OfficerTwo==null||!OfficerTwo.Exists()))
+                StagePoliceScene();
+
+            if(!_scentPresented&&player.DistanceTo(Scene)<28f)
             {
+                _scentPresented=true;
+                Game.DisplayNotification("~b~On-scene officer:~s~ The suspect fled on foot. I preserved their scent from the driver seat. Bring Rex beside the vehicle to begin the trail.");
+            }
+
+            if(!ApiRequested&&_scentPresented&&K9DistanceTo(Scene)<22f)
+            {
+                RequestK9("Track",Subject,"officer-presented scent article collected from abandoned vehicle driver seat");
+                if(ApiRequested)
+                {
+                    ClearSceneRoute();
+                    Game.DisplayNotification("~b~AdvancedK9:~s~ Rex has the scent. Follow Rex and watch his body language.");
+                }
+            }
+
+            if(ApiRequested&&!_suspectLocated&&K9DistanceTo(Subject.Position)<18f)
+            {
+                _suspectLocated=true;_locatedAt=Game.GameTime;
                 if(_outcome==0)NativeFunction.Natives.TASK_HANDS_UP(Subject,120000,player,-1,true);
                 else if(_outcome==1)NativeFunction.Natives.TASK_SMART_FLEE_PED(Subject,player,600f,-1,false,false);
                 else if(_outcome==2)NativeFunction.Natives.TASK_COWER(Subject,-1);
                 else NativeFunction.Natives.TASK_WANDER_STANDARD(Subject,10f,10);
                 SubjectBlip=Subject.AttachBlip();SubjectBlip.IsRouteEnabled=true;
-                Resolve(_outcome==0?"~g~Fugitive surrendered at the end of the K9 trail.":"~o~Fugitive located; take appropriate police action.");
+                Game.DisplayNotification(_outcome==0
+                    ?"~g~Rex located the fugitive. The suspect is surrendering; secure the arrest."
+                    :"~o~Rex located the fugitive. Suspect marked on the map; take appropriate police action.");
+                Game.LogTrivial("AdvancedK9 Callouts: Rex located FugitiveTrail subject; persistent suspect marker created.");
+            }
+
+            if(_suspectLocated)
+            {
+                if(Subject.IsDead)Resolve("~o~Fugitive Trail concluded: suspect is deceased.");
+                else if(Functions.IsPedArrested(Subject))Resolve("~g~Fugitive Trail complete: suspect arrested.");
+                else if(Game.GameTime-_locatedAt>300000)Resolve("~o~Fugitive Trail concluded after suspect location.");
             }
             else if(Game.GameTime-StartedAt>480000)Resolve("~r~Fugitive Trail: scent trail expired.");
+
             base.Process();
         }
     }
