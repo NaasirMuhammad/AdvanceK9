@@ -125,6 +125,7 @@ namespace AdvancedK9
         private K9Command _lastPatrolCommand;
         private int _patrolCommandRepeatCount;
         private uint _lastPatrolCommandAt;
+        private readonly Dictionary<string,uint> _lastOperationalXp=new Dictionary<string,uint>(StringComparer.OrdinalIgnoreCase);
         private bool _deployed;
         private bool _downed;
         private bool _carryingDog;
@@ -1200,6 +1201,7 @@ namespace AdvancedK9
                 }
                 _trust.Change(1, "successful detection");
                 _profile.RecordSearch();
+                AwardOperationalXp("Certified odor detection",8,20,1,3);
                 foreach(var detectedOdor in presentedOdors)
                 {
                     _pr.RecordK9Indication(target,true,detectedOdor,_profile.Name);
@@ -1278,7 +1280,7 @@ namespace AdvancedK9
         }
         private void CompleteBuildingAlert(Ped target)
         {
-            _dog.Tasks.Clear();Bark(2);Sit();_pr.RecordLocatedSuspect(target);K9IncidentLog.Write(_profile.Name,"Building search","Visible subject located; alert and hold",target.Position);K9DeploymentReport.Write("Player",_profile.Name,"Building search","Handler-led dynamic structure clearance","None",false,0f,0,0,"Located","None","Alert bark and hold",target.Position);Game.DisplayNotification("~g~Building search: subject located.~s~~n~K9 is sitting and holding; Apprehend requires a separate aimed command.");
+            _dog.Tasks.Clear();Bark(2);Sit();AwardOperationalXp("Building subject locate",8,18,1,2);_pr.RecordLocatedSuspect(target);K9IncidentLog.Write(_profile.Name,"Building search","Visible subject located; alert and hold",target.Position);K9DeploymentReport.Write("Player",_profile.Name,"Building search","Handler-led dynamic structure clearance","None",false,0f,0,0,"Located","None","Alert bark and hold",target.Position);Game.DisplayNotification("~g~Building search: subject located.~s~~n~K9 is sitting and holding; Apprehend requires a separate aimed command.");
         }
 
         private void K9Warning()
@@ -1452,6 +1454,7 @@ namespace AdvancedK9
                     Game.DisplayNotification("~g~Track complete — person located.~s~~n~K9 is sitting and holding. Aim at the suspect and command APPREHEND only if deployment is required.");K9IncidentLog.Write(_profile.Name,"Track","Subject located; alert bark and hold only",target.Position);
                     _pr.RecordLocatedSuspect(target);
                     _trust.Change(2, "successful track");
+                    AwardOperationalXp("Completed scent track",12,25,1,3);
                     int seconds=(int)((Game.GameTime-_activeTrackStarted)/1000);K9DeploymentReport.Write("Player",_profile.Name,"Track","Locate person",_activeScentSource,_warningGiven,_activeTrackDistance,seconds,0,"Located","None","Alert bark and hold",target.Position);
                     return;
                 }
@@ -1615,6 +1618,7 @@ namespace AdvancedK9
                     Game.DisplayNotification("~g~Suspect neutralized without lethal force.~s~ Move in for arrest.");
                     _pr.RecordApprehension(target);
                     _trust.Change(1, "controlled apprehension");
+                    AwardOperationalXp("Controlled apprehension",15,30,1,3);
                     int biteSeconds=(int)((Game.GameTime-_biteStarted)/1000);K9DeploymentReport.Write("Player",_profile.Name,"Apprehension",reaction,_activeScentSource,_warningGiven,_activeTrackDistance,_activeTrackStarted==0?0:(int)((Game.GameTime-_activeTrackStarted)/1000),biteSeconds,"Controlled surrender",_profile.Injury,"Suspect ready for PR/STP arrest",target.Position);
                     Follow();
                     return;
@@ -1826,6 +1830,19 @@ namespace AdvancedK9
             NativeFunction.Natives.SET_PED_CONFIG_FLAG(_dog,294,true);
             NativeFunction.Natives.SET_PED_CAN_PLAY_GESTURE_ANIMS(_dog,false);
             Game.LogTrivial("AdvancedK9 gunfire immunity configured: permanent events blocked, aimed-group response blocked, shocking events disabled, human gesture animations disabled.");
+        }
+
+        private void AwardOperationalXp(string activity,int minimumXp,int maximumXp,int minimumConfidence,int maximumConfidence)
+        {
+            uint previous;uint now=Game.GameTime;
+            if(_lastOperationalXp.TryGetValue(activity,out previous)&&now-previous<60000){Game.LogTrivial("AdvancedK9 operational XP duplicate suppressed: "+activity+".");return;}
+            _lastOperationalXp[activity]=now;
+            int xp=_random.Next(Math.Max(0,minimumXp),Math.Max(minimumXp,maximumXp)+1),confidence=_random.Next(Math.Max(0,minimumConfidence),Math.Max(minimumConfidence,maximumConfidence)+1);
+            int priorLevel=_profile.TrainingLevel,priorProgress=_profile.TrainingLevelProgress,priorConfidence=_profile.Confidence;
+            bool completed=_profile.ApplyPatrolProgress(xp,confidence);
+            int gained=Math.Max(0,_profile.Confidence-priorConfidence);
+            Game.DisplayNotification("~b~OPERATIONAL K9 XP~s~~n~"+activity+": ~g~+"+xp+" XP~s~ • Confidence ~g~+"+gained+"~s~~n~Level "+priorLevel+" • "+priorProgress+" → "+_profile.TrainingLevelProgress+" / "+_profile.CurrentTrainingRequirement);
+            Game.LogTrivial("AdvancedK9 operational XP: activity="+activity+", xp="+xp+", confidence="+gained+", completed="+completed+".");
         }
 
         private void TryAwardPatrolCommandXp(K9Command command)
