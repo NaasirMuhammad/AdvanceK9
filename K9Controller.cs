@@ -1991,14 +1991,19 @@ namespace AdvancedK9
                 var handler=Game.LocalPlayer.Character;
                 AdvancedK9ApiHost.Publish(new K9ApiSnapshot{
                     OnDuty=_onDuty,Deployed=_deployed&&DogEntityExists(),K9Name=_profile==null?_config.DogName:_profile.Name,
-                    State=_state.ToString(),DogHandle=DogEntityExists()?_dog.Handle:0,
-                    HandlerHandle=handler!=null&&handler.Exists()?handler.Handle:0,
+                    State=_state.ToString(),DogHandle=ApiHandleOf(DogEntityExists()?_dog:null),
+                    HandlerHandle=ApiHandleOf(handler),
                     Health=_profile==null?0:_profile.Health,Stamina=_profile==null?0:_profile.Stamina,
                     Trust=_trust==null?0:_trust.Level,TrainingLevel=_profile==null?0:_profile.TrainingLevel,
                     Certifications=_profile==null?"":Certifications(),ActiveContextId=_activeSharedApiContextId
                 });
             }
             catch(Exception ex){Game.LogTrivial("AdvancedK9 API snapshot publish skipped: "+ex.Message);}
+        }
+
+        private static int ApiHandleOf(Entity entity)
+        {
+            int value;return entity!=null&&entity.Exists()&&int.TryParse(entity.Handle.ToString(),out value)?value:0;
         }
 
         private void DrainSharedApiRequests()
