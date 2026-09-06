@@ -15,6 +15,7 @@
     <ProjectReference Include="Bridge/LspdfrApiShim/LspdfrApiShim.csproj" Private="false" />
   </ItemGroup>
   <ItemGroup>
+    <Reference Include="Microsoft.CSharp" />
     <PackageReference Include="RagePluginHook" Version="1.124.0" ExcludeAssets="runtime" />
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
   </ItemGroup>
