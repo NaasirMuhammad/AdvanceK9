@@ -13,6 +13,9 @@ namespace AdvancedK9.Callouts
         private bool _suspectLocated;
         private bool _transportStarted;
         private uint _locatedAt;
+        private uint _nextCoverSearch;
+        private bool _hideSpotAssigned;
+        private Vector3 _hidePosition;
 
         public override bool OnBeforeCalloutDisplayed()
         {
@@ -36,13 +39,13 @@ namespace AdvancedK9.Callouts
         {
             StartedAt=Game.GameTime;_outcome=Random.Next(4);
             StagePoliceScene();
-            float angle=Random.Next(360);float distance=Random.Next(115,176);
-            Vector3 hidePosition=Scene+new Vector3((float)System.Math.Sin(angle*System.Math.PI/180.0)*distance,(float)System.Math.Cos(angle*System.Math.PI/180.0)*distance,0f);
-            hidePosition=World.GetNextPositionOnStreet(hidePosition);
-            Vector3 coverPosition=new Vector3(hidePosition.X+2.2f,hidePosition.Y,hidePosition.Z);
-            CoverProp=SpawnProp(Random.Next(2)==0?"prop_dumpster_01a":"prop_bush_med_03",coverPosition);
-            Subject=SpawnPed("a_m_m_hillbilly_01",hidePosition,Random.Next(360));if(Subject==null)return false;
-            NativeFunction.Natives.TASK_STAND_STILL(Subject,-1);
+            float angle=Random.Next(360);float distance=Random.Next(55,76);
+            Vector3 startPosition=World.GetNextPositionOnStreet(Scene+new Vector3((float)System.Math.Sin(angle*System.Math.PI/180.0)*distance,(float)System.Math.Cos(angle*System.Math.PI/180.0)*distance,0f));
+            Subject=SpawnPed("a_m_m_hillbilly_01",startPosition,Random.Next(360));if(Subject==null)return false;
+            Subject.MaxHealth=250;Subject.Health=250;
+            NativeFunction.Natives.TASK_SMART_FLEE_COORD(Subject,Scene.X,Scene.Y,Scene.Z,260f,-1,false,false);
+            _nextCoverSearch=Game.GameTime+1000;
+            Game.LogTrivial("AdvancedK9 Callouts: fugitive is running from the scene while searching for existing environmental cover.");
             Functions.PlayScannerAudioUsingPosition("WE_HAVE CRIME_RESIST_ARREST IN_OR_ON_POSITION",Scene);
             RouteToScene("Respond to the abandoned vehicle. The on-scene officer has preserved a scent article from the driver seat.");
             return base.OnCalloutAccepted();
@@ -65,6 +68,20 @@ namespace AdvancedK9.Callouts
                 if(ApiRequested){ClearSceneRoute();Game.LogTrivial("AdvancedK9 Callouts: fugitive vehicle scent source registered; awaiting handler command.");}
             }
 
+            if(!_suspectLocated&&!_hideSpotAssigned&&Game.GameTime>=_nextCoverSearch)
+            {
+                _nextCoverSearch=Game.GameTime+3500;
+                Vector3 cover;
+                if(TryFindExistingCover(Subject.Position,out cover))
+                {
+                    _hideSpotAssigned=true;_hidePosition=cover;
+                    Subject.Tasks.Clear();
+                    Subject.Tasks.FollowNavigationMeshToPosition(_hidePosition,Subject.Heading,4.6f);
+                    Game.LogTrivial("AdvancedK9 Callouts: fugitive committed to existing cover at "+_hidePosition+".");
+                }
+                else NativeFunction.Natives.TASK_SMART_FLEE_COORD(Subject,Scene.X,Scene.Y,Scene.Z,260f,-1,false,false);
+            }
+            if(!_suspectLocated&&_hideSpotAssigned&&Subject.DistanceTo(_hidePosition)<3.5f)NativeFunction.Natives.TASK_STAND_STILL(Subject,-1);
             if(ApiRequested&&!_suspectLocated)SupportOfficersFollowK9();
             if(ApiRequested&&!_suspectLocated&&K9DistanceTo(Subject.Position)<18f)
             {
