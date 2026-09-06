@@ -59,7 +59,7 @@ namespace AdvancedK9.Callouts
                 Game.DisplayNotification("~b~On-scene officer:~s~ The suspect fled on foot. I preserved their scent from the driver seat.~n~~y~Deploy Rex and bring him beside me before requesting the article.");
             }
 
-            if(!ApiRequested&&_sceneBriefed&&K9ReadyOnFoot()&&K9DistanceTo(Scene)<24f)
+            if(!ApiRequested&&_sceneBriefed)
             {
                 _scentPresented=true;
                 AssignCalloutScent(Subject,"preserved scent article from abandoned vehicle driver seat");
