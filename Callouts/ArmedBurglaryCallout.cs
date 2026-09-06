@@ -38,7 +38,8 @@ namespace AdvancedK9.Callouts
         {
             if(Finished||Subject==null||!Subject.Exists()){if(!Finished)Resolve("~r~Armed Burglary ended: suspect unavailable.");return;}
             var player=Game.LocalPlayer.Character;
-            if(!ApiRequested&&player.DistanceTo(Scene)<55f)RequestK9("SearchBuilding",Subject,"armed burglary suspect hiding near structure");\n            if(ApiRequested)ClearSceneRoute();
+            if(!ApiRequested&&player.DistanceTo(Scene)<55f)RequestK9("SearchBuilding",Subject,"armed burglary suspect hiding near structure");
+            if(ApiRequested)ClearSceneRoute();
             if(ApiRequested&&player.DistanceTo(Subject)<24f)
             {
                 if(_outcome<=1)NativeFunction.Natives.TASK_HANDS_UP(Subject,120000,player,-1,true);
