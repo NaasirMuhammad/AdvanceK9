@@ -297,3 +297,17 @@ Vehicle searches visit all four exterior corners before the result is determined
 - `K9Profile.cs` — persistent breed, coat, vest and name profile
 - `DogCamera.cs` — scripted K9 camera
 - `AcademySession.cs` — guided training evaluation
+
+
+## Ownership and permitted use
+
+AdvancedK9 is owned and authored by **mtennekten**. It is provided for personal,
+non-commercial gameplay only. Do not redistribute, alter, mirror, rehost, bundle,
+sell, or upload the mod or any part of it elsewhere without mtennekten's express
+prior written permission. Linking to the official release page is permitted.
+
+Users may edit their personal `AdvancedK9.ini` and normal runtime-generated
+profile/configuration data. Third-party software, trademarks, models, textures,
+and other assets remain the property of their respective owners.
+
+See `LICENSE` and `THIRD_PARTY_NOTICES.md` for the complete terms and notices.
