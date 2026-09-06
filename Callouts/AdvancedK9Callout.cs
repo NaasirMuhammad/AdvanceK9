@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using AdvancedK9.API;
 using LSPD_First_Response.Mod.API;
 using LSPD_First_Response.Mod.Callouts;
@@ -32,7 +33,6 @@ namespace AdvancedK9.Callouts
         private bool _cleanupCompleted;
         private bool _trafficControlled;
         private uint _nextSupportMove;
-        private bool _k9ApprehensionObserved;
         private bool _medicalResponseStarted;
 
         protected bool Prepare(string message,Vector3 scene,float radius,bool snapToStreet=true)
@@ -188,19 +188,47 @@ namespace AdvancedK9.Callouts
         {
             if(Game.GameTime<_nextSupportMove)return;
             K9ApiSnapshot snapshot;
-            if(!AdvancedK9Api.TryGetSnapshot(out snapshot)||!string.Equals(snapshot.State,"Tracking",StringComparison.OrdinalIgnoreCase)||snapshot.DogHandle<=0)return;
+            if(!AdvancedK9Api.TryGetSnapshot(out snapshot)||snapshot.DogHandle<=0)return;
             if(!NativeFunction.Natives.DOES_ENTITY_EXIST<bool>(snapshot.DogHandle))return;
-            _nextSupportMove=Game.GameTime+3500;
+            _nextSupportMove=Game.GameTime+3000;
             Vector3 dogPosition=NativeFunction.Natives.GET_ENTITY_COORDS<Vector3>(snapshot.DogHandle,true);
-            if(OfficerOne!=null&&OfficerOne.Exists()&&OfficerOne.DistanceTo(dogPosition)>7f)OfficerOne.Tasks.FollowNavigationMeshToPosition(dogPosition,OfficerOne.Heading,3.4f);
-            if(OfficerTwo!=null&&OfficerTwo.Exists()&&OfficerTwo.DistanceTo(dogPosition)>10f)OfficerTwo.Tasks.FollowNavigationMeshToPosition(dogPosition,OfficerTwo.Heading,3.2f);
+            if(OfficerOne!=null&&OfficerOne.Exists()&&OfficerOne.DistanceTo(dogPosition)>6f)
+            {
+                OfficerOne.Tasks.Clear();
+                OfficerOne.Tasks.FollowNavigationMeshToPosition(dogPosition,OfficerOne.Heading,4.2f);
+            }
+            if(OfficerTwo!=null&&OfficerTwo.Exists()&&PoliceVehicle!=null&&PoliceVehicle.Exists())
+            {
+                if(!OfficerTwo.IsInVehicle(PoliceVehicle,false))NativeFunction.Natives.SET_PED_INTO_VEHICLE(OfficerTwo,PoliceVehicle,-1);
+                NativeFunction.Natives.TASK_VEHICLE_DRIVE_TO_COORD_LONGRANGE(OfficerTwo,PoliceVehicle,dogPosition.X,dogPosition.Y,dogPosition.Z,18f,786603,10f);
+            }
+            Game.LogTrivial("AdvancedK9 Callouts: support officers committed to live K9 position "+dogPosition+".");
+        }
+
+        protected bool TryFindExistingCover(Vector3 center,out Vector3 hidingPosition)
+        {
+            hidingPosition=center;
+            try
+            {
+                var cover=World.GetAllObjects().Where(o=>o.Exists()&&o.DistanceTo(center)<70f).OrderBy(o=>o.DistanceTo(center)).FirstOrDefault(o=>{
+                    string name=(o.Model.Name??"").ToLowerInvariant();
+                    return name.Contains("bush")||name.Contains("hedge")||name.Contains("dumpster")||name.Contains("wall")||name.Contains("fence")||name.Contains("crate")||name.Contains("container");
+                });
+                if(cover==null||!cover.Exists())return false;
+                Vector3 objectPosition=cover.Position;float dx=objectPosition.X-Scene.X,dy=objectPosition.Y-Scene.Y;float length=(float)Math.Sqrt(dx*dx+dy*dy);
+                if(length<.1f){dx=1f;dy=0f;length=1f;}
+                hidingPosition=new Vector3(objectPosition.X+dx/length*1.4f,objectPosition.Y+dy/length*1.4f,objectPosition.Z);
+                Game.LogTrivial("AdvancedK9 Callouts: existing environmental cover selected: "+cover.Model.Name+" at "+hidingPosition+".");
+                return true;
+            }
+            catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: cover search contained: "+ex.Message);return false;}
         }
 
         protected void BeginAutomaticTransport(string completionMessage)
         {
             if(Subject==null||!Subject.Exists()||PoliceVehicle==null||!PoliceVehicle.Exists()){Resolve(completionMessage);return;}
             Game.DisplayNotification("~b~On-scene units:~s~ Suspect secured. We will handle transport.");
-            var suspect=Subject;var officer=OfficerOne;var transport=PoliceVehicle;
+            var suspect=Subject;var officer=OfficerTwo!=null&&OfficerTwo.Exists()?OfficerTwo:OfficerOne;var transport=PoliceVehicle;
             GameFiber.StartNew(delegate
             {
                 try
@@ -218,10 +246,9 @@ namespace AdvancedK9.Callouts
         protected bool ProcessPostApprehensionMedical(string completionMessage)
         {
             if(_medicalResponseStarted||Subject==null||!Subject.Exists()||Subject.IsDead)return _medicalResponseStarted;
-            K9ApiSnapshot snapshot;
-            if(AdvancedK9Api.TryGetSnapshot(out snapshot)&&string.Equals(snapshot.State,"Apprehending",StringComparison.OrdinalIgnoreCase))_k9ApprehensionObserved=true;
             bool injured=Subject.Health<Subject.MaxHealth-5||Subject.IsRagdoll;
-            if(!_k9ApprehensionObserved||!injured)return false;
+            if(!injured)return false;
+            K9ApiSnapshot snapshot;
             if(AdvancedK9Api.TryGetSnapshot(out snapshot)&&string.Equals(snapshot.State,"Apprehending",StringComparison.OrdinalIgnoreCase))return false;
             _medicalResponseStarted=true;
             var suspect=Subject;
@@ -251,10 +278,11 @@ namespace AdvancedK9.Callouts
                         NativeFunction.Natives.SET_PED_INTO_VEHICLE(suspect,MedicalVehicle,2);
                         NativeFunction.Natives.SET_PED_INTO_VEHICLE(MedicOne,MedicalVehicle,-1);
                         if(MedicTwo!=null&&MedicTwo.Exists())NativeFunction.Natives.SET_PED_INTO_VEHICLE(MedicTwo,MedicalVehicle,1);
-                        if(OfficerOne!=null&&OfficerOne.Exists()&&PoliceVehicle!=null&&PoliceVehicle.Exists())
+                        Ped patrolDriver=OfficerTwo!=null&&OfficerTwo.Exists()?OfficerTwo:OfficerOne;
+                        if(patrolDriver!=null&&patrolDriver.Exists()&&PoliceVehicle!=null&&PoliceVehicle.Exists())
                         {
-                            NativeFunction.Natives.SET_PED_INTO_VEHICLE(OfficerOne,PoliceVehicle,-1);
-                            NativeFunction.Natives.TASK_VEHICLE_FOLLOW(OfficerOne,PoliceVehicle,MedicalVehicle,20f,786603,8);
+                            NativeFunction.Natives.SET_PED_INTO_VEHICLE(patrolDriver,PoliceVehicle,-1);
+                            NativeFunction.Natives.TASK_VEHICLE_FOLLOW(patrolDriver,PoliceVehicle,MedicalVehicle,20f,786603,8);
                         }
                         NativeFunction.Natives.TASK_VEHICLE_DRIVE_TO_COORD_LONGRANGE(MedicOne,MedicalVehicle,hospital.X,hospital.Y,hospital.Z,22f,786603,8f);
                         Game.DisplayNotification("~o~EMS:~s~ Serious injuries require hospital transport. The on-scene patrol unit is following to complete the arrest.");
