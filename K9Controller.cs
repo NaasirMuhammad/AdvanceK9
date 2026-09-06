@@ -24,6 +24,7 @@ namespace AdvancedK9
         private readonly K9Roster _roster;
         private readonly SearchEvidenceMarkers _evidenceMarkers=new SearchEvidenceMarkers();
         private readonly ContainmentPositionStore _containmentPositions=new ContainmentPositionStore();
+        private int _containmentPositionIndex;
         private VehicleSeatProfiles _seatProfiles;
         private VoiceCommandService _voice;
         private Ped _dog;
@@ -326,7 +327,7 @@ namespace AdvancedK9
             new[]{K9Command.Follow,K9Command.Heel,K9Command.Sit,K9Command.LieDown,K9Command.Stay,K9Command.Recall,K9Command.WhistleRecall,K9Command.HandSignal,K9Command.Fetch,K9Command.Pet},
             new[]{K9Command.SearchArea,K9Command.SearchBuilding,K9Command.SearchVehicle,K9Command.SearchNarcotics,K9Command.SearchExplosives,K9Command.SearchWeapons,K9Command.ClearEvidenceMarkers},
             new[]{K9Command.CollectScent,K9Command.Track,K9Command.FindTrail},
-            new[]{K9Command.K9Warning,K9Command.Apprehend,K9Command.HandoffArrest,K9Command.RequestPerimeter,K9Command.HoldPerimeter,K9Command.ContainSuspect,K9Command.RequestTransport,K9Command.RequestMedical,K9Command.RequestBombSquad,K9Command.DoorPop,K9Command.Release,K9Command.Guard,K9Command.Bark},
+            new[]{K9Command.K9Warning,K9Command.Apprehend,K9Command.HandoffArrest,K9Command.RequestPerimeter,K9Command.HoldPerimeter,K9Command.ContainSuspect,K9Command.SaveContainmentPosition,K9Command.SendContainmentPosition,K9Command.NextContainmentPosition,K9Command.ClearContainmentPosition,K9Command.RequestTransport,K9Command.RequestMedical,K9Command.RequestBombSquad,K9Command.DoorPop,K9Command.Release,K9Command.Guard,K9Command.Bark},
             new[]{K9Command.EnterVehicle,K9Command.ExitVehicle,K9Command.ToggleLeash,K9Command.ToggleCamera,K9Command.Restock},
             new[]{K9Command.Feed,K9Command.Drink,K9Command.Rest,K9Command.Inspect,K9Command.FirstAid,K9Command.CarryK9,K9Command.EmergencyLoadK9,K9Command.VeterinaryTransport,K9Command.Rehabilitation,K9Command.VeterinaryCare},
             new[]{K9Command.Training,K9Command.TrainNarcotics,K9Command.TrainExplosives,K9Command.TrainWeapons}};
@@ -588,6 +589,10 @@ namespace AdvancedK9
                     case K9Command.RequestPerimeter: CompatibilityService("Perimeter"); break;
                     case K9Command.HoldPerimeter: HoldPerimeter(); break;
                     case K9Command.ContainSuspect: ContainSuspect(); break;
+                    case K9Command.SaveContainmentPosition: SaveContainmentPosition(); break;
+                    case K9Command.SendContainmentPosition: SendContainmentPosition(false); break;
+                    case K9Command.NextContainmentPosition: SendContainmentPosition(true); break;
+                    case K9Command.ClearContainmentPosition: ClearContainmentPosition(); break;
                     case K9Command.RequestTransport: CompatibilityService("Transport"); break;
                     case K9Command.RequestMedical: CompatibilityService("Medical"); break;
                     case K9Command.RequestBombSquad: CompatibilityService("BombSquad"); break;
@@ -628,11 +633,11 @@ namespace AdvancedK9
 
         private bool RequiresTrustCheck(K9Command command)
         {
-            return command==K9Command.Follow||command==K9Command.Heel||command==K9Command.Sit||command==K9Command.LieDown||command==K9Command.Stay||command==K9Command.Recall||command==K9Command.SearchArea||command==K9Command.SearchBuilding||command==K9Command.SearchVehicle||command==K9Command.SearchNarcotics||command==K9Command.SearchExplosives||command==K9Command.SearchWeapons||command==K9Command.Track||command==K9Command.FindTrail||command==K9Command.Fetch||command==K9Command.Apprehend||command==K9Command.HoldPerimeter||command==K9Command.ContainSuspect;
+            return command==K9Command.Follow||command==K9Command.Heel||command==K9Command.Sit||command==K9Command.LieDown||command==K9Command.Stay||command==K9Command.Recall||command==K9Command.SearchArea||command==K9Command.SearchBuilding||command==K9Command.SearchVehicle||command==K9Command.SearchNarcotics||command==K9Command.SearchExplosives||command==K9Command.SearchWeapons||command==K9Command.Track||command==K9Command.FindTrail||command==K9Command.Fetch||command==K9Command.Apprehend||command==K9Command.HoldPerimeter||command==K9Command.ContainSuspect||command==K9Command.SendContainmentPosition||command==K9Command.NextContainmentPosition;
         }
 
         private static bool RequiresLeashRelease(K9Command command){return command==K9Command.Apprehend||command==K9Command.Fetch||command==K9Command.EnterVehicle||command==K9Command.CarryK9||command==K9Command.EmergencyLoadK9||command==K9Command.VeterinaryTransport||command==K9Command.VeterinaryCare;}
-        private static bool IsWorkingLeashCommand(K9Command command){return command==K9Command.SearchArea||command==K9Command.SearchBuilding||command==K9Command.SearchVehicle||command==K9Command.SearchNarcotics||command==K9Command.SearchExplosives||command==K9Command.SearchWeapons||command==K9Command.Track||command==K9Command.FindTrail||command==K9Command.HoldPerimeter||command==K9Command.ContainSuspect;}
+        private static bool IsWorkingLeashCommand(K9Command command){return command==K9Command.SearchArea||command==K9Command.SearchBuilding||command==K9Command.SearchVehicle||command==K9Command.SearchNarcotics||command==K9Command.SearchExplosives||command==K9Command.SearchWeapons||command==K9Command.Track||command==K9Command.FindTrail||command==K9Command.HoldPerimeter||command==K9Command.ContainSuspect||command==K9Command.SendContainmentPosition||command==K9Command.NextContainmentPosition;}
 
         private bool TrustAllowsCommand(K9Command command)
         {
@@ -1315,6 +1320,44 @@ namespace AdvancedK9
             _containTarget=target;_perimeterCenter=target.Position;_perimeterRadius=_leashRope>=0?4f:5f;_perimeterPoint=0;_nextPerimeterMove=0;_state=K9State.Containing;
             Game.DisplayNotification("~o~K9 containment active.~s~~n~"+_profile.Name+" will block and alert without biting. APPREHEND remains a separate aimed command.");
             K9IncidentLog.Write(_profile.Name,"Containment","Suspect containment started",target.Position);
+        }
+
+        private void SaveContainmentPosition()
+        {
+            if(!DogExists())return;
+            Vector3 position=Game.LocalPlayer.Character.Position;float radius=_leashRope>=0?5.5f:8f;
+            var saved=_containmentPositions.SaveOrUpdate(position,radius);
+            _containmentPositionIndex=Math.Max(0,_containmentPositions.Positions.ToList().IndexOf(saved));
+            Game.DisplayNotification("~g~Containment position saved.~s~~n~"+saved.Name+" • "+radius.ToString("0.0")+"m ring. Up to 24 positions persist between shifts.");
+            K9IncidentLog.Write(_profile.Name,"Containment","Saved "+saved.Name,position);
+        }
+
+        private void SendContainmentPosition(bool advance)
+        {
+            if(!DogExists())return;
+            var positions=_containmentPositions.Positions;
+            if(positions.Count==0){Game.DisplayNotification("~y~No saved containment positions.~s~~n~Stand at a perimeter point and use Save Containment Position.");return;}
+            if(advance)_containmentPositionIndex=(_containmentPositionIndex+1)%positions.Count;
+            else
+            {
+                var nearest=_containmentPositions.Nearest(Game.LocalPlayer.Character.Position,250f);
+                int nearestIndex=nearest==null?-1:positions.ToList().IndexOf(nearest);
+                if(nearestIndex>=0)_containmentPositionIndex=nearestIndex;
+                else if(_containmentPositionIndex>=positions.Count)_containmentPositionIndex=0;
+            }
+            var saved=positions[_containmentPositionIndex];
+            _containTarget=null;_perimeterCenter=saved.Position;_perimeterRadius=saved.Radius;_perimeterPoint=0;_nextPerimeterMove=0;_state=K9State.Containing;
+            Game.DisplayNotification("~b~K9 sent to "+saved.Name+".~s~~n~Position "+(_containmentPositionIndex+1)+"/"+positions.Count+" • "+saved.Radius.ToString("0.0")+"m ring"+(_leashRope>=0?" • working leash retained":""));
+            K9IncidentLog.Write(_profile.Name,"Containment","Deployed to saved "+saved.Name,saved.Position);
+        }
+
+        private void ClearContainmentPosition()
+        {
+            Vector3 position=Game.LocalPlayer.Character.Position;
+            if(!_containmentPositions.RemoveNearest(position,25f)){Game.DisplayNotification("~y~No saved containment position within 25 meters.");return;}
+            if(_containmentPositionIndex>=_containmentPositions.Positions.Count)_containmentPositionIndex=0;
+            Game.DisplayNotification("~g~Nearest saved containment position removed.");
+            K9IncidentLog.Write(_profile.Name,"Containment","Nearest saved position removed",position);
         }
 
         private void MaintainContainment()
