@@ -33,7 +33,7 @@ namespace AdvancedK9
                 {
                     var requested=new AssemblyName(args.Name);
                     if(!requested.Name.Equals("AdvancedK9.API",StringComparison.OrdinalIgnoreCase))return null;
-                    string path=Path.Combine("Plugins","LSPDFR","AdvancedK9.API.dll");
+                    string path=Path.Combine("Plugins","LSPDFR","AdvancedK9","AdvancedK9.API.dll");
                     if(!File.Exists(path)){Game.LogTrivial("AdvancedK9 dependency resolver: missing "+path+".");return null;}
                     Game.LogTrivial("AdvancedK9 dependency resolver: loading shared API from "+path+".");
                     return Assembly.LoadFrom(path);
