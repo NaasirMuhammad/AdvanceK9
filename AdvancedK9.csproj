@@ -9,6 +9,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Remove="Bridge\**\*.cs" />
+    <Compile Remove="Api\**\*.cs" />
     <Reference Include="System.Net.Http" />
     <Reference Include="System.Windows.Forms" />
     <Reference Include="Microsoft.CSharp" />
