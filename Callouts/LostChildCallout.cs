@@ -32,15 +32,15 @@ namespace AdvancedK9.Callouts
             SubjectBlip=Subject.AttachBlip();SubjectBlip.IsRouteEnabled=false;SubjectBlip.Alpha=0;
             NativeFunction.Natives.TASK_COWER(Subject,-1);
             Functions.PlayScannerAudioUsingPosition("CITIZENS_REPORT CRIME_MISSING_PERSON IN_OR_ON_POSITION UNITS_RESPOND_CODE_2",Scene);
-            Game.DisplayNotification("~b~Lost Child:~s~ Meet the reporting party and deploy the K9 from the last-known location.");
+            RouteToScene("Respond to the reporting party at the child’s last-known location.");
             return base.OnCalloutAccepted();
         }
         public override void Process()
         {
             if(Finished||Subject==null||!Subject.Exists()){if(!Finished)Resolve("~r~Lost Child ended: subject unavailable.");return;}
             var player=Game.LocalPlayer.Character;
-            if(!ApiRequested&&player.DistanceTo(Scene)<45f)RequestK9("Track",Subject,"lost child last-known-location scent pad");
-            if(player.DistanceTo(Subject)<12f)
+            if(!ApiRequested&&player.DistanceTo(Scene)<45f)RequestK9("Track",Subject,"lost child last-known-location scent pad");\n            if(ApiRequested)ClearSceneRoute();
+            if(ApiRequested&&player.DistanceTo(Subject)<12f)
             {
                 string result=_outcome==0?"~g~Child located safely after wandering away.":_outcome==1?"~g~Child located hiding and frightened.":_outcome==2?"~o~Child located with a minor injury; medical assistance requested.":"~g~Child located with a concerned adult; identity verification required.";
                 Resolve(result);
