@@ -24,6 +24,7 @@ namespace AdvancedK9
         private K9Profile _profile;
         private readonly K9Roster _roster;
         private readonly SearchEvidenceMarkers _evidenceMarkers=new SearchEvidenceMarkers();
+        private readonly ShiftLifecycle _shift=new ShiftLifecycle();
         private readonly ContainmentPositionStore _containmentPositions=new ContainmentPositionStore();
         private int _containmentPositionIndex;
         private VehicleSeatProfiles _seatProfiles;
@@ -276,6 +277,7 @@ namespace AdvancedK9
         private void ActivateForDuty()
         {
             if (_voice == null) InitializeVoice();
+            _shift.Begin(_profile.Name);
             SpawnStationKennels();
             ActionNotification("~b~Advanced K9 Beta active~s~. Press ~y~"+KeyChord(_config.SpawnKey)+"~s~ to deploy "+_profile.Name+".");
         }
@@ -287,6 +289,7 @@ namespace AdvancedK9
             _voice?.StopListening();
             _voiceActive = false;
             _voiceStatus = "Off duty";
+            _shift.End(_profile.Health,_profile.Stamina,_profile.Food,_profile.Water,!_deployed||_state==K9State.Dismissed);
             if (_dog!=null&&_dog.Exists()) Dismiss(false);
             DeleteStationKennels();
             Game.LogTrivial("AdvancedK9: player is off duty; K9, UI and voice are inactive.");
@@ -626,6 +629,7 @@ namespace AdvancedK9
                     case K9Command.TrainWeapons: RunAcademySpecialty(DetectionSpecialty.Weapons); break;
                 }
                 TryAwardPatrolCommandXp(command);
+                _shift.Record(command);
             }
             catch (Exception ex)
             {
