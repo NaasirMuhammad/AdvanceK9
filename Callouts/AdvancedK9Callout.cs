@@ -20,9 +20,23 @@ namespace AdvancedK9.Callouts
 
         protected bool Prepare(string message,Vector3 scene,float radius)
         {
-            K9ApiSnapshot snapshot;if(!AdvancedK9Api.TryGetSnapshot(out snapshot)||!snapshot.OnDuty)return false;
-            Scene=scene;ContextId=GetType().Name+"-"+Guid.NewGuid().ToString("N");CalloutMessage=message;CalloutPosition=scene;
-            ShowCalloutAreaBlipBeforeAccepting(scene,radius);AddMinimumDistanceCheck(50f,scene);return true;
+            // LSPDFR only creates registered callouts while the player is on duty. Do not
+            // reject the offer because the separately loaded API snapshot can briefly lag
+            // during assembly resolution or a duty transition.
+            var player=Game.LocalPlayer.Character;
+            if(player==null||!player.Exists())
+            {
+                Game.LogTrivial("AdvancedK9 Callouts: "+GetType().Name+" rejected because the player ped is unavailable.");
+                return false;
+            }
+            Scene=scene;
+            ContextId=GetType().Name+"-"+Guid.NewGuid().ToString("N");
+            CalloutMessage=message;
+            CalloutPosition=scene;
+            ShowCalloutAreaBlipBeforeAccepting(scene,radius);
+            AddMinimumDistanceCheck(50f,scene);
+            Game.LogTrivial("AdvancedK9 Callouts: "+GetType().Name+" prepared at "+scene+".");
+            return true;
         }
 
         protected Vector3 StreetOffset(float forward,float side)
