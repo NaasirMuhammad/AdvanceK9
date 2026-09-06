@@ -23,6 +23,7 @@ namespace AdvancedK9.Callouts
         protected uint StartedAt;
         protected bool Finished;
         private bool _cleanupCompleted;
+        private bool _trafficControlled;
 
         protected bool Prepare(string message,Vector3 scene,float radius)
         {
@@ -105,6 +106,22 @@ namespace AdvancedK9.Callouts
             return vehicleReady&&officersReady;
         }
 
+        protected bool K9ReadyOnFoot()
+        {
+            K9ApiSnapshot snapshot;
+            return AdvancedK9Api.TryGetSnapshot(out snapshot)&&snapshot.OnDuty&&snapshot.Deployed&&
+                snapshot.DogHandle>0&&!string.Equals(snapshot.State,"InVehicle",StringComparison.OrdinalIgnoreCase)&&
+                !string.Equals(snapshot.State,"Dismissed",StringComparison.OrdinalIgnoreCase);
+        }
+
+        protected void ControlSceneTraffic()
+        {
+            if(_trafficControlled)return;
+            NativeFunction.Natives.SET_ROADS_IN_AREA(Scene.X-32f,Scene.Y-32f,Scene.Z-8f,Scene.X+32f,Scene.Y+32f,Scene.Z+8f,false,true);
+            _trafficControlled=true;
+            Game.LogTrivial("AdvancedK9 Callouts: traffic control established around "+GetType().Name+" scene.");
+        }
+
         protected float K9DistanceTo(Vector3 position)
         {
             K9ApiSnapshot snapshot;
@@ -159,6 +176,11 @@ namespace AdvancedK9.Callouts
             if(OfficerOne!=null&&OfficerOne.Exists())OfficerOne.Dismiss();
             if(OfficerTwo!=null&&OfficerTwo.Exists())OfficerTwo.Dismiss();
             if(PoliceVehicle!=null&&PoliceVehicle.Exists())PoliceVehicle.Dismiss();
+            if(_trafficControlled)
+            {
+                NativeFunction.Natives.SET_ROADS_IN_AREA(Scene.X-32f,Scene.Y-32f,Scene.Z-8f,Scene.X+32f,Scene.Y+32f,Scene.Z+8f,true,true);
+                _trafficControlled=false;
+            }
             if(!string.IsNullOrWhiteSpace(ContextId))AdvancedK9Api.SendCommand("ClearEvidenceMarkers",ContextId,0,"Scene",Scene.X,Scene.Y,Scene.Z,"callout scene cleared");
             Game.LogTrivial("AdvancedK9 Callouts: cleared scene and evidence markers for "+GetType().Name+".");
             base.End();
