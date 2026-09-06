@@ -1,5 +1,6 @@
 using System;
 using AdvancedK9.API;
+using LSPD_First_Response.Mod.API;
 using LSPD_First_Response.Mod.Callouts;
 using Rage;
 using Rage.Native;
@@ -18,6 +19,9 @@ namespace AdvancedK9.Callouts
         protected Ped OfficerOne;
         protected Ped OfficerTwo;
         protected Ped ParentTwo;
+        protected Vehicle MedicalVehicle;
+        protected Ped MedicOne;
+        protected Ped MedicTwo;
         protected Rage.Object EvidenceProp;
         protected Rage.Object CoverProp;
         protected Blip SubjectBlip;
@@ -28,6 +32,8 @@ namespace AdvancedK9.Callouts
         private bool _cleanupCompleted;
         private bool _trafficControlled;
         private uint _nextSupportMove;
+        private bool _k9ApprehensionObserved;
+        private bool _medicalResponseStarted;
 
         protected bool Prepare(string message,Vector3 scene,float radius,bool snapToStreet=true)
         {
@@ -209,6 +215,75 @@ namespace AdvancedK9.Callouts
             },"AdvancedK9 automatic prisoner transport");
         }
 
+        protected bool ProcessPostApprehensionMedical(string completionMessage)
+        {
+            if(_medicalResponseStarted||Subject==null||!Subject.Exists()||Subject.IsDead)return _medicalResponseStarted;
+            K9ApiSnapshot snapshot;
+            if(AdvancedK9Api.TryGetSnapshot(out snapshot)&&string.Equals(snapshot.State,"Apprehending",StringComparison.OrdinalIgnoreCase))_k9ApprehensionObserved=true;
+            bool injured=Subject.Health<Subject.MaxHealth-5||Subject.IsRagdoll;
+            if(!_k9ApprehensionObserved||!injured)return false;
+            if(AdvancedK9Api.TryGetSnapshot(out snapshot)&&string.Equals(snapshot.State,"Apprehending",StringComparison.OrdinalIgnoreCase))return false;
+            _medicalResponseStarted=true;
+            var suspect=Subject;
+            GameFiber.StartNew(delegate
+            {
+                try
+                {
+                    Vector3 downedPosition=suspect.Position;
+                    Vector3 ambulancePosition=World.GetNextPositionOnStreet(new Vector3(downedPosition.X+28f,downedPosition.Y+18f,downedPosition.Z));
+                    MedicalVehicle=SpawnVehicle("ambulance",ambulancePosition,0f);
+                    MedicOne=SpawnPed("s_m_m_paramedic_01",new Vector3(ambulancePosition.X+1.5f,ambulancePosition.Y,ambulancePosition.Z),0f);
+                    MedicTwo=SpawnPed("s_m_m_paramedic_01",new Vector3(ambulancePosition.X-1.5f,ambulancePosition.Y,ambulancePosition.Z),0f);
+                    Game.DisplayNotification("~b~Dispatch:~s~ EMS responding to the K9 apprehension at the suspect's current location.");
+                    Game.LogTrivial("AdvancedK9 Callouts: EMS routed to live downed suspect position "+downedPosition+" instead of scene origin "+Scene+".");
+                    if(MedicOne!=null&&MedicOne.Exists())MedicOne.Tasks.FollowNavigationMeshToPosition(suspect.Position,MedicOne.Heading,3.2f).WaitForCompletion(12000);
+                    if(MedicTwo!=null&&MedicTwo.Exists())MedicTwo.Tasks.FollowNavigationMeshToPosition(suspect.Position,MedicTwo.Heading,3.0f).WaitForCompletion(12000);
+                    if(!suspect.Exists())return;
+                    if(MedicOne!=null&&MedicOne.Exists())NativeFunction.Natives.TASK_TURN_PED_TO_FACE_ENTITY(MedicOne,suspect,1000);
+                    if(MedicTwo!=null&&MedicTwo.Exists())NativeFunction.Natives.TASK_TURN_PED_TO_FACE_ENTITY(MedicTwo,suspect,1000);
+                    Game.DisplayNotification("~b~EMS:~s~ Treating K9 apprehension injuries on scene.");
+                    GameFiber.Wait(5000);
+                    bool serious=suspect.Health<=System.Math.Max(25,suspect.MaxHealth*45/100);
+                    suspect.Health=System.Math.Max(suspect.Health,serious?System.Math.Max(50,suspect.MaxHealth/2):System.Math.Max(75,suspect.MaxHealth*3/4));
+                    if(serious&&MedicalVehicle!=null&&MedicalVehicle.Exists()&&MedicOne!=null&&MedicOne.Exists())
+                    {
+                        Vector3 hospital=NearestHospital(suspect.Position);
+                        NativeFunction.Natives.SET_PED_INTO_VEHICLE(suspect,MedicalVehicle,2);
+                        NativeFunction.Natives.SET_PED_INTO_VEHICLE(MedicOne,MedicalVehicle,-1);
+                        if(MedicTwo!=null&&MedicTwo.Exists())NativeFunction.Natives.SET_PED_INTO_VEHICLE(MedicTwo,MedicalVehicle,1);
+                        if(OfficerOne!=null&&OfficerOne.Exists()&&PoliceVehicle!=null&&PoliceVehicle.Exists())
+                        {
+                            NativeFunction.Natives.SET_PED_INTO_VEHICLE(OfficerOne,PoliceVehicle,-1);
+                            NativeFunction.Natives.TASK_VEHICLE_FOLLOW(OfficerOne,PoliceVehicle,MedicalVehicle,20f,786603,8);
+                        }
+                        NativeFunction.Natives.TASK_VEHICLE_DRIVE_TO_COORD_LONGRANGE(MedicOne,MedicalVehicle,hospital.X,hospital.Y,hospital.Z,22f,786603,8f);
+                        Game.DisplayNotification("~o~EMS:~s~ Serious injuries require hospital transport. The on-scene patrol unit is following to complete the arrest.");
+                        Game.LogTrivial("AdvancedK9 Callouts: serious suspect injury transported toward hospital "+hospital+" with patrol follow.");
+                        GameFiber.Wait(5000);
+                    }
+                    else
+                    {
+                        Functions.SetPedAsArrested(suspect,true,true);
+                        Game.DisplayNotification("~g~EMS:~s~ Suspect treated and cleared on scene. Patrol will complete arrest and transport.");
+                        GameFiber.Wait(1200);
+                        BeginAutomaticTransport(completionMessage);
+                        return;
+                    }
+                }
+                catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: live-position EMS response contained: "+ex);}
+                Resolve(completionMessage);
+            },"AdvancedK9 live-position EMS response");
+            return true;
+        }
+
+        private static Vector3 NearestHospital(Vector3 position)
+        {
+            Vector3[] hospitals={new Vector3(295f,-1446f,29f),new Vector3(360f,-585f,28f),new Vector3(-676f,310f,83f),new Vector3(1839f,3672f,34f),new Vector3(-247f,6331f,32f)};
+            Vector3 nearest=hospitals[0];float best=position.DistanceTo(nearest);
+            for(int i=1;i<hospitals.Length;i++){float distance=position.DistanceTo(hospitals[i]);if(distance<best){best=distance;nearest=hospitals[i];}}
+            return nearest;
+        }
+
         protected void RequestK9(string command,Ped target,string details)
         {
             if(ApiRequested||!K9Available())return;ApiRequested=true;
@@ -233,6 +308,9 @@ namespace AdvancedK9.Callouts
             if(SceneVehicle!=null&&SceneVehicle.Exists())SceneVehicle.Dismiss();
             if(EvidenceProp!=null&&EvidenceProp.Exists())EvidenceProp.Dismiss();
             if(CoverProp!=null&&CoverProp.Exists())CoverProp.Dismiss();
+            if(MedicOne!=null&&MedicOne.Exists())MedicOne.Dismiss();
+            if(MedicTwo!=null&&MedicTwo.Exists())MedicTwo.Dismiss();
+            if(MedicalVehicle!=null&&MedicalVehicle.Exists())MedicalVehicle.Dismiss();
             if(OfficerOne!=null&&OfficerOne.Exists())OfficerOne.Dismiss();
             if(OfficerTwo!=null&&OfficerTwo.Exists())OfficerTwo.Dismiss();
             if(PoliceVehicle!=null&&PoliceVehicle.Exists())PoliceVehicle.Dismiss();
