@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.24.0-beta
+
+### Shared API and dynamic callouts
+
+- Adds the versioned `AdvancedK9.API.dll` contract and separate `AdvancedK9.Callouts.dll` so callouts can use K9 state and commands without coupling their lifecycle to the core plugin.
+- Adds Lost Child, Fugitive Trail from an Abandoned Vehicle, and Armed Burglary Suspect Hiding with variable outcomes, K9 scent/track/search assignments, safe cleanup, and replayable dispatch flow.
+
+### Detection, containment, and integrations
+
+- Presents every certified odor found in the same inventory as one combined, duplicate-safe alert while recording, sharing, and marking each category individually.
+- Preserves explosive-first behavior: silent indication, optional automatic safety recall, configurable recall distance, and configurable close-search lockout.
+- Adds persistent Save, Send, Next, and Clear Containment Position commands for up to 24 reusable perimeter positions.
+- Adds independent optional BLR, PD Comp, and Damage Tracker Framework adapters through a versioned AdvancedK9 state/event boundary. No third-party files are bundled or modified.
+
+### Shift progression and pursuit safety
+
+- Adds guided pre-shift and end-of-shift checklists, saved duty hours, condition totals, activity counts, and readable shift deployment summaries.
+- Expands operational XP to reward certified detections, building locates, completed scent tracks, and controlled apprehensions with duplicate suppression.
+- Adds configurable lost-visual pursuit tracking, last-known-location scent assignment, hidden-suspect recognition, and existing arrest/end-of-pursuit cleanup.
+- Preserves the v0.23.2 continuous follow/run, seated recall, leash, vehicle exit, and elevator/teleport transition fixes.
+
 ## 0.23.2-beta
 
 ### Persistent roster and kennels
