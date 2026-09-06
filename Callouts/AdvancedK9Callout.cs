@@ -263,7 +263,8 @@ namespace AdvancedK9.Callouts
                     }
                     else
                     {
-                        Functions.SetPedAsArrested(suspect,true,true);
+                        NativeFunction.Natives.SET_ENABLE_HANDCUFFS(suspect,true);
+                        NativeFunction.Natives.TASK_HANDS_UP(suspect,-1,Game.LocalPlayer.Character,-1,true);
                         Game.DisplayNotification("~g~EMS:~s~ Suspect treated and cleared on scene. Patrol will complete arrest and transport.");
                         GameFiber.Wait(1200);
                         BeginAutomaticTransport(completionMessage);
