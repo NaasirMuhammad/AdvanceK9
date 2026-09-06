@@ -31,15 +31,15 @@ namespace AdvancedK9.Callouts
             NativeFunction.Natives.GIVE_WEAPON_TO_PED(Subject,NativeFunction.Natives.GET_HASH_KEY<uint>("WEAPON_PISTOL"),36,false,false);
             NativeFunction.Natives.TASK_COWER(Subject,-1);
             Functions.PlayScannerAudioUsingPosition("WE_HAVE CRIME_BURGLARY IN_OR_ON_POSITION UNITS_RESPOND_CODE_3",Scene);
-            Game.DisplayNotification("~b~Armed Burglary:~s~ Establish containment, issue a K9 warning and search the structure perimeter.");
+            RouteToScene("Respond to the burglary location and establish containment.");
             return base.OnCalloutAccepted();
         }
         public override void Process()
         {
             if(Finished||Subject==null||!Subject.Exists()){if(!Finished)Resolve("~r~Armed Burglary ended: suspect unavailable.");return;}
             var player=Game.LocalPlayer.Character;
-            if(!ApiRequested&&player.DistanceTo(Scene)<55f)RequestK9("SearchBuilding",Subject,"armed burglary suspect hiding near structure");
-            if(player.DistanceTo(Subject)<24f)
+            if(!ApiRequested&&player.DistanceTo(Scene)<55f)RequestK9("SearchBuilding",Subject,"armed burglary suspect hiding near structure");\n            if(ApiRequested)ClearSceneRoute();
+            if(ApiRequested&&player.DistanceTo(Subject)<24f)
             {
                 if(_outcome<=1)NativeFunction.Natives.TASK_HANDS_UP(Subject,120000,player,-1,true);
                 else if(_outcome==2)NativeFunction.Natives.TASK_SMART_FLEE_PED(Subject,player,700f,-1,false,false);
