@@ -156,7 +156,7 @@ namespace AdvancedK9.Callouts
         {
             if(ApiRequested||target==null||!target.Exists())return;
             ApiRequested=true;
-            AdvancedK9Api.SendCommand("AssignScent",ContextId,HandleOf(target),"Ped",Scene.X,Scene.Y,Scene.Z,details);
+            AdvancedK9Api.SendCommand("AssignScent",ContextId,HandleOf(target),"Ped",Scene.X,Scene.Y,Scene.Z,details,target.Position.X,target.Position.Y,target.Position.Z);
             Game.DisplayNotification("~b~AdvancedK9 callout:~s~ preserved vehicle scent is ready. Command Rex to COLLECT SCENT or TRACK beside the abandoned vehicle.");
         }
 
