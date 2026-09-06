@@ -7,6 +7,7 @@ using System.IO;
 using System.Windows.Forms;
 using Rage;
 using Rage.Native;
+using AdvancedK9.API;
 
 namespace AdvancedK9
 {
@@ -41,6 +42,9 @@ namespace AdvancedK9
         private uint _nextDutyDiagnostic;
         private uint _nextDutyLogRead;
         private uint _nextHudUpdate;
+        private uint _nextSharedApiPublish;
+        private string _lastSharedApiRequestId="";
+        private string _activeSharedApiContextId="";
         private uint _nextKennelPrompt;
         private long _dutyLogPosition;
         private bool? _lspdfrDutyFromLog;
@@ -175,7 +179,9 @@ namespace AdvancedK9
                     _onDuty = dutyNow;
                     if (_onDuty) ActivateForDuty(); else DeactivateForDuty();
                 }
+                PublishSharedApi();
                 if (!_onDuty) continue;
+                DrainSharedApiRequests();
                 _pr.TickDiagnostics();
                 _voice?.Tick();
                 _menu.Tick();
@@ -1974,6 +1980,46 @@ namespace AdvancedK9
             catch(Exception ex)
             {
                 Game.LogTrivial("AdvancedK9 environment update skipped; controller remains active: "+ex.Message);
+            }
+        }
+
+        private void PublishSharedApi()
+        {
+            if(Game.GameTime<_nextSharedApiPublish)return;_nextSharedApiPublish=Game.GameTime+500;
+            try
+            {
+                var handler=Game.LocalPlayer.Character;
+                AdvancedK9ApiHost.Publish(new K9ApiSnapshot{
+                    OnDuty=_onDuty,Deployed=_deployed&&DogEntityExists(),K9Name=_profile==null?_config.DogName:_profile.Name,
+                    State=_state.ToString(),DogHandle=DogEntityExists()?_dog.Handle:0,
+                    HandlerHandle=handler!=null&&handler.Exists()?handler.Handle:0,
+                    Health=_profile==null?0:_profile.Health,Stamina=_profile==null?0:_profile.Stamina,
+                    Trust=_trust==null?0:_trust.Level,TrainingLevel=_profile==null?0:_profile.TrainingLevel,
+                    Certifications=_profile==null?"":Certifications(),ActiveContextId=_activeSharedApiContextId
+                });
+            }
+            catch(Exception ex){Game.LogTrivial("AdvancedK9 API snapshot publish skipped: "+ex.Message);}
+        }
+
+        private void DrainSharedApiRequests()
+        {
+            K9ApiCommandRequest request;if(!AdvancedK9ApiHost.TryReadCommand(out request)||request.RequestId==_lastSharedApiRequestId)return;
+            _lastSharedApiRequestId=request.RequestId;_activeSharedApiContextId=request.ContextId??"";
+            K9Command command;
+            if(!Enum.TryParse(request.Command,true,out command))
+            {
+                AdvancedK9ApiHost.PublishResult(request.RequestId,false,"Unknown AdvancedK9 command: "+request.Command);return;
+            }
+            try
+            {
+                Execute(command);
+                AdvancedK9ApiHost.PublishResult(request.RequestId,true,_profile.Name+" accepted "+command+".");
+                Game.LogTrivial("AdvancedK9 API command accepted: context="+_activeSharedApiContextId+", command="+command+".");
+            }
+            catch(Exception ex)
+            {
+                AdvancedK9ApiHost.PublishResult(request.RequestId,false,ex.Message);
+                Game.LogTrivial("AdvancedK9 API command failed: "+ex.Message);
             }
         }
 

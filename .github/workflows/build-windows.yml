@@ -46,14 +46,17 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $main = Get-ChildItem 'bin' -Recurse -Filter 'AdvancedK9.dll' | Select-Object -First 1
           $bridge = Resolve-Path 'artifact-bridge/AdvancedK9.LSPDFRBridge.dll'
+          $api = Get-ChildItem 'bin' -Recurse -Filter 'AdvancedK9.API.dll' | Select-Object -First 1
           $lemon = Get-ChildItem 'bin' -Recurse -Filter 'LemonUI.RagePluginHook.dll' | Select-Object -First 1
           $naudioCore = Get-ChildItem 'bin' -Recurse -Filter 'NAudio.Core.dll' | Select-Object -First 1
           $naudioWinMM = Get-ChildItem 'bin' -Recurse -Filter 'NAudio.WinMM.dll' | Select-Object -First 1
           if (-not $main) { throw 'Compiled AdvancedK9.dll was not found.' }
+          if (-not $api) { throw 'Compiled AdvancedK9.API.dll was not found.' }
           if (-not $lemon) { throw 'LemonUI.RagePluginHook.dll was not found.' }
           if (-not $naudioCore) { throw 'Required AI voice runtime NAudio.Core.dll was not found.' }
           if (-not $naudioWinMM) { throw 'Required AI voice runtime NAudio.WinMM.dll was not found.' }
           if ([System.Reflection.AssemblyName]::GetAssemblyName($main.FullName).Version -ne [Version]'0.23.2.0') { throw 'AdvancedK9.dll version is not 0.23.2.0.' }
+          if ([System.Reflection.AssemblyName]::GetAssemblyName($api.FullName).Version -ne [Version]'0.24.0.0') { throw 'AdvancedK9.API.dll version is not 0.24.0.0.' }
           if ([System.Reflection.AssemblyName]::GetAssemblyName($bridge).Version -ne [Version]'0.23.2.0') { throw 'AdvancedK9.LSPDFRBridge.dll version is not 0.23.2.0.' }
           $package = Join-Path $pwd 'release-package'
           $pluginRoot = Join-Path $package 'Plugins'
@@ -61,6 +64,7 @@ jobs:
           $configRoot = Join-Path $lspdfrRoot 'AdvancedK9'
           New-Item -ItemType Directory -Force -Path $configRoot | Out-Null
           Copy-Item $main.FullName (Join-Path $pluginRoot 'AdvancedK9.dll')
+          Copy-Item $api.FullName (Join-Path $pluginRoot 'AdvancedK9.API.dll')
           Copy-Item $bridge (Join-Path $lspdfrRoot 'AdvancedK9.LSPDFRBridge.dll')
           Copy-Item $lemon.FullName (Join-Path $package 'LemonUI.RagePluginHook.dll')
           Copy-Item $naudioCore.FullName (Join-Path $package 'NAudio.Core.dll')
