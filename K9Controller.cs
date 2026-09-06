@@ -54,6 +54,9 @@ namespace AdvancedK9
         private uint _nextVitalsUpdate;
         private Ped _voiceAimedTarget;
         private Ped _scentTarget;
+        private Ped _pendingCalloutScentTarget;
+        private Vector3 _pendingCalloutScentPosition;
+        private string _pendingCalloutScentDetails="";
         private uint _scentCollectedAt;
         private float _scentRainAtCollection;
         private uint _nextEnvironmentUpdate;
@@ -1072,9 +1075,16 @@ namespace AdvancedK9
         {
             var handler=Game.LocalPlayer.Character;
             Ped target=GetValidAimedSuspect(false);
+            ScentSample assignedCalloutSample=null;
+            if(target==null&&_pendingCalloutScentTarget!=null&&_pendingCalloutScentTarget.Exists()&&!_pendingCalloutScentTarget.IsDead&&
+                handler.DistanceTo(_pendingCalloutScentPosition)<=18f)
+            {
+                target=_pendingCalloutScentTarget;
+                assignedCalloutSample=NewScentSample(ScentArticleType.VehicleSeat,"callout abandoned vehicle","preserved driver-seat scent");
+            }
             Vehicle sourceVehicle=null;
             Rage.Object sourceArticle=null;
-            ScentSample sample=null;
+            ScentSample sample=assignedCalloutSample;
             if(target==null)
             {
                 var aimedEntity=Game.LocalPlayer.GetFreeAimingTarget() as Entity;
@@ -1442,6 +1452,18 @@ namespace AdvancedK9
 
         private void Track()
         {
+            var handler=Game.LocalPlayer.Character;
+            if((_scentTarget==null||!_scentTarget.Exists()||_scentTarget.IsDead)&&
+                _pendingCalloutScentTarget!=null&&_pendingCalloutScentTarget.Exists()&&!_pendingCalloutScentTarget.IsDead&&
+                handler.DistanceTo(_pendingCalloutScentPosition)<=18f)
+            {
+                _scentTarget=_pendingCalloutScentTarget;_scentCollectedAt=Game.GameTime;
+                _scentRainAtCollection=NativeFunction.Natives.GET_RAIN_LEVEL<float>();
+                _activeScentSample=NewScentSample(ScentArticleType.VehicleSeat,"callout abandoned vehicle","preserved driver-seat scent");
+                _activeScentSource="Callout vehicle — preserved driver-seat scent";_trailLost=false;
+                Game.DisplayNotification("~g~Vehicle scent collected.~s~~n~Rex sampled the preserved driver-seat article and is beginning the assigned trail.");
+                Game.LogTrivial("AdvancedK9 callout vehicle scent collected by TRACK command.");
+            }
             var aimed=_automaticTrackRequested?null:GetValidAimedSuspect(false);
             if(aimed==null&&_voiceAimedTarget!=null&&_voiceAimedTarget.Exists()&&!_voiceAimedTarget.IsDead&&!LspdfrBridge.IsPedCop(_voiceAimedTarget))aimed=_voiceAimedTarget;
             var target=aimed??(_scentTarget!=null&&_scentTarget.Exists()&&!_scentTarget.IsDead?_scentTarget:null)??CurrentPursuitSuspect();
@@ -2121,6 +2143,15 @@ namespace AdvancedK9
                     Ped apiTarget=World.GetAllPeds().FirstOrDefault(p=>p!=null&&p.Exists()&&ApiHandleOf(p)==request.TargetHandle);
                     if(apiTarget!=null&&!apiTarget.IsDead&&!LspdfrBridge.IsPedCop(apiTarget))
                     {
+                        if(command==K9Command.AssignScent)
+                        {
+                            _pendingCalloutScentTarget=apiTarget;
+                            _pendingCalloutScentPosition=new Vector3(request.X,request.Y,request.Z);
+                            _pendingCalloutScentDetails=request.Details??"callout vehicle scent";
+                            AdvancedK9ApiHost.PublishResult(request.RequestId,true,"Callout scent source registered; awaiting handler command.");
+                            Game.LogTrivial("AdvancedK9 API scent source assigned: context="+_activeSharedApiContextId+", source="+_pendingCalloutScentDetails+".");
+                            return;
+                        }
                         _voiceAimedTarget=apiTarget;
                         if(command==K9Command.Track||command==K9Command.CollectScent)
                         {
@@ -2130,6 +2161,12 @@ namespace AdvancedK9
                             _activeScentSource="Callout — "+request.Details;_trailLost=false;
                         }
                     }
+                }
+                if(command==K9Command.AssignScent)
+                {
+                    AdvancedK9ApiHost.PublishResult(request.RequestId,false,"Callout scent subject was unavailable.");
+                    Game.LogTrivial("AdvancedK9 API scent assignment failed: target unavailable.");
+                    return;
                 }
                 Execute(command);
                 AdvancedK9ApiHost.PublishResult(request.RequestId,true,_profile.Name+" accepted "+command+".");
