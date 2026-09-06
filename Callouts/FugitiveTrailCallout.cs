@@ -13,19 +13,21 @@ namespace AdvancedK9.Callouts
         {
             try
             {
-                return Prepare("Fugitive trail from abandoned vehicle",StreetOffset(520f,Random.Next(-160,161)),110f);
+                if(!Prepare("Fugitive trail from abandoned vehicle",StreetOffset(520f,Random.Next(-160,161)),110f))return false;
             }
             catch(System.Exception ex)
             {
                 Game.LogTrivial("AdvancedK9 Callouts: "+GetType().Name+" primary scene calculation failed; using safe fallback: "+ex);
                 var playerPosition=Game.LocalPlayer.Character.Position;
-                return Prepare("Fugitive trail from abandoned vehicle",new Vector3(playerPosition.X+260f,playerPosition.Y,playerPosition.Z),110f);
+                if(!Prepare("Fugitive trail from abandoned vehicle",new Vector3(playerPosition.X+260f,playerPosition.Y,playerPosition.Z),110f))return false;
             }
+            SceneVehicle=SpawnVehicle("primo",Scene,Random.Next(360));
+            StagePoliceScene();
+            return SceneVehicle!=null&&SceneVehicle.Exists();
         }
         public override bool OnCalloutAccepted()
         {
             StartedAt=Game.GameTime;_outcome=Random.Next(4);
-            SceneVehicle=SpawnVehicle("primo",Scene,Random.Next(360));
             Vector3 suspectPosition=new Vector3(Scene.X+Random.Next(260,430),Scene.Y+Random.Next(-260,261),Scene.Z);
             Subject=SpawnPed("a_m_m_hillbilly_01",suspectPosition,Random.Next(360));if(Subject==null)return false;
             NativeFunction.Natives.TASK_WANDER_STANDARD(Subject,10f,10);
