@@ -36,7 +36,7 @@ namespace AdvancedK9.Callouts
         {
             StartedAt=Game.GameTime;_outcome=Random.Next(4);
             StagePoliceScene();
-            Vector3 suspectPosition=World.GetNextPositionOnStreet(new Vector3(Scene.X+Random.Next(260,430),Scene.Y+Random.Next(-260,261),Scene.Z));
+            Vector3 suspectPosition=World.GetNextPositionOnStreet(new Vector3(Scene.X+Random.Next(120,191),Scene.Y+Random.Next(-75,76),Scene.Z));
             Subject=SpawnPed("a_m_m_hillbilly_01",suspectPosition,Random.Next(360));if(Subject==null)return false;
             NativeFunction.Natives.TASK_COWER(Subject,-1);
             Functions.PlayScannerAudioUsingPosition("WE_HAVE CRIME_RESIST_ARREST IN_OR_ON_POSITION",Scene);
