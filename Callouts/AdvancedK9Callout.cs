@@ -25,7 +25,7 @@ namespace AdvancedK9.Callouts
         private bool _cleanupCompleted;
         private bool _trafficControlled;
 
-        protected bool Prepare(string message,Vector3 scene,float radius)
+        protected bool Prepare(string message,Vector3 scene,float radius,bool snapToStreet=true)
         {
             var player=Game.LocalPlayer.Character;
             if(player==null||!player.Exists())
@@ -33,7 +33,7 @@ namespace AdvancedK9.Callouts
                 Game.LogTrivial("AdvancedK9 Callouts: "+GetType().Name+" rejected because the player ped is unavailable.");
                 return false;
             }
-            Scene=World.GetNextPositionOnStreet(scene);
+            Scene=snapToStreet?World.GetNextPositionOnStreet(scene):scene;
             ContextId=GetType().Name+"-"+Guid.NewGuid().ToString("N");
             CalloutMessage=message;
             CalloutPosition=Scene;
