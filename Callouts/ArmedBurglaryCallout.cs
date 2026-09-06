@@ -11,7 +11,16 @@ namespace AdvancedK9.Callouts
         private int _outcome;
         public override bool OnBeforeCalloutDisplayed()
         {
-            return Prepare("Armed burglary suspect hiding — K9 requested",StreetOffset(460f,Random.Next(-130,131)),85f)&&base.OnBeforeCalloutDisplayed();
+            try
+            {
+                return Prepare("Armed burglary suspect hiding — K9 requested",StreetOffset(460f,Random.Next(-130,131)),85f);
+            }
+            catch(System.Exception ex)
+            {
+                Game.LogTrivial("AdvancedK9 Callouts: "+GetType().Name+" primary scene calculation failed; using safe fallback: "+ex);
+                var playerPosition=Game.LocalPlayer.Character.Position;
+                return Prepare("Armed burglary suspect hiding — K9 requested",new Vector3(playerPosition.X+260f,playerPosition.Y,playerPosition.Z),85f);
+            }
         }
         public override bool OnCalloutAccepted()
         {
