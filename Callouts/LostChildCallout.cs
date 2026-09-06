@@ -23,11 +23,11 @@ namespace AdvancedK9.Callouts
                 new Vector3(-3150f,1100f,20f)
             };
             Vector3[] children={
-                new Vector3(250f,-900f,29f),new Vector3(1130f,-700f,56f),
-                new Vector3(-1300f,-1550f,4f),new Vector3(150f,-1980f,18f),
-                new Vector3(-1550f,-850f,10f),new Vector3(1900f,3720f,32f),
-                new Vector3(1750f,4850f,42f),new Vector3(-150f,6500f,29f),
-                new Vector3(-3200f,1050f,20f)
+                new Vector3(320f,-950f,29f),new Vector3(1170f,-760f,57f),
+                new Vector3(-1360f,-1560f,4f),new Vector3(210f,-2020f,18f),
+                new Vector3(-1580f,-900f,10f),new Vector3(1960f,3770f,32f),
+                new Vector3(1810f,4890f,42f),new Vector3(-210f,6515f,29f),
+                new Vector3(-3230f,1190f,20f)
             };
             Vector3 player=Game.LocalPlayer.Character.Position;int best=0;float distance=player.DistanceTo(scenes[0]);
             for(int i=1;i<scenes.Length;i++){float candidate=player.DistanceTo(scenes[i]);if(candidate<distance){best=i;distance=candidate;}}
