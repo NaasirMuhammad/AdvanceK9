@@ -78,7 +78,8 @@ namespace AdvancedK9.Callouts
 
             if(_suspectLocated)
             {
-                if(Subject.IsDead)Resolve("~o~Fugitive Trail concluded: suspect is deceased.");
+                if(ProcessPostApprehensionMedical("~g~Fugitive Trail complete: EMS treated the suspect and patrol completed custody.")){}
+                else if(Subject.IsDead)Resolve("~o~Fugitive Trail concluded: suspect is deceased.");
                 else if(NativeFunction.Natives.IS_PED_CUFFED<bool>(Subject)&&!_transportStarted){_transportStarted=true;BeginAutomaticTransport("~g~Fugitive Trail complete: on-scene units transported the prisoner.");}
                 else if(Game.GameTime-_locatedAt>300000)Resolve("~o~Fugitive Trail concluded after suspect location.");
             }
