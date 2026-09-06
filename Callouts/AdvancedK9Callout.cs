@@ -21,25 +21,23 @@ namespace AdvancedK9.Callouts
         protected bool ApiRequested;
         protected uint StartedAt;
         protected bool Finished;
+        private bool _cleanupCompleted;
 
         protected bool Prepare(string message,Vector3 scene,float radius)
         {
-            // LSPDFR only creates registered callouts while the player is on duty. Do not
-            // reject the offer because the separately loaded API snapshot can briefly lag
-            // during assembly resolution or a duty transition.
             var player=Game.LocalPlayer.Character;
             if(player==null||!player.Exists())
             {
                 Game.LogTrivial("AdvancedK9 Callouts: "+GetType().Name+" rejected because the player ped is unavailable.");
                 return false;
             }
-            Scene=scene;
+            Scene=World.GetNextPositionOnStreet(scene);
             ContextId=GetType().Name+"-"+Guid.NewGuid().ToString("N");
             CalloutMessage=message;
-            CalloutPosition=scene;
-            ShowCalloutAreaBlipBeforeAccepting(scene,radius);
-            AddMinimumDistanceCheck(50f,scene);
-            Game.LogTrivial("AdvancedK9 Callouts: "+GetType().Name+" prepared at "+scene+".");
+            CalloutPosition=Scene;
+            ShowCalloutAreaBlipBeforeAccepting(Scene,radius);
+            AddMinimumDistanceCheck(50f,Scene);
+            Game.LogTrivial("AdvancedK9 Callouts: "+GetType().Name+" prepared at "+Scene+".");
             return true;
         }
 
@@ -65,8 +63,10 @@ namespace AdvancedK9.Callouts
         {
             Vector3 cruiserPosition=World.GetNextPositionOnStreet(new Vector3(Scene.X-14f,Scene.Y-8f,Scene.Z));
             PoliceVehicle=SpawnVehicle("police3",cruiserPosition,Game.LocalPlayer.Character.Heading);
-            OfficerOne=SpawnPed("s_m_y_cop_01",new Vector3(Scene.X-7f,Scene.Y-3f,Scene.Z),0f);
-            OfficerTwo=SpawnPed("s_m_y_cop_01",new Vector3(Scene.X+6f,Scene.Y-4f,Scene.Z),180f);
+            Vector3 officerOnePosition=World.GetNextPositionOnStreet(new Vector3(Scene.X-7f,Scene.Y-3f,Scene.Z));
+            Vector3 officerTwoPosition=World.GetNextPositionOnStreet(new Vector3(Scene.X+6f,Scene.Y-4f,Scene.Z));
+            OfficerOne=SpawnPed("s_m_y_cop_01",officerOnePosition,0f);
+            OfficerTwo=SpawnPed("s_m_y_cop_01",officerTwoPosition,180f);
             if(OfficerOne!=null&&OfficerOne.Exists())Rage.Native.NativeFunction.Natives.TASK_STAND_STILL(OfficerOne,-1);
             if(OfficerTwo!=null&&OfficerTwo.Exists())Rage.Native.NativeFunction.Natives.TASK_STAND_STILL(OfficerTwo,-1);
             Game.LogTrivial("AdvancedK9 Callouts: staged police scene for "+GetType().Name+".");
@@ -107,6 +107,8 @@ namespace AdvancedK9.Callouts
 
         public override void End()
         {
+            if(_cleanupCompleted)return;
+            _cleanupCompleted=true;
             ClearSceneRoute();
             if(SubjectBlip!=null&&SubjectBlip.Exists())SubjectBlip.Delete();
             if(Reporter!=null&&Reporter.Exists())Reporter.Dismiss();
@@ -116,9 +118,10 @@ namespace AdvancedK9.Callouts
             if(OfficerTwo!=null&&OfficerTwo.Exists())OfficerTwo.Dismiss();
             if(PoliceVehicle!=null&&PoliceVehicle.Exists())PoliceVehicle.Dismiss();
             if(!string.IsNullOrWhiteSpace(ContextId))AdvancedK9Api.SendCommand("ClearEvidenceMarkers",ContextId,0,"Scene",Scene.X,Scene.Y,Scene.Z,"callout scene cleared");
+            Game.LogTrivial("AdvancedK9 Callouts: cleared scene and evidence markers for "+GetType().Name+".");
             base.End();
         }
 
-        public override void OnCalloutNotAccepted(){End();base.OnCalloutNotAccepted();}
+        public override void OnCalloutNotAccepted(){End();}
     }
 }
