@@ -5,7 +5,7 @@ using Rage;
 
 namespace AdvancedK9.Callouts
 {
-    internal abstract class AdvancedK9Callout : Callout
+    public abstract class AdvancedK9Callout : Callout
     {
         protected readonly Random Random=new Random();
         protected string ContextId;
