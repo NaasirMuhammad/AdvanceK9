@@ -11,7 +11,7 @@ using Rage.Native;
 namespace AdvancedK9
 {
     internal enum CompatibilityMode { Standalone, PolicingRedefined, StopThePed }
-    internal sealed class CompatibilitySearchResult { public bool Positive; public bool Inconclusive; public DetectionSpecialty Specialty; public string Source; public string Detail; }
+    internal sealed class CompatibilitySearchResult { public bool Positive; public bool Inconclusive; public DetectionSpecialty Specialty; public readonly List<DetectionSpecialty> Odors=new List<DetectionSpecialty>(); public string Source; public string Detail; }
 
     // Optional PR/CDF and Stop The Ped adapter. No external assembly is referenced,
     // so AdvancedK9 remains loadable when either integration is absent or updated.
@@ -62,12 +62,13 @@ namespace AdvancedK9
             else{object record=GetRecord(target);inventory=Flatten(record,0,new HashSet<object>(ReferenceComparer.Instance));if(string.IsNullOrWhiteSpace(inventory))inventory=GetSearchText(target);if(string.IsNullOrWhiteSpace(inventory)){string handle=target.Handle.ToString();if(handle==_bridgeVehicleHandle)inventory=_bridgeVehicleData;else if(handle==_bridgePedHandle)inventory=_bridgePedData;}if(string.IsNullOrWhiteSpace(inventory))inventory=RequestBridgeRecord(target);}
             if(string.IsNullOrWhiteSpace(inventory)){Game.LogTrivial("AdvancedK9 compatibility search: inventory unavailable for entity "+target.Handle+"; result is inconclusive and random/negative fallbacks are suppressed.");return new CompatibilitySearchResult{Positive=false,Inconclusive=true,Specialty=DetectionSpecialty.General,Source=ModeLabel,Detail="Integration inventory unavailable"};}
             if(inventory=="[AdvancedK9:EMPTY_INVENTORY]")inventory="";
-            var odors=ClassifyAll(inventory);DetectionSpecialty detected=requested!=DetectionSpecialty.General&&odors.Contains(requested)?requested:
-                odors.FirstOrDefault(s=>s==DetectionSpecialty.Narcotics&&narcoticsCertified||s==DetectionSpecialty.Explosives&&explosivesCertified||s==DetectionSpecialty.Weapons&&weaponsCertified);
-            bool certified=detected==DetectionSpecialty.Narcotics?narcoticsCertified:detected==DetectionSpecialty.Explosives?explosivesCertified:detected==DetectionSpecialty.Weapons?weaponsCertified:false;
-            bool matches=requested==DetectionSpecialty.General||odors.Contains(requested);
-            var result=new CompatibilitySearchResult{Positive=detected!=DetectionSpecialty.General&&certified&&matches,Specialty=detected,Source=ModeLabel,Detail=TrimDetail(inventory)};
-            Game.LogTrivial("AdvancedK9 compatibility search: source="+result.Source+", entity="+target.Handle+", requested="+requested+", detected="+detected+", certified="+certified+", positive="+result.Positive+".");return result;
+            var odors=ClassifyAll(inventory);
+            var certifiedOdors=odors.Where(s=>s==DetectionSpecialty.Narcotics&&narcoticsCertified||s==DetectionSpecialty.Explosives&&explosivesCertified||s==DetectionSpecialty.Weapons&&weaponsCertified).OrderBy(s=>s==DetectionSpecialty.Explosives?0:s==DetectionSpecialty.Weapons?1:2).ToList();
+            var presented=requested==DetectionSpecialty.General?certifiedOdors:certifiedOdors.Where(s=>s==requested).ToList();
+            DetectionSpecialty detected=presented.Count>0?presented[0]:DetectionSpecialty.General;
+            var result=new CompatibilitySearchResult{Positive=presented.Count>0,Specialty=detected,Source=ModeLabel,Detail=TrimDetail(inventory)};
+            result.Odors.AddRange(presented);
+            Game.LogTrivial("AdvancedK9 compatibility search: source="+result.Source+", entity="+target.Handle+", requested="+requested+", classified=["+string.Join(",",odors)+"], presented=["+string.Join(",",presented)+"], positive="+result.Positive+".");return result;
         }
 
         private string RequestBridgeRecord(Entity target)
