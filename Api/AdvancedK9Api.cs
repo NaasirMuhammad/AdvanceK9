@@ -35,6 +35,9 @@ namespace AdvancedK9.API
         public float X { get; set; }
         public float Y { get; set; }
         public float Z { get; set; }
+        public float TargetX { get; set; }
+        public float TargetY { get; set; }
+        public float TargetZ { get; set; }
         public string Details { get; set; } = "";
     }
 
@@ -85,13 +88,14 @@ namespace AdvancedK9.API
             catch{return false;}
         }
 
-        public static string SendCommand(string command,string contextId="",int targetHandle=0,string targetType="",float x=0,float y=0,float z=0,string details="")
+        public static string SendCommand(string command,string contextId="",int targetHandle=0,string targetType="",float x=0,float y=0,float z=0,string details="",float targetX=0,float targetY=0,float targetZ=0)
         {
-            var request=new K9ApiCommandRequest{Command=command??"",ContextId=contextId??"",TargetHandle=targetHandle,TargetType=targetType??"",X=x,Y=y,Z=z,Details=details??""};
+            var request=new K9ApiCommandRequest{Command=command??"",ContextId=contextId??"",TargetHandle=targetHandle,TargetType=targetType??"",X=x,Y=y,Z=z,TargetX=targetX,TargetY=targetY,TargetZ=targetZ,Details=details??""};
             WriteValues(RequestPath,new[]{
                 Pair("Protocol",ProtocolVersion),Pair("RequestId",request.RequestId),Pair("CreatedUtcTicks",request.CreatedUtcTicks),
                 Pair("Command",request.Command),Pair("ContextId",request.ContextId),Pair("TargetHandle",request.TargetHandle),
-                Pair("TargetType",request.TargetType),Pair("X",request.X),Pair("Y",request.Y),Pair("Z",request.Z),Pair("Details",request.Details)
+                Pair("TargetType",request.TargetType),Pair("X",request.X),Pair("Y",request.Y),Pair("Z",request.Z),
+                Pair("TargetX",request.TargetX),Pair("TargetY",request.TargetY),Pair("TargetZ",request.TargetZ),Pair("Details",request.Details)
             });
             return request.RequestId;
         }
@@ -178,6 +182,7 @@ namespace AdvancedK9.API
                     Command=AdvancedK9Api.Read(values,"Command"),ContextId=AdvancedK9Api.Read(values,"ContextId"),
                     TargetHandle=AdvancedK9Api.ReadInt(values,"TargetHandle"),TargetType=AdvancedK9Api.Read(values,"TargetType"),
                     X=AdvancedK9Api.ReadFloat(values,"X"),Y=AdvancedK9Api.ReadFloat(values,"Y"),Z=AdvancedK9Api.ReadFloat(values,"Z"),
+                    TargetX=AdvancedK9Api.ReadFloat(values,"TargetX"),TargetY=AdvancedK9Api.ReadFloat(values,"TargetY"),TargetZ=AdvancedK9Api.ReadFloat(values,"TargetZ"),
                     Details=AdvancedK9Api.Read(values,"Details")
                 };
                 File.Delete(AdvancedK9Api.RequestPath);
