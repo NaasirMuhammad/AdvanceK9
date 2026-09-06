@@ -39,6 +39,11 @@ namespace AdvancedK9
         public float SearchRadius = 12f;
         public float TrackRadius = 80f;
         public int NonLethalHealthFloor = 35;
+        public bool PursuitAutoTrackLostVisual = true;
+        public int PursuitLostVisualSeconds = 4;
+        public bool ExplosiveAutoRecall = true;
+        public bool ExplosiveSearchLockout = true;
+        public float ExplosiveSafetyDistance = 12f;
         public int StartingTrust = 40;
         public float FetchBallOffsetX = 0.12f;
         public float FetchBallOffsetY = 0.01f;
@@ -107,6 +112,11 @@ namespace AdvancedK9
             result.SearchRadius = Math.Max(3f, ini.ReadSingle("Search", "Radius", result.SearchRadius));
             result.TrackRadius = Math.Max(20f, ini.ReadSingle("Tracking", "AcquisitionRadius", result.TrackRadius));
             result.NonLethalHealthFloor = Math.Max(10, ini.ReadInt32("Apprehension", "HealthFloor", result.NonLethalHealthFloor));
+            result.PursuitAutoTrackLostVisual = ini.ReadBoolean("Pursuit", "AutoTrackLostVisual", result.PursuitAutoTrackLostVisual);
+            result.PursuitLostVisualSeconds = Math.Max(2, Math.Min(30, ini.ReadInt32("Pursuit", "LostVisualSeconds", result.PursuitLostVisualSeconds)));
+            result.ExplosiveAutoRecall = ini.ReadBoolean("ExplosiveSafety", "AutoRecall", result.ExplosiveAutoRecall);
+            result.ExplosiveSearchLockout = ini.ReadBoolean("ExplosiveSafety", "SearchLockout", result.ExplosiveSearchLockout);
+            result.ExplosiveSafetyDistance = Math.Max(6f, Math.Min(40f, ini.ReadSingle("ExplosiveSafety", "RecallDistance", result.ExplosiveSafetyDistance)));
             result.StartingTrust = Math.Max(0, Math.Min(100, ini.ReadInt32("Trust", "StartingLevel", result.StartingTrust)));
             result.FetchBallOffsetX = ini.ReadSingle("Fetch", "BallOffsetX", result.FetchBallOffsetX);
             result.FetchBallOffsetY = ini.ReadSingle("Fetch", "BallOffsetY", result.FetchBallOffsetY);
