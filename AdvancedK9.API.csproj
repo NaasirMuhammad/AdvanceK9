@@ -4,6 +4,9 @@
     <LangVersion>latest</LangVersion>
     <AssemblyName>AdvancedK9.API</AssemblyName>
     <RootNamespace>AdvancedK9.API</RootNamespace>
+    <Authors>mtennekten</Authors>
+    <Company>mtennekten</Company>
+    <Copyright>Copyright © 2026 mtennekten</Copyright>
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <Version>0.24.0-beta</Version>
