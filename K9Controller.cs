@@ -1493,7 +1493,7 @@ namespace AdvancedK9
             GameFiber.Wait(250);
             var end = Game.GameTime + 120000;
             uint nextScentCheck=Game.GameTime+(uint)_random.Next(18000,28001);
-            var route=BuildRecordedTrailRoute(target);int routeIndex=0;Vector3 initialDirection=route.Count>0?route[0]:target.Position;Vector3 testedDirection=PerformFullCircleDirectionTest(initialDirection,scentQuality,rain);if(testedDirection.DistanceTo(initialDirection)>3f)route.Insert(0,testedDirection);_activeTrackDistance=0f;_activeTrackStarted=Game.GameTime;Vector3 previous=_dog.Position;
+            var route=BuildRecordedTrailRoute(target);int routeIndex=0;Vector3 initialDirection=route.Count>0?route[0]:target.Position;PerformFullCircleDirectionTest(initialDirection,scentQuality,rain);_activeTrackDistance=0f;_activeTrackStarted=Game.GameTime;Vector3 previous=_dog.Position;
             while (_running && DogExists() && target.Exists() && !target.IsDead && Game.GameTime < end && _state == K9State.Tracking)
             {
                 CaptureTargetTrailPoint(target);
@@ -1519,16 +1519,10 @@ namespace AdvancedK9
                 }
                 var destination=routeIndex<route.Count?route[routeIndex]:target.Position;
                 TrailEnvironment environment=AssessTrailEnvironment(_dog.Position,destination);if(environment.QualityPenalty>0){scentQuality=Math.Max(5,scentQuality-environment.QualityPenalty);Game.DisplaySubtitle("~o~"+environment.Label+"~s~ — trail quality "+scentQuality+"%",1100);}
-                if(environment.DirectionCheckChance>0&&Game.GameTime>=_nextObstacleDirectionCheck){_nextObstacleDirectionCheck=Game.GameTime+7000;destination=PerformObstacleDirectionCheck(destination,environment,scentQuality,rain);}
+                if(environment.DirectionCheckChance>0&&Game.GameTime>=_nextObstacleDirectionCheck){_nextObstacleDirectionCheck=Game.GameTime+12000;PerformObstacleDirectionCheck(destination,environment,scentQuality,rain);}
                 float dx = destination.X - _dog.Position.X, dy = destination.Y - _dog.Position.Y;
                 float distance = (float)Math.Sqrt(dx * dx + dy * dy);
-                float step = Math.Min(_workingLeashed?4.5f:6f,Math.Max(2.4f,distance-1f));
-                float inv = distance > .01f ? 1f / distance : 0f;
-                float scentJitter = (float)(_random.NextDouble() * 1.4 - .7);
-                var waypoint = new Vector3(_dog.Position.X + dx * inv * step - dy * inv * scentJitter,
-                                           _dog.Position.Y + dy * inv * step + dx * inv * scentJitter,
-                                           destination.Z);
-                waypoint=WorkingLeadWaypoint(waypoint,_workingLeashed?4.5f:6f);
+                var waypoint=destination;
                 _dog.Tasks.Clear();
                 if(Game.GameTime>=nextScentCheck)
                 {
@@ -1538,15 +1532,13 @@ namespace AdvancedK9
                 }
                 if(_workingLeashed)
                 {
-                    _dog.Tasks.FollowNavigationMeshToPosition(waypoint,target.Heading,rain>.35f?2.2f:3.0f).WaitForCompletion(2400);
-                    _dog.Tasks.FollowNavigationMeshToPosition(waypoint,target.Heading,(rain>.35f?2.2f:3.0f)*environment.SpeedMultiplier).WaitForCompletion(2400);
+                    _dog.Tasks.FollowNavigationMeshToPosition(waypoint,target.Heading,(rain>.35f?3.6f:4.8f)*Math.Max(.8f,environment.SpeedMultiplier)).WaitForCompletion(3200);
                     if(_dog.DistanceTo(destination)<5f&&routeIndex<route.Count)routeIndex++;
                     else Game.DisplaySubtitle("~b~Follow the leash~s~ — "+_profile.Name+" is holding the scent line.",900);
                 }
                 else
                 {
-                    _dog.Tasks.FollowNavigationMeshToPosition(waypoint,target.Heading,rain>.35f?2.8f:3.8f).WaitForCompletion(3200);
-                    _dog.Tasks.FollowNavigationMeshToPosition(waypoint,target.Heading,(rain>.35f?2.8f:3.8f)*environment.SpeedMultiplier).WaitForCompletion(3200);
+                    _dog.Tasks.FollowNavigationMeshToPosition(waypoint,target.Heading,(rain>.35f?4.4f:5.8f)*Math.Max(.8f,environment.SpeedMultiplier)).WaitForCompletion(3800);
                     if(_dog.DistanceTo(destination)<5f&&routeIndex<route.Count)routeIndex++;
                     else if(_dog.DistanceTo(Game.LocalPlayer.Character)>6.5f)Game.DisplaySubtitle("~b~Advance with your K9~s~ — "+_profile.Name+" is holding the scent line ahead.",900);
                 }
@@ -1585,21 +1577,17 @@ namespace AdvancedK9
 
         private Vector3 PerformFullCircleDirectionTest(Vector3 correctDirection,int scentQuality,float rain)
         {
-            if(!DogExists())return correctDirection;Vector3 center=_dog.Position;Game.DisplayNotification("~b~K9 direction test started.~s~~n~"+_profile.Name+" will visibly cast through a full circle before selecting the trail.");
-            for(int sector=0;sector<8;sector++)
-            {
-                double angle=sector*Math.PI/4.0;Vector3 cast=new Vector3(center.X+(float)Math.Sin(angle)*2.2f,center.Y+(float)Math.Cos(angle)*2.2f,center.Z);
-                _dog.Tasks.FollowNavigationMeshToPosition(cast,(float)(sector*45),1.35f).WaitForCompletion(1100);PlayDogAnimation("creatures@rottweiler@indication@","indicate_low",360,0);GameFiber.Wait(90);
-            }
-            double wrongChance=.28-(_profile.TrainingLevel-1)*.035-(_trust.Level/100.0)*.10+((100-_profile.Stamina)/100.0)*.18+rain*.18+((100-scentQuality)/100.0)*.22;
-            wrongChance=Math.Max(.02,Math.Min(.55,wrongChance));bool wrong=_random.NextDouble()<wrongChance;Vector3 selected=correctDirection;
-            if(wrong)
-            {
-                float dx=correctDirection.X-center.X,dy=correctDirection.Y-center.Y;float length=(float)Math.Sqrt(dx*dx+dy*dy);if(length<1f)length=6f;double turn=(_random.Next(2)==0?-1:1)*(_random.Next(55,126)*Math.PI/180.0);float nx=(float)(dx*Math.Cos(turn)-dy*Math.Sin(turn)),ny=(float)(dx*Math.Sin(turn)+dy*Math.Cos(turn));selected=new Vector3(center.X+nx/length*6f,center.Y+ny/length*6f,center.Z);
-                Game.DisplayNotification("~o~Initial direction is uncertain.~s~~n~Training, trust, fatigue, weather, and scent quality affected the cast. The K9 will check again after movement.");
-            }
-            IndicateTrackDirection(selected);Vector3 pull=WorkingLeadWaypoint(selected,_workingLeashed?4.5f:6f);_dog.Tasks.FollowNavigationMeshToPosition(pull,_dog.Heading,3.2f).WaitForCompletion(1600);Game.DisplaySubtitle(_workingLeashed?"~b~Strong leash pull~s~ — follow the selected route.":"~b~Strong body-line indication~s~ — K9 committed to route.",1400);
-            K9IncidentLog.Write(_profile.Name,"Direction test","360-degree cast; "+(wrong?"uncertain route selected":"correct route selected")+"; probability "+(wrongChance*100).ToString("0")+"%",center);return selected;
+            if(!DogExists())return correctDirection;
+            Vector3 center=_dog.Position;
+            Game.DisplayNotification("~b~K9 direction test started.~s~~n~"+_profile.Name+" is checking the air before committing to the strongest scent line.");
+            _dog.Tasks.Clear();
+            NativeFunction.Natives.TASK_TURN_PED_TO_FACE_COORD(_dog,correctDirection.X,correctDirection.Y,correctDirection.Z,900);
+            GameFiber.Wait(650);
+            PlayDogAnimation("creatures@rottweiler@indication@","indicate_low",650,0);
+            IndicateTrackDirection(correctDirection);
+            Game.DisplaySubtitle(_workingLeashed?"~b~Strong leash pull~s~ — follow the committed route.":"~b~Strong body-line indication~s~ — K9 committed to route.",1400);
+            K9IncidentLog.Write(_profile.Name,"Direction test","Safe scent check; correct route committed without false movement points",center);
+            return correctDirection;
         }
 
         private TrailEnvironment AssessTrailEnvironment(Vector3 from,Vector3 destination)
@@ -1627,11 +1615,11 @@ namespace AdvancedK9
 
         private Vector3 PerformObstacleDirectionCheck(Vector3 correct,TrailEnvironment environment,int scentQuality,float rain)
         {
-            Vector3 center=_dog.Position;Game.DisplaySubtitle("~b~Direction check~s~ — "+environment.Label,1000);
-            for(int i=-1;i<=1;i++){float angle=_dog.Heading+i*55f;Vector3 test=center+HeadingOffset(angle,1.8f);_dog.Tasks.FollowNavigationMeshToPosition(test,angle,1.2f).WaitForCompletion(800);PlayDogAnimation("creatures@rottweiler@indication@","indicate_low",300,0);}
-            double mistake=(environment.DirectionCheckChance/100.0)*(.25+((100-_profile.Stamina)/100.0)*.3+rain*.25+((100-scentQuality)/100.0)*.3)*(1.15-_trust.Level/120.0)*(1.15-_profile.TrainingLevel*.08);
-            if(_random.NextDouble()>=Math.Max(.01,Math.Min(.65,mistake))){IndicateTrackDirection(correct);return correct;}
-            float dx=correct.X-center.X,dy=correct.Y-center.Y,length=(float)Math.Sqrt(dx*dx+dy*dy);if(length<.1f)return correct;float side=_random.Next(2)==0?-1f:1f;Vector3 uncertain=new Vector3(center.X-dy/length*side*4f,center.Y+dx/length*side*4f,center.Z);Game.DisplaySubtitle("~o~Uncertain check~s~ — watch the leash/body line for correction.",1300);K9IncidentLog.Write(_profile.Name,"Obstacle direction check",environment.Label+" produced a temporary wrong direction",center);return uncertain;
+            if(!DogExists())return correct;
+            Game.DisplaySubtitle("~b~Scent confirmation~s~ — "+environment.Label,1000);
+            PlayDogAnimation("creatures@rottweiler@indication@","indicate_low",350,0);
+            K9IncidentLog.Write(_profile.Name,"Obstacle scent check",environment.Label+"; route retained",_dog.Position);
+            return correct;
         }
 
         private void ReacquireTrail()
