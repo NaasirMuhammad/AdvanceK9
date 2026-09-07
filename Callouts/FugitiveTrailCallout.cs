@@ -50,15 +50,14 @@ namespace AdvancedK9.Callouts
                 if(length<.1f){dx=1f;dy=0f;length=1f;}
                 float side=Random.Next(2)==0?-8f:8f;
                 Vector3 coverPosition=new Vector3(trailEnd.X-dy/length*side,trailEnd.Y+dx/length*side,trailEnd.Z);
-                CoverProp=SpawnProp("prop_bush_med_03",coverPosition);
                 hidingPosition=new Vector3(coverPosition.X+dx/length*1.7f,coverPosition.Y+dy/length*1.7f,coverPosition.Z);
-                Game.LogTrivial("AdvancedK9 Callouts: no usable map cover found; off-road foliage hide staged at "+hidingPosition+".");
+                Game.LogTrivial("AdvancedK9 Callouts: remote map cover was not streamed; off-road fallback selected without spawning artificial cover.");
             }
             Subject=SpawnPed("a_m_m_hillbilly_01",hidingPosition,Random.Next(360));if(Subject==null)return false;
             Subject.MaxHealth=250;Subject.Health=250;
-            NativeFunction.Natives.TASK_STAND_STILL(Subject,-1);
+            NativeFunction.Natives.TASK_START_SCENARIO_IN_PLACE(Subject,"WORLD_HUMAN_BUM_SLUMPED",0,true);
             _coverConfirmed=true;_nextCoverSearch=Game.GameTime+9000;
-            Game.LogTrivial("AdvancedK9 Callouts: fugitive staged stationary behind environmental cover before scent collection.");
+            Game.LogTrivial("AdvancedK9 Callouts: fugitive staged low and stationary at an off-road hiding point before scent collection.");
             Functions.PlayScannerAudioUsingPosition("WE_HAVE CRIME_RESIST_ARREST IN_OR_ON_POSITION",Scene);
             RouteToScene("Respond to the abandoned vehicle. The on-scene officer has preserved a scent article from the driver seat.");
             return base.OnCalloutAccepted();
@@ -73,6 +72,13 @@ namespace AdvancedK9.Callouts
             if(!_sceneBriefed&&player.DistanceTo(Scene)<28f)
             {
                 _sceneBriefed=true;
+                Vector3 streamedCover;
+                if(TryFindExistingCover(Subject.Position,out streamedCover))
+                {
+                    Subject.Position=streamedCover;
+                    NativeFunction.Natives.TASK_START_SCENARIO_IN_PLACE(Subject,"WORLD_HUMAN_BUM_SLUMPED",0,true);
+                    Game.LogTrivial("AdvancedK9 Callouts: fugitive moved to streamed world cover before scent handoff; no artificial cover prop used.");
+                }
                 Game.DisplayNotification("~b~On-scene officer:~s~ The suspect fled on foot. I preserved their scent from the driver seat.~n~~y~Deploy Rex beside the abandoned vehicle and command TRACK.");
             }
             if(!ApiRequested&&_sceneBriefed)
@@ -81,7 +87,7 @@ namespace AdvancedK9.Callouts
                 if(ApiRequested){ClearSceneRoute();Game.LogTrivial("AdvancedK9 Callouts: fugitive vehicle scent source registered; awaiting handler command.");}
             }
 
-            if(ApiRequested&&!_suspectLocated&&!_supportCommitted&&player.DistanceTo(Scene)>22f&&K9ReadyOnFoot())
+            if(ApiRequested&&!_suspectLocated&&!_supportCommitted&&K9ReadyOnFoot()&&(K9DistanceTo(Scene)>7f||K9TrackingActive()))
             {
                 _supportCommitted=true;
                 Game.DisplayNotification("~b~On-scene officers:~s~ We are moving behind the K9 team.");
