@@ -34,6 +34,7 @@ namespace AdvancedK9.Callouts
         private bool _trafficControlled;
         private uint _nextSupportMove;
         private bool _medicalResponseStarted;
+        private int _cachedDogHandle;
 
         protected bool Prepare(string message,Vector3 scene,float radius,bool snapToStreet=true)
         {
@@ -125,9 +126,13 @@ namespace AdvancedK9.Callouts
         protected bool K9ReadyOnFoot()
         {
             K9ApiSnapshot snapshot;
-            return AdvancedK9Api.TryGetSnapshot(out snapshot)&&snapshot.OnDuty&&snapshot.Deployed&&
-                snapshot.DogHandle>0&&!string.Equals(snapshot.State,"InVehicle",StringComparison.OrdinalIgnoreCase)&&
-                !string.Equals(snapshot.State,"Dismissed",StringComparison.OrdinalIgnoreCase);
+            if(AdvancedK9Api.TryGetSnapshot(out snapshot)&&snapshot.OnDuty&&snapshot.Deployed&&snapshot.DogHandle>0)
+            {
+                _cachedDogHandle=snapshot.DogHandle;
+                return !string.Equals(snapshot.State,"InVehicle",StringComparison.OrdinalIgnoreCase)&&
+                    !string.Equals(snapshot.State,"Dismissed",StringComparison.OrdinalIgnoreCase);
+            }
+            return _cachedDogHandle>0&&NativeFunction.Natives.DOES_ENTITY_EXIST<bool>(_cachedDogHandle);
         }
 
         protected void ControlSceneTraffic()
@@ -141,9 +146,9 @@ namespace AdvancedK9.Callouts
         protected float K9DistanceTo(Vector3 position)
         {
             K9ApiSnapshot snapshot;
-            if(!AdvancedK9Api.TryGetSnapshot(out snapshot)||snapshot.DogHandle<=0)return float.MaxValue;
-            if(!NativeFunction.Natives.DOES_ENTITY_EXIST<bool>(snapshot.DogHandle))return float.MaxValue;
-            Vector3 dogPosition=NativeFunction.Natives.GET_ENTITY_COORDS<Vector3>(snapshot.DogHandle,true);
+            if(AdvancedK9Api.TryGetSnapshot(out snapshot)&&snapshot.DogHandle>0)_cachedDogHandle=snapshot.DogHandle;
+            if(_cachedDogHandle<=0||!NativeFunction.Natives.DOES_ENTITY_EXIST<bool>(_cachedDogHandle))return float.MaxValue;
+            Vector3 dogPosition=NativeFunction.Natives.GET_ENTITY_COORDS<Vector3>(_cachedDogHandle,true);
             return dogPosition.DistanceTo(position);
         }
 
@@ -195,8 +200,9 @@ namespace AdvancedK9.Callouts
             if(Game.GameTime<_nextSupportMove)return;
             K9ApiSnapshot snapshot;
             Vector3 dogPosition=Game.LocalPlayer.Character.Position;
-            if(AdvancedK9Api.TryGetSnapshot(out snapshot)&&snapshot.DogHandle>0&&NativeFunction.Natives.DOES_ENTITY_EXIST<bool>(snapshot.DogHandle))
-                dogPosition=NativeFunction.Natives.GET_ENTITY_COORDS<Vector3>(snapshot.DogHandle,true);
+            if(AdvancedK9Api.TryGetSnapshot(out snapshot)&&snapshot.DogHandle>0)_cachedDogHandle=snapshot.DogHandle;
+            if(_cachedDogHandle>0&&NativeFunction.Natives.DOES_ENTITY_EXIST<bool>(_cachedDogHandle))
+                dogPosition=NativeFunction.Natives.GET_ENTITY_COORDS<Vector3>(_cachedDogHandle,true);
             _nextSupportMove=Game.GameTime+3000;
             if(OfficerOne!=null&&OfficerOne.Exists()&&OfficerOne.DistanceTo(dogPosition)>6f)
             {
