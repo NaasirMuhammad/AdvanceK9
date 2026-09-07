@@ -35,9 +35,9 @@ namespace AdvancedK9.Callouts
             SceneVehicle=SpawnVehicle("primo",Scene,trafficHeading);
             if(SceneVehicle!=null&&SceneVehicle.Exists())
             {
-                Vector3 curbPosition=SceneVehicle.GetOffsetPosition(new Vector3(8f,0f,0f));
+                Vector3 curbPosition=SceneVehicle.GetOffsetPosition(new Vector3(11f,0f,0f));
                 SceneVehicle.Position=curbPosition;Scene=curbPosition;CalloutPosition=Scene;
-                Game.LogTrivial("AdvancedK9 Callouts: failed traffic stop shifted 8 metres to the roadside shoulder.");
+                Game.LogTrivial("AdvancedK9 Callouts: failed traffic stop shifted 11 metres to the roadside shoulder.");
             }
             StagePoliceScene();
             ConfigureTrafficStopScene();
