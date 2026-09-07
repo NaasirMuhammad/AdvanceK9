@@ -1928,8 +1928,10 @@ namespace AdvancedK9
                 NativeFunction.Natives.SET_PED_CAN_RAGDOLL(_dog,true);
             }
             if(_leashRope>=0)PinLeashEndpoints();
-            if (_dog.DistanceTo(Game.LocalPlayer.Character) > 150f && _state == K9State.Following)
-                _dog.Position = Game.LocalPlayer.Character.GetOffsetPosition(new Vector3(-1f, -2f, 0f));
+            // Ordinary sprint separation must be recovered through locomotion. Position snapping is
+            // reserved for the verified elevator/teleport transition above.
+            if (_dog.DistanceTo(Game.LocalPlayer.Character) > 45f && _state == K9State.Following)
+                IssuePersistentFollow(Game.LocalPlayer.Character,false);
         }
 
         private void ConfigureK9RelationshipGroup(Ped handler)
@@ -2069,6 +2071,8 @@ namespace AdvancedK9
             // few-steps-then-stop behavior. Leave the task untouched unless measured movement
             // proves that the dog has actually been stuck for several seconds.
             NativeFunction.Natives.SET_PED_MAX_MOVE_BLEND_RATIO(_dog,3f);
+            NativeFunction.Natives.SET_ENTITY_MAX_SPEED(_dog,16f);
+            NativeFunction.Natives.SET_PED_MOVE_RATE_OVERRIDE(_dog,handlerSpeedForFollow(handler)>5.5f?1.35f:1.12f);
             if(Game.GameTime<_nextFollowMotionSample)return;
             _nextFollowMotionSample=Game.GameTime+1000;
             Vector3 dogPosition=_dog.Position;
@@ -2090,12 +2094,18 @@ namespace AdvancedK9
             Game.LogTrivial("AdvancedK9 follow recovery: persistent task reissued after K9 moved less than 0.3m for 2.5 seconds while handler was moving.");
         }
 
+        private static float handlerSpeedForFollow(Ped handler){try{return handler==null||!handler.Exists()?0f:NativeFunction.Natives.GET_ENTITY_SPEED<float>(handler);}catch{return 0f;}}
+
         private void IssuePersistentFollow(Ped handler,bool leashed)
         {
             if(handler==null||!handler.Exists()||!DogExists())return;
             float side=leashed?-.55f:-.8f;
             float behind=leashed?-.85f:-1.15f;
-            NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(_dog,handler,side,behind,0f,3f,-1,.35f,true);
+            float handlerSpeed=handlerSpeedForFollow(handler);
+            float catchupSpeed=handlerSpeed>5.5f?9f:handlerSpeed>2.5f?6.5f:4.2f;
+            NativeFunction.Natives.SET_ENTITY_MAX_SPEED(_dog,16f);
+            NativeFunction.Natives.SET_PED_MOVE_RATE_OVERRIDE(_dog,handlerSpeed>5.5f?1.35f:1.12f);
+            NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(_dog,handler,side,behind,0f,catchupSpeed,-1,.35f,true);
             NativeFunction.Natives.SET_PED_KEEP_TASK(_dog,true);
             NativeFunction.Natives.SET_PED_MAX_MOVE_BLEND_RATIO(_dog,3f);
             _followMotionSamplePosition=_dog.Position;

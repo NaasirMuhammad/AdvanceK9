@@ -68,10 +68,10 @@ jobs:
           if (-not $lemon) { throw 'LemonUI.RagePluginHook.dll was not found.' }
           if (-not $naudioCore) { throw 'Required AI voice runtime NAudio.Core.dll was not found.' }
           if (-not $naudioWinMM) { throw 'Required AI voice runtime NAudio.WinMM.dll was not found.' }
-          if ([System.Reflection.AssemblyName]::GetAssemblyName($main.FullName).Version -ne [Version]'0.24.0.15') { throw 'AdvancedK9.dll version is not 0.24.0.15.' }
+          if ([System.Reflection.AssemblyName]::GetAssemblyName($main.FullName).Version -ne [Version]'0.24.0.16') { throw 'AdvancedK9.dll version is not 0.24.0.15.' }
           if ([System.Reflection.AssemblyName]::GetAssemblyName($api.FullName).Version -ne [Version]'0.24.0.0') { throw 'AdvancedK9.API.dll version is not 0.24.0.0.' }
           if ([System.Reflection.AssemblyName]::GetAssemblyName($bridge).Version -ne [Version]'0.24.0.0') { throw 'AdvancedK9.LSPDFRBridge.dll version is not 0.24.0.0.' }
-          if ([System.Reflection.AssemblyName]::GetAssemblyName($callouts).Version -ne [Version]'0.24.0.23') { throw 'AdvancedK9.Callouts.dll version is not 0.24.0.23.' }
+          if ([System.Reflection.AssemblyName]::GetAssemblyName($callouts).Version -ne [Version]'0.24.0.24') { throw 'AdvancedK9.Callouts.dll version is not 0.24.0.23.' }
           $package = Join-Path $pwd 'release-package'
           $pluginRoot = Join-Path $package 'Plugins'
           $lspdfrRoot = Join-Path $pluginRoot 'LSPDFR'

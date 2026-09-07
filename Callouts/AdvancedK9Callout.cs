@@ -37,6 +37,10 @@ namespace AdvancedK9.Callouts
         private int _cachedDogHandle;
         private bool _supportFiberStarted;
         private bool _supportTrackingEnded;
+        private bool _supportFormationLogged;
+        private bool _secondaryTrafficControlled;
+        private Vector3 _secondaryTrafficCenter;
+        protected bool MedicalResponseStarted{get{return _medicalResponseStarted;}}
         protected bool MedicalResponseComplete;
         protected bool SeriousMedicalTransport;
 
@@ -250,8 +254,9 @@ namespace AdvancedK9.Callouts
             if(AdvancedK9Api.TryGetSnapshot(out snapshot)&&snapshot.DogHandle>0)_cachedDogHandle=snapshot.DogHandle;
             if(_cachedDogHandle>0&&NativeFunction.Natives.DOES_ENTITY_EXIST<bool>(_cachedDogHandle))
                 dogPosition=NativeFunction.Natives.GET_ENTITY_COORDS<Vector3>(_cachedDogHandle,true);
-            _nextSupportMove=Game.GameTime+1500;
+            _nextSupportMove=Game.GameTime+4000;
             var handler=Game.LocalPlayer.Character;
+            object formationLeader=_cachedDogHandle>0?(object)_cachedDogHandle:handler;
             uint taser=NativeFunction.Natives.GET_HASH_KEY<uint>("WEAPON_STUNGUN");
             uint pistol=NativeFunction.Natives.GET_HASH_KEY<uint>("WEAPON_COMBATPISTOL");
             if(OfficerOne!=null&&OfficerOne.Exists())
@@ -261,7 +266,7 @@ namespace AdvancedK9.Callouts
                 NativeFunction.Natives.SET_CURRENT_PED_WEAPON(OfficerOne,taser,true);
                 NativeFunction.Natives.SET_PED_COMBAT_ABILITY(OfficerOne,2);
                 NativeFunction.Natives.SET_PED_COMBAT_MOVEMENT(OfficerOne,2);
-                NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(OfficerOne,handler,-2.2f,-3.5f,0f,4.8f,-1,2.2f,true);
+                NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(OfficerOne,formationLeader,-2.8f,-4.5f,0f,6.5f,-1,2.8f,true);
                 NativeFunction.Natives.SET_PED_KEEP_TASK(OfficerOne,true);
             }
             if(OfficerTwo!=null&&OfficerTwo.Exists())
@@ -271,10 +276,19 @@ namespace AdvancedK9.Callouts
                 NativeFunction.Natives.SET_CURRENT_PED_WEAPON(OfficerTwo,pistol,true);
                 NativeFunction.Natives.SET_PED_COMBAT_ABILITY(OfficerTwo,2);
                 NativeFunction.Natives.SET_PED_COMBAT_MOVEMENT(OfficerTwo,2);
-                NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(OfficerTwo,handler,2.2f,-4.8f,0f,4.6f,-1,2.5f,true);
+                NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(OfficerTwo,formationLeader,2.8f,-5.8f,0f,6.2f,-1,3f,true);
                 NativeFunction.Natives.SET_PED_KEEP_TASK(OfficerTwo,true);
             }
-            Game.LogTrivial("AdvancedK9 Callouts: support search team moving with taser and firearm cover; cross-AppDomain K9 handle="+_cachedDogHandle+".");
+            if(!_supportFormationLogged){_supportFormationLogged=true;Game.LogTrivial("AdvancedK9 Callouts: support search formation assigned to the live K9 entity; handle="+_cachedDogHandle+".");}
+        }
+
+        protected void ControlApprehensionTraffic(Vector3 center)
+        {
+            if(_secondaryTrafficControlled)return;
+            _secondaryTrafficCenter=center;
+            NativeFunction.Natives.SET_ROADS_IN_AREA(center.X-38f,center.Y-38f,center.Z-10f,center.X+38f,center.Y+38f,center.Z+10f,false,true);
+            _secondaryTrafficControlled=true;
+            Game.LogTrivial("AdvancedK9 Callouts: moving traffic exclusion established around the apprehension area.");
         }
 
         protected void SupportOfficersContainSubject()
@@ -346,6 +360,7 @@ namespace AdvancedK9.Callouts
             if(AdvancedK9Api.TryGetSnapshot(out snapshot)&&string.Equals(snapshot.State,"Apprehending",StringComparison.OrdinalIgnoreCase))return false;
             _medicalResponseStarted=true;
             var suspect=Subject;suspect.IsInvincible=true;
+            suspect.Health=System.Math.Max(suspect.Health,System.Math.Max(100,suspect.MaxHealth/2));
             GameFiber.StartNew(delegate
             {
                 try
@@ -357,8 +372,8 @@ namespace AdvancedK9.Callouts
                     MedicTwo=SpawnPed("s_m_m_paramedic_01",new Vector3(ambulancePosition.X-1.5f,ambulancePosition.Y,ambulancePosition.Z),0f);
                     Game.DisplayNotification("~b~Dispatch:~s~ EMS responding to the K9 apprehension at the suspect's current location.");
                     Game.LogTrivial("AdvancedK9 Callouts: EMS routed to live downed suspect position "+downedPosition+" instead of scene origin "+Scene+".");
-                    if(MedicOne!=null&&MedicOne.Exists())MedicOne.Tasks.FollowNavigationMeshToPosition(suspect.Position,MedicOne.Heading,3.2f).WaitForCompletion(12000);
-                    if(MedicTwo!=null&&MedicTwo.Exists())MedicTwo.Tasks.FollowNavigationMeshToPosition(suspect.Position,MedicTwo.Heading,3.0f).WaitForCompletion(12000);
+                    if(MedicOne!=null&&MedicOne.Exists()){MedicOne.Tasks.FollowNavigationMeshToPosition(suspect.Position,MedicOne.Heading,3.2f).WaitForCompletion(9000);if(MedicOne.DistanceTo(suspect)>4f)MedicOne.Position=suspect.GetOffsetPosition(new Vector3(1.6f,0f,0f));}
+                    if(MedicTwo!=null&&MedicTwo.Exists()){MedicTwo.Tasks.FollowNavigationMeshToPosition(suspect.Position,MedicTwo.Heading,3.0f).WaitForCompletion(9000);if(MedicTwo.DistanceTo(suspect)>5f)MedicTwo.Position=suspect.GetOffsetPosition(new Vector3(-1.6f,0f,0f));}
                     if(!suspect.Exists())return;
                     if(MedicOne!=null&&MedicOne.Exists())NativeFunction.Natives.TASK_TURN_PED_TO_FACE_ENTITY(MedicOne,suspect,1000);
                     if(MedicTwo!=null&&MedicTwo.Exists())NativeFunction.Natives.TASK_TURN_PED_TO_FACE_ENTITY(MedicTwo,suspect,1000);
@@ -499,6 +514,12 @@ namespace AdvancedK9.Callouts
             {
                 NativeFunction.Natives.SET_ROADS_IN_AREA(Scene.X-32f,Scene.Y-32f,Scene.Z-8f,Scene.X+32f,Scene.Y+32f,Scene.Z+8f,true,true);
                 _trafficControlled=false;
+            }
+            if(_secondaryTrafficControlled)
+            {
+                var center=_secondaryTrafficCenter;
+                NativeFunction.Natives.SET_ROADS_IN_AREA(center.X-38f,center.Y-38f,center.Z-10f,center.X+38f,center.Y+38f,center.Z+10f,true,true);
+                _secondaryTrafficControlled=false;
             }
             if(!string.IsNullOrWhiteSpace(ContextId))AdvancedK9Api.SendCommand("ClearEvidenceMarkers",ContextId,0,"Scene",Scene.X,Scene.Y,Scene.Z,"callout scene cleared");
             Game.LogTrivial("AdvancedK9 Callouts: cleared scene and evidence markers for "+GetType().Name+".");
