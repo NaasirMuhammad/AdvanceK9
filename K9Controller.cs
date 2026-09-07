@@ -974,11 +974,12 @@ namespace AdvancedK9
             NativeFunction.Natives.FREEZE_ENTITY_POSITION(_dog,false);
             NativeFunction.Natives.SET_PED_CAN_RAGDOLL(_dog,false);
             _dog.IsInvincible=true;_dog.Tasks.ClearImmediately();
-            handler.Tasks.PlayAnimation("anim@heists@box_carry@","idle",4f,AnimationFlags.Loop);
+            handler.Tasks.PlayAnimation("anim@heists@box_carry@","idle",4f,AnimationFlags.Loop|AnimationFlags.UpperBodyOnly|AnimationFlags.SecondaryTask);
             int spine=NativeFunction.Natives.GET_PED_BONE_INDEX<int>(handler,24818);
             NativeFunction.Natives.SET_ENTITY_COLLISION(_dog,false,false);
-            NativeFunction.Natives.ATTACH_ENTITY_TO_ENTITY(_dog,handler,spine,.18f,.42f,-.08f,0f,90f,90f,false,false,false,false,2,true);
-            PlayDogAnimation("creatures@rottweiler@move","dead_left",-1,1);
+            NativeFunction.Natives.ATTACH_ENTITY_TO_ENTITY(_dog,handler,spine,.05f,.34f,.02f,0f,0f,90f,false,false,false,false,2,true);
+            PlayDogAnimation("creatures@rottweiler@amb@sleep_in_kennel@","sleep_in_kennel",-1,1);
+            NativeFunction.Natives.SET_PED_CAN_SWITCH_WEAPON(handler,false);
             _carryingDog=true;_state=K9State.Injured;
             K9IncidentLog.Write(_profile.Name,_carriedForAccess?"Access carry":"Medical","Handler began K9 carry",handler.Position);
             Game.DisplayNotification("~b~Carrying "+_profile.Name+".~s~~n~Use this for stairs, obstacles, or inaccessible terrain. Select Carry / Set Down K9 again to place him down.");
@@ -987,7 +988,8 @@ namespace AdvancedK9
         private void SetDownCarriedK9(bool notify)
         {
             if(!_carryingDog)return;
-            var handler=Game.LocalPlayer.Character;handler.Tasks.Clear();
+            var handler=Game.LocalPlayer.Character;handler.Tasks.ClearSecondaryTask();
+            NativeFunction.Natives.SET_PED_CAN_SWITCH_WEAPON(handler,true);
             NativeFunction.Natives.DETACH_ENTITY(_dog,true,true);
             NativeFunction.Natives.SET_ENTITY_COLLISION(_dog,true,true);
             NativeFunction.Natives.FREEZE_ENTITY_POSITION(_dog,false);
