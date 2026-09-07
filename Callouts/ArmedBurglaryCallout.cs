@@ -57,8 +57,8 @@ namespace AdvancedK9.Callouts
                 if(ApiRequested){ClearSceneRoute();Game.LogTrivial("AdvancedK9 Callouts: Armed Burglary clothing scent source registered; patrol search bypassed.");}
             }
 
-            if(ApiRequested&&!_suspectLocated)SupportOfficersFollowK9();
-            if(ApiRequested&&!_suspectLocated&&K9DistanceTo(Subject.Position)<18f)
+            if(ApiRequested&&!_suspectLocated&&K9TrackingActive())SupportOfficersFollowK9();
+            if(ApiRequested&&!_suspectLocated&&System.Math.Min(K9DistanceTo(Subject.Position),player.DistanceTo(Subject))<18f)
             {
                 _suspectLocated=true;_locatedAt=Game.GameTime;
                 SubjectBlip=Subject.AttachBlip();SubjectBlip.IsRouteEnabled=true;
