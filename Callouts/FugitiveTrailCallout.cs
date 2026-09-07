@@ -24,16 +24,18 @@ namespace AdvancedK9.Callouts
         private bool _supportCommitted;
         private float _sceneHeading;
         private bool _deathReported;
+        private Vector3 _hidingPosition;
+        private uint _nextHideTask;
 
         private static readonly Vector3[] RoadsideScenes={
-            new Vector3(425f,-1027f,29f),new Vector3(367f,-1578f,29f),new Vector3(817f,-1056f,27f),
-            new Vector3(-1127f,-849f,13f),new Vector3(-565f,-675f,33f),new Vector3(-1310f,-1261f,4f),
-            new Vector3(1208f,-1396f,35f),new Vector3(1000f,-2535f,28f),new Vector3(-296f,-2732f,6f),
+            new Vector3(-565f,-675f,33f),new Vector3(-1310f,-1261f,4f),new Vector3(-1430f,-590f,30f),
+            new Vector3(1208f,-1396f,35f),new Vector3(1110f,-1730f,35f),new Vector3(830f,-1830f,29f),
+            new Vector3(1000f,-2535f,28f),new Vector3(-296f,-2732f,6f),new Vector3(-340f,-1200f,37f),
             new Vector3(1690f,3591f,35f),new Vector3(1865f,3684f,34f),new Vector3(1180f,2690f,38f),
             new Vector3(-445f,6037f,31f),new Vector3(-153f,6346f,31f),new Vector3(-2535f,2341f,33f)
         };
 
-        private static readonly float[] RoadsideHeadings={90f,320f,90f,35f,270f,110f,180f,85f,145f,210f,30f,180f,135f,45f,95f};
+        private static readonly float[] RoadsideHeadings={270f,110f,90f,180f,180f,180f,85f,145f,180f,210f,30f,180f,135f,45f,95f};
 
         private bool PrepareRoadsideScene()
         {
@@ -101,10 +103,25 @@ namespace AdvancedK9.Callouts
             }
             float dx=trailEnd.X-Scene.X,dy=trailEnd.Y-Scene.Y;float length=(float)System.Math.Sqrt(dx*dx+dy*dy);
             if(length<.1f){dx=1f;dy=0f;length=1f;}
-            float coverSide=Random.Next(2)==0?-8f:8f;
-            Vector3 coverPosition=new Vector3(trailEnd.X-dy/length*coverSide,trailEnd.Y+dx/length*coverSide,trailEnd.Z);
+            Vector3 coverPosition=trailEnd;bool offRoadCover=false;
+            float[] offsets={10f,-10f,14f,-14f,18f,-18f};
+            for(int i=0;i<offsets.Length;i++)
+            {
+                Vector3 candidate=new Vector3(trailEnd.X-dy/length*offsets[i],trailEnd.Y+dx/length*offsets[i],trailEnd.Z);
+                int interior=NativeFunction.Natives.GET_INTERIOR_AT_COORDS<int>(candidate.X,candidate.Y,candidate.Z);
+                bool onRoad=NativeFunction.Natives.IS_POINT_ON_ROAD<bool>(candidate.X,candidate.Y,candidate.Z,0);
+                if(interior==0&&!onRoad){coverPosition=candidate;offRoadCover=true;break;}
+            }
+            if(!offRoadCover)
+            {
+                Game.LogTrivial("AdvancedK9 Callouts: rejected FugitiveTrail scene because no safe off-road hiding position was available.");
+                return false;
+            }
             CoverProp=SpawnProp("prop_dumpster_01a",coverPosition);
-            Vector3 hidingPosition=new Vector3(coverPosition.X+dx/length*1.35f,coverPosition.Y+dy/length*1.35f,coverPosition.Z);
+            if(CoverProp==null||!CoverProp.Exists())return false;
+            CoverProp.Heading=(float)(System.Math.Atan2(-dx,dy)*180.0/System.Math.PI);
+            Vector3 hidingPosition=new Vector3(coverPosition.X+dx/length*1.8f,coverPosition.Y+dy/length*1.8f,coverPosition.Z);
+            _hidingPosition=hidingPosition;
             Game.LogTrivial("AdvancedK9 Callouts: guaranteed physical cover staged off the roadway; subject position is shielded from the scene side.");
             Vector3 escapeStart=new Vector3(Scene.X+dx/length*48f-dy/length*8f,Scene.Y+dy/length*48f+dx/length*8f,Scene.Z);
             Subject=SpawnPed("a_m_m_hillbilly_01",escapeStart,Random.Next(360));if(Subject==null)return false;
@@ -180,6 +197,8 @@ namespace AdvancedK9.Callouts
         {
             if(Finished||Subject==null||!Subject.Exists()){if(!Finished)Resolve("~r~Fugitive Trail ended: suspect unavailable.");return;}
             var player=Game.LocalPlayer.Character;
+            ControlLiveTraffic(Scene,42f);
+            if(_suspectLocated)ControlLiveTraffic(Subject.Position,48f);
             if(player.DistanceTo(Scene)<350f&&(PoliceVehicle==null||!PoliceVehicle.Exists()||OfficerOne==null||!OfficerOne.Exists()||OfficerTwo==null||!OfficerTwo.Exists()))StagePoliceScene();
 
             if(!_sceneBriefed&&player.DistanceTo(Scene)<28f)
@@ -201,6 +220,12 @@ namespace AdvancedK9.Callouts
                 Game.LogTrivial("AdvancedK9 Callouts: support movement armed by handler departure from scent scene.");
             }
             if(_phase==FugitivePhase.Tracking&&_supportCommitted&&!_suspectLocated)SupportOfficersFollowK9();
+
+            if(!_suspectLocated&&Subject.DistanceTo(_hidingPosition)<7f&&Game.GameTime>=_nextHideTask)
+            {
+                _nextHideTask=Game.GameTime+3500;
+                NativeFunction.Natives.TASK_COWER(Subject,5000);
+            }
 
             float rexDistance=K9DistanceTo(Subject.Position);
             if(ApiRequested&&!_suspectLocated&&!_rexReachedSubject&&rexDistance<3f)
@@ -224,7 +249,9 @@ namespace AdvancedK9.Callouts
             if(_suspectLocated)
             {
                 bool injured=!Subject.IsDead&&(Subject.Health<Subject.MaxHealth-5||Subject.IsRagdoll);
-                if(Subject.IsDead)
+                bool custody=SubjectInCustody();
+                bool confirmedDead=Subject.Health<=0&&NativeFunction.Natives.IS_PED_DEAD_OR_DYING<bool>(Subject,true)&&!custody;
+                if(confirmedDead)
                 {
                     if(!_deathReported)
                     {
@@ -243,7 +270,7 @@ namespace AdvancedK9.Callouts
                     _phase=FugitivePhase.Complete;
                     Resolve("~g~Fugitive Trail complete: EMS transported the seriously injured suspect under LSPDFR custody.");
                 }
-                else if(SubjectInCustody())
+                else if(custody)
                 {
                     if(!_custodyConfirmed)
                     {

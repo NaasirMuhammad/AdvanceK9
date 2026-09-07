@@ -157,6 +157,25 @@ namespace AdvancedK9.Callouts
             Game.LogTrivial("AdvancedK9 Callouts: traffic control established around "+GetType().Name+" scene.");
         }
 
+        protected void ControlLiveTraffic(Vector3 center,float radius)
+        {
+            NativeFunction.Natives.SET_VEHICLE_DENSITY_MULTIPLIER_THIS_FRAME(0f);
+            NativeFunction.Natives.SET_RANDOM_VEHICLE_DENSITY_MULTIPLIER_THIS_FRAME(0f);
+            NativeFunction.Natives.SET_PARKED_VEHICLE_DENSITY_MULTIPLIER_THIS_FRAME(0f);
+            try
+            {
+                Vehicle playerVehicle=Game.LocalPlayer.Character.CurrentVehicle;
+                foreach(Vehicle vehicle in World.GetAllVehicles())
+                {
+                    if(vehicle==null||!vehicle.Exists()||vehicle.DistanceTo(center)>radius||vehicle==SceneVehicle||vehicle==PoliceVehicle||vehicle==playerVehicle)continue;
+                    Ped driver=vehicle.Driver;
+                    if(driver==null||!driver.Exists())continue;
+                    NativeFunction.Natives.TASK_VEHICLE_TEMP_ACTION(driver,vehicle,6,2500);
+                }
+            }
+            catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: live traffic containment fallback: "+ex.Message);}
+        }
+
         protected float K9DistanceTo(Vector3 position)
         {
             K9ApiSnapshot snapshot;
@@ -267,24 +286,26 @@ namespace AdvancedK9.Callouts
             if(OfficerOne!=null&&OfficerOne.Exists())
             {
                 OfficerOne.BlockPermanentEvents=true;
+                OfficerOne.Tasks.Clear();
                 NativeFunction.Natives.GIVE_WEAPON_TO_PED(OfficerOne,taser,2,false,true);
                 NativeFunction.Natives.SET_CURRENT_PED_WEAPON(OfficerOne,taser,true);
                 NativeFunction.Natives.SET_PED_COMBAT_ABILITY(OfficerOne,2);
                 NativeFunction.Natives.SET_PED_COMBAT_MOVEMENT(OfficerOne,2);
                 float distance=OfficerOne.DistanceTo(handler);
-                if(distance>85f)OfficerOne.Position=handler.GetOffsetPosition(new Vector3(-4f,-16f,0f));
+                NativeFunction.Natives.SET_PED_AS_GROUP_MEMBER(OfficerOne,NativeFunction.Natives.GET_PED_GROUP_INDEX<int>(handler));
                 NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(OfficerOne,handler,-3.2f,-7.5f,0f,distance>25f?7.5f:5.8f,-1,3.5f,true);
                 NativeFunction.Natives.SET_PED_KEEP_TASK(OfficerOne,true);
             }
             if(OfficerTwo!=null&&OfficerTwo.Exists())
             {
                 OfficerTwo.BlockPermanentEvents=true;
+                OfficerTwo.Tasks.Clear();
                 NativeFunction.Natives.GIVE_WEAPON_TO_PED(OfficerTwo,pistol,60,false,true);
                 NativeFunction.Natives.SET_CURRENT_PED_WEAPON(OfficerTwo,pistol,true);
                 NativeFunction.Natives.SET_PED_COMBAT_ABILITY(OfficerTwo,2);
                 NativeFunction.Natives.SET_PED_COMBAT_MOVEMENT(OfficerTwo,2);
                 float distance=OfficerTwo.DistanceTo(handler);
-                if(distance>85f)OfficerTwo.Position=handler.GetOffsetPosition(new Vector3(4f,-18f,0f));
+                NativeFunction.Natives.SET_PED_AS_GROUP_MEMBER(OfficerTwo,NativeFunction.Natives.GET_PED_GROUP_INDEX<int>(handler));
                 NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(OfficerTwo,handler,3.2f,-9f,0f,distance>25f?7.2f:5.6f,-1,3.8f,true);
                 NativeFunction.Natives.SET_PED_KEEP_TASK(OfficerTwo,true);
             }
