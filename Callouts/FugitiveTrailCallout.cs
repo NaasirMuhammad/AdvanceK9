@@ -35,9 +35,9 @@ namespace AdvancedK9.Callouts
             SceneVehicle=SpawnVehicle("primo",Scene,trafficHeading);
             if(SceneVehicle!=null&&SceneVehicle.Exists())
             {
-                Vector3 curbPosition=SceneVehicle.GetOffsetPosition(new Vector3(4.2f,0f,0f));
+                Vector3 curbPosition=SceneVehicle.GetOffsetPosition(new Vector3(5.5f,0f,0f));
                 SceneVehicle.Position=curbPosition;Scene=curbPosition;CalloutPosition=Scene;
-                Game.LogTrivial("AdvancedK9 Callouts: failed traffic stop shifted 4.2 metres to the roadside shoulder.");
+                Game.LogTrivial("AdvancedK9 Callouts: failed traffic stop shifted 5.5 metres to the roadside shoulder.");
             }
             StagePoliceScene();
             ConfigureTrafficStopScene();
@@ -50,7 +50,7 @@ namespace AdvancedK9.Callouts
             StartedAt=Game.GameTime;_outcome=Random.Next(4);
             StagePoliceScene();
             ConfigureTrafficStopScene();
-            float angle=Random.Next(360);float distance=Random.Next(135,181);
+            float angle=Random.Next(360);float distance=Random.Next(85,116);
             float radians=(float)(angle*System.Math.PI/180.0);
             Vector3 trailEnd=World.GetNextPositionOnStreet(Scene+new Vector3((float)System.Math.Sin(radians)*distance,(float)System.Math.Cos(radians)*distance,0f));
             float dx=trailEnd.X-Scene.X,dy=trailEnd.Y-Scene.Y;float length=(float)System.Math.Sqrt(dx*dx+dy*dy);
@@ -62,9 +62,11 @@ namespace AdvancedK9.Callouts
                 hidingPosition=new Vector3(trailEnd.X-dy/length*side,trailEnd.Y+dx/length*side,trailEnd.Z);
                 Game.LogTrivial("AdvancedK9 Callouts: fugitive destination placed well off the roadway when streamed cover was unavailable.");
             }
-            Vector3 escapeStart=new Vector3(Scene.X+dx/length*70f-dy/length*8f,Scene.Y+dy/length*70f+dx/length*8f,Scene.Z);
+            CoverProp=SpawnProp("prop_dumpster_01a",hidingPosition);
+            if(CoverProp!=null&&CoverProp.Exists())hidingPosition=new Vector3(hidingPosition.X+dx/length*2.2f,hidingPosition.Y+dy/length*2.2f,hidingPosition.Z);
+            Vector3 escapeStart=new Vector3(Scene.X+dx/length*48f-dy/length*8f,Scene.Y+dy/length*48f+dx/length*8f,Scene.Z);
             Subject=SpawnPed("a_m_m_hillbilly_01",escapeStart,Random.Next(360));if(Subject==null)return false;
-            Subject.MaxHealth=250;Subject.Health=250;Subject.BlockPermanentEvents=true;
+            Subject.MaxHealth=500;Subject.Health=500;Subject.BlockPermanentEvents=true;Subject.IsPersistent=true;
             NativeFunction.Natives.TASK_FOLLOW_NAV_MESH_TO_COORD(Subject,hidingPosition.X,hidingPosition.Y,hidingPosition.Z,5.2f,22000,2f,0,0f);
             var escapingSubject=Subject;var finalCover=hidingPosition;
             GameFiber.StartNew(delegate
@@ -81,7 +83,7 @@ namespace AdvancedK9.Callouts
                 catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: fugitive escape staging contained: "+ex.Message);}
             },"AdvancedK9 fugitive escape to cover");
             _coverConfirmed=true;_nextCoverSearch=Game.GameTime+9000;
-            Game.LogTrivial("AdvancedK9 Callouts: fugitive actively escaping from the stop toward cover 135-180 metres away; no sleeping scenario used.");
+            Game.LogTrivial("AdvancedK9 Callouts: fugitive actively escaping from the stop toward cover 85-115 metres away; dumpster fallback guarantees concealment and no sleeping scenario is used.");
             Functions.PlayScannerAudioUsingPosition("WE_HAVE CRIME_RESIST_ARREST IN_OR_ON_POSITION",Scene);
             RouteToScene("Respond to the failed traffic stop. The driver abandoned the stopped vehicle and fled on foot; officers preserved the driver-seat scent.");
             return base.OnCalloutAccepted();
@@ -137,7 +139,7 @@ namespace AdvancedK9.Callouts
             if(_rexReachedSubject&&!_suspectLocated&&Game.GameTime-_rexReachedAt>=2800)
             {
                 _suspectLocated=true;_locatedAt=Game.GameTime;
-                SubjectBlip=Subject.AttachBlip();SubjectBlip.IsRouteEnabled=true;
+                SubjectBlip=Subject.AttachBlip();SubjectBlip.IsRouteEnabled=true;Subject.IsInvincible=true;
                 if(_outcome==0)NativeFunction.Natives.TASK_HANDS_UP(Subject,120000,player,-1,true);
                 else NativeFunction.Natives.TASK_SMART_FLEE_PED(Subject,player,700f,-1,false,false);
                 Game.DisplayNotification(_outcome==0?"~g~Rex alerted on the hidden fugitive. The suspect is surrendering; secure the arrest.":"~o~Rex alerted and flushed the fugitive from cover. Tracking is complete; command APPREHEND if deployment is justified.");
