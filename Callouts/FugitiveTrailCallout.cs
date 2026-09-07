@@ -15,6 +15,9 @@ namespace AdvancedK9.Callouts
         private uint _locatedAt;
         private uint _nextCoverSearch;
         private bool _coverConfirmed;
+        private bool _rexReachedSubject;
+        private uint _rexReachedAt;
+        private bool _supportCommitted;
 
         public override bool OnBeforeCalloutDisplayed()
         {
@@ -39,12 +42,23 @@ namespace AdvancedK9.Callouts
             StartedAt=Game.GameTime;_outcome=Random.Next(4);
             StagePoliceScene();
             float angle=Random.Next(360);float distance=Random.Next(55,76);
-            Vector3 startPosition=World.GetNextPositionOnStreet(Scene+new Vector3((float)System.Math.Sin(angle*System.Math.PI/180.0)*distance,(float)System.Math.Cos(angle*System.Math.PI/180.0)*distance,0f));
-            Subject=SpawnPed("a_m_m_hillbilly_01",startPosition,Random.Next(360));if(Subject==null)return false;
+            Vector3 trailEnd=World.GetNextPositionOnStreet(Scene+new Vector3((float)System.Math.Sin(angle*System.Math.PI/180.0)*distance,(float)System.Math.Cos(angle*System.Math.PI/180.0)*distance,0f));
+            Vector3 hidingPosition;
+            if(!TryFindExistingCover(trailEnd,out hidingPosition))
+            {
+                float dx=trailEnd.X-Scene.X,dy=trailEnd.Y-Scene.Y;float length=(float)System.Math.Sqrt(dx*dx+dy*dy);
+                if(length<.1f){dx=1f;dy=0f;length=1f;}
+                float side=Random.Next(2)==0?-8f:8f;
+                Vector3 coverPosition=new Vector3(trailEnd.X-dy/length*side,trailEnd.Y+dx/length*side,trailEnd.Z);
+                CoverProp=SpawnProp("prop_bush_med_03",coverPosition);
+                hidingPosition=new Vector3(coverPosition.X+dx/length*1.7f,coverPosition.Y+dy/length*1.7f,coverPosition.Z);
+                Game.LogTrivial("AdvancedK9 Callouts: no usable map cover found; off-road foliage hide staged at "+hidingPosition+".");
+            }
+            Subject=SpawnPed("a_m_m_hillbilly_01",hidingPosition,Random.Next(360));if(Subject==null)return false;
             Subject.MaxHealth=250;Subject.Health=250;
-            NativeFunction.Natives.TASK_SEEK_COVER_FROM_POS(Subject,Scene.X,Scene.Y,Scene.Z,15000,true);
-            _nextCoverSearch=Game.GameTime+9000;
-            Game.LogTrivial("AdvancedK9 Callouts: fugitive tasked through GTA cover navigation; he will keep moving until engine-valid cover is reached.");
+            NativeFunction.Natives.TASK_STAND_STILL(Subject,-1);
+            _coverConfirmed=true;_nextCoverSearch=Game.GameTime+9000;
+            Game.LogTrivial("AdvancedK9 Callouts: fugitive staged stationary behind environmental cover before scent collection.");
             Functions.PlayScannerAudioUsingPosition("WE_HAVE CRIME_RESIST_ARREST IN_OR_ON_POSITION",Scene);
             RouteToScene("Respond to the abandoned vehicle. The on-scene officer has preserved a scent article from the driver seat.");
             return base.OnCalloutAccepted();
@@ -67,26 +81,29 @@ namespace AdvancedK9.Callouts
                 if(ApiRequested){ClearSceneRoute();Game.LogTrivial("AdvancedK9 Callouts: fugitive vehicle scent source registered; awaiting handler command.");}
             }
 
-            if(!_suspectLocated&&!_coverConfirmed&&Game.GameTime>=_nextCoverSearch)
+            if(ApiRequested&&!_suspectLocated&&!_supportCommitted&&player.DistanceTo(Scene)>22f&&K9ReadyOnFoot())
             {
-                _nextCoverSearch=Game.GameTime+9000;
-                _coverConfirmed=NativeFunction.Natives.IS_PED_IN_COVER<bool>(Subject,false);
-                if(!_coverConfirmed)
-                {
-                    NativeFunction.Natives.TASK_SEEK_COVER_FROM_POS(Subject,Scene.X,Scene.Y,Scene.Z,15000,true);
-                    Game.LogTrivial("AdvancedK9 Callouts: fugitive has not reached valid cover; cover-seeking run reissued.");
-                }
-                else Game.LogTrivial("AdvancedK9 Callouts: fugitive reached GTA engine-valid environmental cover.");
+                _supportCommitted=true;
+                Game.DisplayNotification("~b~On-scene officers:~s~ We are moving behind the K9 team.");
+                Game.LogTrivial("AdvancedK9 Callouts: support movement armed by handler departure from scent scene.");
             }
-            if(ApiRequested&&!_suspectLocated&&K9TrackingActive())SupportOfficersFollowK9();
-            if(ApiRequested&&!_suspectLocated&&System.Math.Min(K9DistanceTo(Subject.Position),player.DistanceTo(Subject))<18f)
+            if(_supportCommitted&&!_suspectLocated)SupportOfficersFollowK9();
+
+            float rexDistance=K9DistanceTo(Subject.Position);
+            if(ApiRequested&&!_suspectLocated&&!_rexReachedSubject&&rexDistance<3f)
+            {
+                _rexReachedSubject=true;_rexReachedAt=Game.GameTime;
+                NativeFunction.Natives.TASK_STAND_STILL(Subject,5000);
+                Game.LogTrivial("AdvancedK9 Callouts: Rex physically reached FugitiveTrail subject; waiting for core alert bark and tracking release.");
+            }
+            if(_rexReachedSubject&&!_suspectLocated&&Game.GameTime-_rexReachedAt>=2800)
             {
                 _suspectLocated=true;_locatedAt=Game.GameTime;
                 SubjectBlip=Subject.AttachBlip();SubjectBlip.IsRouteEnabled=true;
                 if(_outcome==0)NativeFunction.Natives.TASK_HANDS_UP(Subject,120000,player,-1,true);
                 else NativeFunction.Natives.TASK_SMART_FLEE_PED(Subject,player,700f,-1,false,false);
-                Game.DisplayNotification(_outcome==0?"~g~Rex located the hidden fugitive. The suspect is surrendering; secure the arrest.":"~o~Rex flushed the fugitive from cover. The suspect is fleeing; officers are moving with the K9 team.");
-                Game.LogTrivial("AdvancedK9 Callouts: Rex located FugitiveTrail subject behind cover; persistent suspect marker created.");
+                Game.DisplayNotification(_outcome==0?"~g~Rex alerted on the hidden fugitive. The suspect is surrendering; secure the arrest.":"~o~Rex alerted and flushed the fugitive from cover. Tracking is complete; command APPREHEND if deployment is justified.");
+                Game.LogTrivial("AdvancedK9 Callouts: alert-first FugitiveTrail transition completed after Rex reached the stationary hidden subject.");
             }
 
             if(_suspectLocated)
