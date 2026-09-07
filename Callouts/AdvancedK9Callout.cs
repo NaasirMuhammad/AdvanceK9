@@ -148,7 +148,8 @@ namespace AdvancedK9.Callouts
         {
             K9ApiSnapshot snapshot;
             if(AdvancedK9Api.TryGetSnapshot(out snapshot)&&snapshot.DogHandle>0)_cachedDogHandle=snapshot.DogHandle;
-            if(_cachedDogHandle<=0||!NativeFunction.Natives.DOES_ENTITY_EXIST<bool>(_cachedDogHandle))return float.MaxValue;
+            if(_cachedDogHandle<=0||!NativeFunction.Natives.DOES_ENTITY_EXIST<bool>(_cachedDogHandle))
+                return Game.LocalPlayer.Character.Position.DistanceTo(position);
             Vector3 dogPosition=NativeFunction.Natives.GET_ENTITY_COORDS<Vector3>(_cachedDogHandle,true);
             return dogPosition.DistanceTo(position);
         }
@@ -232,24 +233,20 @@ namespace AdvancedK9.Callouts
             if(_cachedDogHandle>0&&NativeFunction.Natives.DOES_ENTITY_EXIST<bool>(_cachedDogHandle))
                 dogPosition=NativeFunction.Natives.GET_ENTITY_COORDS<Vector3>(_cachedDogHandle,true);
             _nextSupportMove=Game.GameTime+1500;
-            int playerGroup=NativeFunction.Natives.GET_PED_GROUP_INDEX<int>(Game.LocalPlayer.Character);
+            var handler=Game.LocalPlayer.Character;int handlerHandle=HandleOf(handler);
             if(OfficerOne!=null&&OfficerOne.Exists())
             {
-                OfficerOne.BlockPermanentEvents=false;
-                NativeFunction.Natives.SET_PED_AS_GROUP_MEMBER(OfficerOne,playerGroup);
-                NativeFunction.Natives.SET_PED_NEVER_LEAVES_GROUP(OfficerOne,true);
+                OfficerOne.BlockPermanentEvents=true;OfficerOne.Tasks.Clear();
+                NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(OfficerOne,handlerHandle,-2.2f,-3.5f,0f,4.8f,-1,2.2f,true);
                 NativeFunction.Natives.SET_PED_KEEP_TASK(OfficerOne,true);
-                if(OfficerOne.DistanceTo(dogPosition)>8f)NativeFunction.Natives.TASK_GO_TO_ENTITY(OfficerOne,_cachedDogHandle,-1,5.5f,4.8f,0f,0);
             }
             if(OfficerTwo!=null&&OfficerTwo.Exists())
             {
-                OfficerTwo.BlockPermanentEvents=false;
-                NativeFunction.Natives.SET_PED_AS_GROUP_MEMBER(OfficerTwo,playerGroup);
-                NativeFunction.Natives.SET_PED_NEVER_LEAVES_GROUP(OfficerTwo,true);
+                OfficerTwo.BlockPermanentEvents=true;OfficerTwo.Tasks.Clear();
+                NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(OfficerTwo,handlerHandle,2.2f,-4.8f,0f,4.6f,-1,2.5f,true);
                 NativeFunction.Natives.SET_PED_KEEP_TASK(OfficerTwo,true);
-                if(OfficerTwo.DistanceTo(dogPosition)>10f)NativeFunction.Natives.TASK_GO_TO_ENTITY(OfficerTwo,_cachedDogHandle,-1,7f,4.5f,0f,0);
             }
-            Game.LogTrivial("AdvancedK9 Callouts: both support officers joined the handler group and were retasked toward live K9 entity "+_cachedDogHandle+" at "+dogPosition+".");
+            Game.LogTrivial("AdvancedK9 Callouts: both support officers retasked directly behind handler entity "+handlerHandle+"; cross-AppDomain K9 handle="+_cachedDogHandle+".");
         }
 
         protected bool TryFindExistingCover(Vector3 center,out Vector3 hidingPosition)
@@ -409,6 +406,28 @@ namespace AdvancedK9.Callouts
             },"AdvancedK9 police scene departure");
         }
 
+        private void PreserveSceneVehicleForReturn(Vehicle vehicle)
+        {
+            if(vehicle==null||!vehicle.Exists())return;vehicle.IsPersistent=true;
+            GameFiber.StartNew(delegate
+            {
+                try
+                {
+                    uint expires=Game.GameTime+600000;bool playerReturned=false;
+                    while(vehicle.Exists()&&Game.GameTime<expires)
+                    {
+                        float distance=Game.LocalPlayer.Character.DistanceTo(vehicle);
+                        if(distance<45f)playerReturned=true;
+                        if(playerReturned&&distance>120f)break;
+                        GameFiber.Wait(1000);
+                    }
+                }
+                catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: preserved scene vehicle cleanup contained: "+ex.Message);}
+                if(vehicle.Exists())vehicle.Dismiss();
+            },"AdvancedK9 preserved scene vehicle");
+            Game.LogTrivial("AdvancedK9 Callouts: abandoned vehicle preserved for scene return; cleanup waits until the handler returns and leaves or ten minutes pass.");
+        }
+
         public override void End()
         {
             if(_cleanupCompleted)return;
@@ -418,7 +437,7 @@ namespace AdvancedK9.Callouts
             if(Reporter!=null&&Reporter.Exists())Reporter.Dismiss();
             if(ParentTwo!=null&&ParentTwo.Exists())ParentTwo.Dismiss();
             if(Subject!=null&&Subject.Exists())Subject.Dismiss();
-            if(SceneVehicle!=null&&SceneVehicle.Exists())SceneVehicle.Dismiss();
+            if(SceneVehicle!=null&&SceneVehicle.Exists()){if(Finished)PreserveSceneVehicleForReturn(SceneVehicle);else SceneVehicle.Dismiss();}SceneVehicle=null;
             if(EvidenceProp!=null&&EvidenceProp.Exists())EvidenceProp.Dismiss();
             if(CoverProp!=null&&CoverProp.Exists())CoverProp.Dismiss();
             if(MedicOne!=null&&MedicOne.Exists())MedicOne.Dismiss();
