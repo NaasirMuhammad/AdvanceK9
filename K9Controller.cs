@@ -988,7 +988,7 @@ namespace AdvancedK9
         private void SetDownCarriedK9(bool notify)
         {
             if(!_carryingDog)return;
-            var handler=Game.LocalPlayer.Character;handler.Tasks.ClearSecondaryTask();
+            var handler=Game.LocalPlayer.Character;NativeFunction.Natives.CLEAR_PED_SECONDARY_TASK(handler);
             NativeFunction.Natives.SET_PED_CAN_SWITCH_WEAPON(handler,true);
             NativeFunction.Natives.DETACH_ENTITY(_dog,true,true);
             NativeFunction.Natives.SET_ENTITY_COLLISION(_dog,true,true);
