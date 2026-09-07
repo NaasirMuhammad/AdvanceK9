@@ -35,9 +35,9 @@ namespace AdvancedK9.Callouts
             SceneVehicle=SpawnVehicle("primo",Scene,trafficHeading);
             if(SceneVehicle!=null&&SceneVehicle.Exists())
             {
-                Vector3 curbPosition=SceneVehicle.GetOffsetPosition(new Vector3(5.5f,0f,0f));
+                Vector3 curbPosition=SceneVehicle.GetOffsetPosition(new Vector3(8f,0f,0f));
                 SceneVehicle.Position=curbPosition;Scene=curbPosition;CalloutPosition=Scene;
-                Game.LogTrivial("AdvancedK9 Callouts: failed traffic stop shifted 5.5 metres to the roadside shoulder.");
+                Game.LogTrivial("AdvancedK9 Callouts: failed traffic stop shifted 8 metres to the roadside shoulder.");
             }
             StagePoliceScene();
             ConfigureTrafficStopScene();
@@ -50,9 +50,19 @@ namespace AdvancedK9.Callouts
             StartedAt=Game.GameTime;_outcome=Random.Next(4);
             StagePoliceScene();
             ConfigureTrafficStopScene();
-            float angle=Random.Next(360);float distance=Random.Next(85,116);
-            float radians=(float)(angle*System.Math.PI/180.0);
-            Vector3 trailEnd=World.GetNextPositionOnStreet(Scene+new Vector3((float)System.Math.Sin(radians)*distance,(float)System.Math.Cos(radians)*distance,0f));
+            float angle=Random.Next(360);float distance=Random.Next(85,116);Vector3 trailEnd=Scene;
+            for(int attempt=0;attempt<10;attempt++)
+            {
+                float radians=(float)(angle*System.Math.PI/180.0);
+                Vector3 candidate=World.GetNextPositionOnStreet(Scene+new Vector3((float)System.Math.Sin(radians)*distance,(float)System.Math.Cos(radians)*distance,0f));
+                if(System.Math.Abs(candidate.Z-Scene.Z)<=4f){trailEnd=candidate;break;}
+                angle=(angle+37f)%360f;
+            }
+            if(trailEnd.DistanceTo(Scene)<50f)
+            {
+                float radians=(float)(angle*System.Math.PI/180.0);
+                trailEnd=Scene+new Vector3((float)System.Math.Sin(radians)*90f,(float)System.Math.Cos(radians)*90f,0f);
+            }
             float dx=trailEnd.X-Scene.X,dy=trailEnd.Y-Scene.Y;float length=(float)System.Math.Sqrt(dx*dx+dy*dy);
             if(length<.1f){dx=1f;dy=0f;length=1f;}
             Vector3 hidingPosition;
@@ -108,7 +118,7 @@ namespace AdvancedK9.Callouts
         {
             if(Finished||Subject==null||!Subject.Exists()){if(!Finished)Resolve("~r~Fugitive Trail ended: suspect unavailable.");return;}
             var player=Game.LocalPlayer.Character;
-            if(player.DistanceTo(Scene)<180f&&(PoliceVehicle==null||!PoliceVehicle.Exists()||OfficerOne==null||!OfficerOne.Exists()||OfficerTwo==null||!OfficerTwo.Exists()))StagePoliceScene();
+            if(player.DistanceTo(Scene)<350f&&(PoliceVehicle==null||!PoliceVehicle.Exists()||OfficerOne==null||!OfficerOne.Exists()||OfficerTwo==null||!OfficerTwo.Exists()))StagePoliceScene();
 
             if(!_sceneBriefed&&player.DistanceTo(Scene)<28f)
             {
@@ -150,7 +160,7 @@ namespace AdvancedK9.Callouts
             {
                 if(ProcessPostApprehensionMedical("~g~Fugitive Trail complete: EMS treated the suspect and patrol completed custody.")){}
                 else if(Subject.IsDead)Resolve("~o~Fugitive Trail concluded: suspect is deceased.");
-                else if(NativeFunction.Natives.IS_PED_CUFFED<bool>(Subject)&&!_transportStarted){_transportStarted=true;BeginAutomaticTransport("~g~Fugitive Trail complete: on-scene units transported the prisoner.");}
+                else if((NativeFunction.Natives.IS_PED_CUFFED<bool>(Subject)||Functions.IsPedArrested(Subject))&&!_transportStarted){_transportStarted=true;BeginAutomaticTransport("~g~Fugitive Trail complete: on-scene units transported the prisoner.");}
                 else if(Game.GameTime-_locatedAt>600000)Resolve("~o~Fugitive Trail concluded after suspect location.");
             }
             else if(!ApiRequested&&Game.GameTime-StartedAt>900000)Resolve("~r~Fugitive Trail: response expired before scent collection.");
