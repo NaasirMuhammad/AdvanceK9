@@ -118,7 +118,13 @@ namespace AdvancedK9.Callouts
             Vector3 officerTwoPosition=SceneVehicle!=null&&SceneVehicle.Exists()
                 ?SceneVehicle.GetOffsetPosition(new Vector3(2.5f,-3.5f,0f))
                 :new Vector3(Scene.X+4f,Scene.Y-3f,Scene.Z);
-            if(PoliceVehicle==null||!PoliceVehicle.Exists())PoliceVehicle=SpawnPoliceVehicle(cruiserPosition,SceneVehicle!=null&&SceneVehicle.Exists()?SceneVehicle.Heading:Game.LocalPlayer.Character.Heading);
+            float sceneHeading=SceneVehicle!=null&&SceneVehicle.Exists()?SceneVehicle.Heading:Game.LocalPlayer.Character.Heading;
+            if(PoliceVehicle==null||!PoliceVehicle.Exists())
+            {
+                PoliceVehicle=SpawnPoliceVehicle(cruiserPosition,sceneHeading);
+                if(PoliceVehicle==null||!PoliceVehicle.Exists())
+                    PoliceVehicle=SpawnPoliceVehicle(new Vector3(cruiserPosition.X+3f,cruiserPosition.Y+3f,cruiserPosition.Z),sceneHeading);
+            }
             if(OfficerOne==null||!OfficerOne.Exists())OfficerOne=SpawnPoliceOfficer(officerOnePosition,0f);
             if(OfficerTwo==null||!OfficerTwo.Exists())OfficerTwo=SpawnPoliceOfficer(officerTwoPosition,180f);
             if(OfficerOne!=null&&OfficerOne.Exists()){OfficerOne.BlockPermanentEvents=true;NativeFunction.Natives.TASK_START_SCENARIO_IN_PLACE(OfficerOne,"WORLD_HUMAN_COP_IDLES",0,true);}
@@ -254,9 +260,8 @@ namespace AdvancedK9.Callouts
             if(AdvancedK9Api.TryGetSnapshot(out snapshot)&&snapshot.DogHandle>0)_cachedDogHandle=snapshot.DogHandle;
             if(_cachedDogHandle>0&&NativeFunction.Natives.DOES_ENTITY_EXIST<bool>(_cachedDogHandle))
                 dogPosition=NativeFunction.Natives.GET_ENTITY_COORDS<Vector3>(_cachedDogHandle,true);
-            _nextSupportMove=Game.GameTime+4000;
+            _nextSupportMove=Game.GameTime+1500;
             var handler=Game.LocalPlayer.Character;
-            object formationLeader=_cachedDogHandle>0?(object)_cachedDogHandle:handler;
             uint taser=NativeFunction.Natives.GET_HASH_KEY<uint>("WEAPON_STUNGUN");
             uint pistol=NativeFunction.Natives.GET_HASH_KEY<uint>("WEAPON_COMBATPISTOL");
             if(OfficerOne!=null&&OfficerOne.Exists())
@@ -266,7 +271,9 @@ namespace AdvancedK9.Callouts
                 NativeFunction.Natives.SET_CURRENT_PED_WEAPON(OfficerOne,taser,true);
                 NativeFunction.Natives.SET_PED_COMBAT_ABILITY(OfficerOne,2);
                 NativeFunction.Natives.SET_PED_COMBAT_MOVEMENT(OfficerOne,2);
-                NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(OfficerOne,formationLeader,-2.8f,-4.5f,0f,6.5f,-1,2.8f,true);
+                float distance=OfficerOne.DistanceTo(handler);
+                if(distance>85f)OfficerOne.Position=handler.GetOffsetPosition(new Vector3(-4f,-16f,0f));
+                NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(OfficerOne,handler,-3.2f,-7.5f,0f,distance>25f?7.5f:5.8f,-1,3.5f,true);
                 NativeFunction.Natives.SET_PED_KEEP_TASK(OfficerOne,true);
             }
             if(OfficerTwo!=null&&OfficerTwo.Exists())
@@ -276,10 +283,12 @@ namespace AdvancedK9.Callouts
                 NativeFunction.Natives.SET_CURRENT_PED_WEAPON(OfficerTwo,pistol,true);
                 NativeFunction.Natives.SET_PED_COMBAT_ABILITY(OfficerTwo,2);
                 NativeFunction.Natives.SET_PED_COMBAT_MOVEMENT(OfficerTwo,2);
-                NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(OfficerTwo,formationLeader,2.8f,-5.8f,0f,6.2f,-1,3f,true);
+                float distance=OfficerTwo.DistanceTo(handler);
+                if(distance>85f)OfficerTwo.Position=handler.GetOffsetPosition(new Vector3(4f,-18f,0f));
+                NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(OfficerTwo,handler,3.2f,-9f,0f,distance>25f?7.2f:5.6f,-1,3.8f,true);
                 NativeFunction.Natives.SET_PED_KEEP_TASK(OfficerTwo,true);
             }
-            if(!_supportFormationLogged){_supportFormationLogged=true;Game.LogTrivial("AdvancedK9 Callouts: support search formation assigned to the live K9 entity; handle="+_cachedDogHandle+".");}
+            if(!_supportFormationLogged){_supportFormationLogged=true;Game.LogTrivial("AdvancedK9 Callouts: support search formation assigned behind the K9 handler; K9 handle="+_cachedDogHandle+".");}
         }
 
         protected void ControlApprehensionTraffic(Vector3 center)
