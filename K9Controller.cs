@@ -1731,17 +1731,20 @@ namespace AdvancedK9
             var end = Game.GameTime + 25000;
             while (DogExists() && target.Exists() && !target.IsDead && Game.GameTime < end && _state == K9State.Apprehending)
             {
-                if (target.Health <= _config.NonLethalHealthFloor || target.IsRagdoll)
+                bool controlledContact=_dog.DistanceTo(target)<2.15f&&Game.GameTime-_biteStarted>=900;
+                if (controlledContact || target.Health <= _config.NonLethalHealthFloor || target.IsRagdoll)
                 {
                     _dog.Tasks.ClearImmediately();
                     if (target.Health < _config.NonLethalHealthFloor) target.Health = _config.NonLethalHealthFloor;
-                    NativeFunction.Natives.TASK_HANDS_UP(target, -1, Game.LocalPlayer.Character, -1, true);
-                    Game.DisplayNotification("~g~Suspect neutralized without lethal force.~s~ Move in for arrest.");
+                    NativeFunction.Natives.SET_PED_CAN_RAGDOLL(target,true);
+                    NativeFunction.Natives.SET_PED_TO_RAGDOLL(target,2600,3600,0,false,false,false);
+                    _state=K9State.Staying;
+                    NativeFunction.Natives.TASK_GUARD_CURRENT_POSITION(_dog,8f,8f,true);
+                    Game.DisplayNotification("~g~Controlled K9 takedown complete.~s~ Rex is holding position; move in for arrest.");
                     _pr.RecordApprehension(target);
                     _trust.Change(1, "controlled apprehension");
                     AwardOperationalXp("Controlled apprehension",15,30,1,3);
                     int biteSeconds=(int)((Game.GameTime-_biteStarted)/1000);K9DeploymentReport.Write("Player",_profile.Name,"Apprehension",reaction,_activeScentSource,_warningGiven,_activeTrackDistance,_activeTrackStarted==0?0:(int)((Game.GameTime-_activeTrackStarted)/1000),biteSeconds,"Controlled surrender",_profile.Injury,"Suspect ready for PR/STP arrest",target.Position);
-                    Follow();
                     return;
                 }
                 GameFiber.Yield();

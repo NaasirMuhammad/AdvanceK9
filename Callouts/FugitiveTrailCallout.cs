@@ -83,12 +83,23 @@ namespace AdvancedK9.Callouts
             {
                 try
                 {
-                    GameFiber.Wait(18000);
-                    if(!Finished&&escapingSubject!=null&&escapingSubject.Exists())
+                    uint escapeStarted=Game.GameTime,nextRetry=0;
+                    while(!Finished&&escapingSubject!=null&&escapingSubject.Exists()&&escapingSubject.DistanceTo(finalCover)>5f&&Game.GameTime-escapeStarted<90000)
                     {
-                        if(escapingSubject.DistanceTo(finalCover)>12f&&Game.LocalPlayer.Character.DistanceTo(escapingSubject)>80f)escapingSubject.Position=finalCover;
-                        NativeFunction.Natives.TASK_STAND_STILL(escapingSubject,-1);
+                        if(Game.GameTime>=nextRetry)
+                        {
+                            nextRetry=Game.GameTime+4500;
+                            NativeFunction.Natives.TASK_FOLLOW_NAV_MESH_TO_COORD(escapingSubject,finalCover.X,finalCover.Y,finalCover.Z,5.4f,12000,2f,0,0f);
+                        }
+                        if(Game.GameTime-escapeStarted>14000&&Game.LocalPlayer.Character.DistanceTo(escapingSubject)>85f)
+                        {
+                            escapingSubject.Position=finalCover;
+                            break;
+                        }
+                        GameFiber.Wait(250);
                     }
+                    if(!Finished&&escapingSubject!=null&&escapingSubject.Exists()&&escapingSubject.DistanceTo(finalCover)<=7f)
+                        NativeFunction.Natives.TASK_COWER(escapingSubject,-1);
                 }
                 catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: fugitive escape staging contained: "+ex.Message);}
             },"AdvancedK9 fugitive escape to cover");
@@ -156,8 +167,7 @@ namespace AdvancedK9.Callouts
             if(ApiRequested&&!_suspectLocated&&!_rexReachedSubject&&rexDistance<3f)
             {
                 _rexReachedSubject=true;_rexReachedAt=Game.GameTime;
-                NativeFunction.Natives.TASK_STAND_STILL(Subject,5000);
-                Game.LogTrivial("AdvancedK9 Callouts: Rex physically reached FugitiveTrail subject; waiting for core alert bark and tracking release.");
+                Game.LogTrivial("AdvancedK9 Callouts: Rex physically reached FugitiveTrail subject; preserving the suspect's cover/flee task until the alert transition.");
             }
             if(_rexReachedSubject&&!_suspectLocated&&Game.GameTime-_rexReachedAt>=2800)
             {
@@ -165,6 +175,7 @@ namespace AdvancedK9.Callouts
                 SubjectBlip=Subject.AttachBlip();SubjectBlip.IsRouteEnabled=true;Subject.IsInvincible=true;
                 if(_outcome==0)NativeFunction.Natives.TASK_HANDS_UP(Subject,120000,player,-1,true);
                 else NativeFunction.Natives.TASK_SMART_FLEE_PED(Subject,player,700f,-1,false,false);
+                SupportOfficersContainSubject();
                 Game.DisplayNotification(_outcome==0?"~g~Rex alerted on the hidden fugitive. The suspect is surrendering; secure the arrest.":"~o~Rex alerted and flushed the fugitive from cover. Tracking is complete; command APPREHEND if deployment is justified.");
                 Game.LogTrivial("AdvancedK9 Callouts: alert-first FugitiveTrail transition completed after Rex reached the stationary hidden subject.");
             }

@@ -234,19 +234,51 @@ namespace AdvancedK9.Callouts
                 dogPosition=NativeFunction.Natives.GET_ENTITY_COORDS<Vector3>(_cachedDogHandle,true);
             _nextSupportMove=Game.GameTime+1500;
             var handler=Game.LocalPlayer.Character;
+            uint taser=NativeFunction.Natives.GET_HASH_KEY<uint>("WEAPON_STUNGUN");
+            uint pistol=NativeFunction.Natives.GET_HASH_KEY<uint>("WEAPON_COMBATPISTOL");
             if(OfficerOne!=null&&OfficerOne.Exists())
             {
-                OfficerOne.BlockPermanentEvents=true;OfficerOne.Tasks.Clear();
+                OfficerOne.BlockPermanentEvents=true;
+                NativeFunction.Natives.GIVE_WEAPON_TO_PED(OfficerOne,taser,2,false,true);
+                NativeFunction.Natives.SET_CURRENT_PED_WEAPON(OfficerOne,taser,true);
+                NativeFunction.Natives.SET_PED_COMBAT_ABILITY(OfficerOne,2);
+                NativeFunction.Natives.SET_PED_COMBAT_MOVEMENT(OfficerOne,2);
                 NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(OfficerOne,handler,-2.2f,-3.5f,0f,4.8f,-1,2.2f,true);
                 NativeFunction.Natives.SET_PED_KEEP_TASK(OfficerOne,true);
             }
             if(OfficerTwo!=null&&OfficerTwo.Exists())
             {
-                OfficerTwo.BlockPermanentEvents=true;OfficerTwo.Tasks.Clear();
+                OfficerTwo.BlockPermanentEvents=true;
+                NativeFunction.Natives.GIVE_WEAPON_TO_PED(OfficerTwo,pistol,60,false,true);
+                NativeFunction.Natives.SET_CURRENT_PED_WEAPON(OfficerTwo,pistol,true);
+                NativeFunction.Natives.SET_PED_COMBAT_ABILITY(OfficerTwo,2);
+                NativeFunction.Natives.SET_PED_COMBAT_MOVEMENT(OfficerTwo,2);
                 NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(OfficerTwo,handler,2.2f,-4.8f,0f,4.6f,-1,2.5f,true);
                 NativeFunction.Natives.SET_PED_KEEP_TASK(OfficerTwo,true);
             }
-            Game.LogTrivial("AdvancedK9 Callouts: both support officers retasked directly behind the live handler ped; cross-AppDomain K9 handle="+_cachedDogHandle+".");
+            Game.LogTrivial("AdvancedK9 Callouts: support search team moving with taser and firearm cover; cross-AppDomain K9 handle="+_cachedDogHandle+".");
+        }
+
+        protected void SupportOfficersContainSubject()
+        {
+            if(Subject==null||!Subject.Exists())return;
+            uint taser=NativeFunction.Natives.GET_HASH_KEY<uint>("WEAPON_STUNGUN");
+            uint pistol=NativeFunction.Natives.GET_HASH_KEY<uint>("WEAPON_COMBATPISTOL");
+            if(OfficerOne!=null&&OfficerOne.Exists())
+            {
+                OfficerOne.Tasks.Clear();
+                NativeFunction.Natives.GIVE_WEAPON_TO_PED(OfficerOne,taser,2,false,true);
+                NativeFunction.Natives.SET_CURRENT_PED_WEAPON(OfficerOne,taser,true);
+                NativeFunction.Natives.TASK_AIM_GUN_AT_ENTITY(OfficerOne,Subject,-1,false);
+            }
+            if(OfficerTwo!=null&&OfficerTwo.Exists())
+            {
+                OfficerTwo.Tasks.Clear();
+                NativeFunction.Natives.GIVE_WEAPON_TO_PED(OfficerTwo,pistol,60,false,true);
+                NativeFunction.Natives.SET_CURRENT_PED_WEAPON(OfficerTwo,pistol,true);
+                NativeFunction.Natives.TASK_AIM_GUN_AT_ENTITY(OfficerTwo,Subject,-1,false);
+            }
+            Game.LogTrivial("AdvancedK9 Callouts: support officers transitioned from search movement to armed containment.");
         }
 
         protected bool TryFindExistingCover(Vector3 center,out Vector3 hidingPosition)
