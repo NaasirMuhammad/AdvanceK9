@@ -103,7 +103,7 @@ namespace AdvancedK9.Callouts
         protected bool StagePoliceScene()
         {
             Vector3 cruiserPosition=SceneVehicle!=null&&SceneVehicle.Exists()
-                ?SceneVehicle.GetOffsetPosition(new Vector3(-4f,-9f,0f))
+                ?SceneVehicle.GetOffsetPosition(new Vector3(0f,-9f,0f))
                 :new Vector3(Scene.X-10f,Scene.Y-7f,Scene.Z);
             Vector3 officerOnePosition=SceneVehicle!=null&&SceneVehicle.Exists()
                 ?SceneVehicle.GetOffsetPosition(new Vector3(-2.5f,-2.5f,0f))
@@ -209,7 +209,7 @@ namespace AdvancedK9.Callouts
                     while(!Finished&&Game.GameTime<expires)
                     {
                         float departure=K9DistanceTo(Scene);
-                        if(!committed&&((departure<float.MaxValue&&departure>2.5f)||K9TrackingActive()))
+                        if(!committed&&(K9TrackingActive()||(ApiRequested&&Game.LocalPlayer.Character.DistanceTo(Scene)>15f)||(departure<float.MaxValue&&departure>12f)))
                         {
                             committed=true;
                             Game.DisplayNotification("~b~On-scene officers:~s~ Moving behind Rex and the handler.");
@@ -231,18 +231,25 @@ namespace AdvancedK9.Callouts
             if(AdvancedK9Api.TryGetSnapshot(out snapshot)&&snapshot.DogHandle>0)_cachedDogHandle=snapshot.DogHandle;
             if(_cachedDogHandle>0&&NativeFunction.Natives.DOES_ENTITY_EXIST<bool>(_cachedDogHandle))
                 dogPosition=NativeFunction.Natives.GET_ENTITY_COORDS<Vector3>(_cachedDogHandle,true);
-            _nextSupportMove=Game.GameTime+2000;
-            if(OfficerOne!=null&&OfficerOne.Exists()&&OfficerOne.DistanceTo(dogPosition)>5f)
+            _nextSupportMove=Game.GameTime+1500;
+            int playerGroup=NativeFunction.Natives.GET_PED_GROUP_INDEX<int>(Game.LocalPlayer.Character);
+            if(OfficerOne!=null&&OfficerOne.Exists())
             {
-                OfficerOne.Tasks.Clear();
-                NativeFunction.Natives.TASK_GO_TO_ENTITY(OfficerOne,_cachedDogHandle,-1,4.5f,4.6f,0f,0);
+                OfficerOne.BlockPermanentEvents=false;
+                NativeFunction.Natives.SET_PED_AS_GROUP_MEMBER(OfficerOne,playerGroup);
+                NativeFunction.Natives.SET_PED_NEVER_LEAVES_GROUP(OfficerOne,true);
+                NativeFunction.Natives.SET_PED_KEEP_TASK(OfficerOne,true);
+                if(OfficerOne.DistanceTo(dogPosition)>8f)NativeFunction.Natives.TASK_GO_TO_ENTITY(OfficerOne,_cachedDogHandle,-1,5.5f,4.8f,0f,0);
             }
-            if(OfficerTwo!=null&&OfficerTwo.Exists()&&OfficerTwo.DistanceTo(dogPosition)>7f)
+            if(OfficerTwo!=null&&OfficerTwo.Exists())
             {
-                OfficerTwo.Tasks.Clear();
-                NativeFunction.Natives.TASK_GO_TO_ENTITY(OfficerTwo,_cachedDogHandle,-1,6f,4.3f,0f,0);
+                OfficerTwo.BlockPermanentEvents=false;
+                NativeFunction.Natives.SET_PED_AS_GROUP_MEMBER(OfficerTwo,playerGroup);
+                NativeFunction.Natives.SET_PED_NEVER_LEAVES_GROUP(OfficerTwo,true);
+                NativeFunction.Natives.SET_PED_KEEP_TASK(OfficerTwo,true);
+                if(OfficerTwo.DistanceTo(dogPosition)>10f)NativeFunction.Natives.TASK_GO_TO_ENTITY(OfficerTwo,_cachedDogHandle,-1,7f,4.5f,0f,0);
             }
-            Game.LogTrivial("AdvancedK9 Callouts: both foot-support officers retasked directly to live K9 entity "+_cachedDogHandle+" at "+dogPosition+".");
+            Game.LogTrivial("AdvancedK9 Callouts: both support officers joined the handler group and were retasked toward live K9 entity "+_cachedDogHandle+" at "+dogPosition+".");
         }
 
         protected bool TryFindExistingCover(Vector3 center,out Vector3 hidingPosition)
@@ -379,14 +386,19 @@ namespace AdvancedK9.Callouts
             {
                 try
                 {
-                    if(officerOne!=null&&officerOne.Exists()){officerOne.BlockPermanentEvents=false;officerOne.Tasks.Clear();officerOne.Tasks.EnterVehicle(cruiser,0).WaitForCompletion(7000);}
-                    if(officerTwo!=null&&officerTwo.Exists()){officerTwo.BlockPermanentEvents=false;officerTwo.Tasks.Clear();officerTwo.Tasks.EnterVehicle(cruiser,-1).WaitForCompletion(7000);}
+                    if(officerOne!=null&&officerOne.Exists()){NativeFunction.Natives.REMOVE_PED_FROM_GROUP(officerOne);officerOne.BlockPermanentEvents=false;officerOne.Tasks.Clear();officerOne.Tasks.EnterVehicle(cruiser,0);}
+                    if(officerTwo!=null&&officerTwo.Exists()){NativeFunction.Natives.REMOVE_PED_FROM_GROUP(officerTwo);officerTwo.BlockPermanentEvents=false;officerTwo.Tasks.Clear();officerTwo.Tasks.EnterVehicle(cruiser,-1);}
+                    uint entryDeadline=Game.GameTime+8000;
+                    while(Game.GameTime<entryDeadline&&cruiser.Exists()&&
+                        ((officerOne!=null&&officerOne.Exists()&&!officerOne.IsInVehicle(cruiser,false))||(officerTwo!=null&&officerTwo.Exists()&&!officerTwo.IsInVehicle(cruiser,false))))GameFiber.Yield();
+                    if(officerOne!=null&&officerOne.Exists()&&!officerOne.IsInVehicle(cruiser,false))NativeFunction.Natives.SET_PED_INTO_VEHICLE(officerOne,cruiser,0);
+                    if(officerTwo!=null&&officerTwo.Exists()&&!officerTwo.IsInVehicle(cruiser,false))NativeFunction.Natives.SET_PED_INTO_VEHICLE(officerTwo,cruiser,-1);
                     Ped driver=officerTwo!=null&&officerTwo.Exists()?officerTwo:officerOne;
                     if(driver!=null&&driver.Exists()&&cruiser.Exists())
                     {
                         NativeFunction.Natives.SET_VEHICLE_SIREN(cruiser,false);
                         NativeFunction.Natives.TASK_VEHICLE_DRIVE_WANDER(driver,cruiser,18f,786603);
-                        Game.LogTrivial("AdvancedK9 Callouts: scene officers entered their cruiser and began a staged drive-away.");
+                        Game.LogTrivial("AdvancedK9 Callouts: both scene officers secured in their cruiser and began the staged drive-away.");
                         GameFiber.Wait(7000);
                     }
                 }
