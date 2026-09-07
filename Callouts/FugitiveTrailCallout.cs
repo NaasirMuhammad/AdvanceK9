@@ -67,7 +67,7 @@ namespace AdvancedK9.Callouts
                 if(ApiRequested){ClearSceneRoute();Game.LogTrivial("AdvancedK9 Callouts: fugitive vehicle scent source registered; awaiting handler command.");}
             }
 
-            if(!_suspectLocated&&Game.GameTime>=_nextCoverSearch)
+            if(!_suspectLocated&&!_coverConfirmed&&Game.GameTime>=_nextCoverSearch)
             {
                 _nextCoverSearch=Game.GameTime+9000;
                 _coverConfirmed=NativeFunction.Natives.IS_PED_IN_COVER<bool>(Subject,false);
@@ -78,8 +78,8 @@ namespace AdvancedK9.Callouts
                 }
                 else Game.LogTrivial("AdvancedK9 Callouts: fugitive reached GTA engine-valid environmental cover.");
             }
-            if(ApiRequested&&!_suspectLocated)SupportOfficersFollowK9();
-            if(ApiRequested&&!_suspectLocated&&K9DistanceTo(Subject.Position)<18f)
+            if(ApiRequested&&!_suspectLocated&&K9TrackingActive())SupportOfficersFollowK9();
+            if(ApiRequested&&!_suspectLocated&&System.Math.Min(K9DistanceTo(Subject.Position),player.DistanceTo(Subject))<18f)
             {
                 _suspectLocated=true;_locatedAt=Game.GameTime;
                 SubjectBlip=Subject.AttachBlip();SubjectBlip.IsRouteEnabled=true;
