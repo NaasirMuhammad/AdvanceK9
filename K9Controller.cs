@@ -977,7 +977,7 @@ namespace AdvancedK9
             handler.Tasks.PlayAnimation("anim@heists@box_carry@","idle",4f,AnimationFlags.Loop|AnimationFlags.UpperBodyOnly|AnimationFlags.SecondaryTask);
             int spine=NativeFunction.Natives.GET_PED_BONE_INDEX<int>(handler,24818);
             NativeFunction.Natives.SET_ENTITY_COLLISION(_dog,false,false);
-            NativeFunction.Natives.ATTACH_ENTITY_TO_ENTITY(_dog,handler,spine,.05f,.34f,.02f,0f,0f,90f,false,false,false,false,2,true);
+            NativeFunction.Natives.ATTACH_ENTITY_TO_ENTITY(_dog,handler,spine,.05f,.30f,-.16f,90f,0f,90f,false,false,false,false,2,true);
             PlayDogAnimation("creatures@rottweiler@amb@sleep_in_kennel@","sleep_in_kennel",-1,1);
             NativeFunction.Natives.SET_PED_CAN_SWITCH_WEAPON(handler,false);
             _carryingDog=true;_state=K9State.Injured;
