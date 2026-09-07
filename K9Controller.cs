@@ -134,6 +134,7 @@ namespace AdvancedK9
         private bool _deployed;
         private bool _downed;
         private bool _carryingDog;
+        private bool _carriedForAccess;
         private bool _emergencyTransport;
         private bool _veterinaryTransportActive;
         private readonly Vector3 _veterinaryHospital=new Vector3(306.7f,-595.2f,43.3f);
@@ -962,9 +963,47 @@ namespace AdvancedK9
 
         private void RestoreDogAfterTreatment(int healthPercent){if(!DogEntityExists())return;NativeFunction.Natives.FREEZE_ENTITY_POSITION(_dog,false);NativeFunction.Natives.SET_PED_CAN_RAGDOLL(_dog,true);if(_dog.IsDead)NativeFunction.Natives.RESURRECT_PED(_dog);NativeFunction.Natives.REVIVE_INJURED_PED(_dog);NativeFunction.Natives.CLEAR_PED_TASKS_IMMEDIATELY(_dog);int health=Math.Max(1,(int)(_dog.MaxHealth*Math.Max(1,Math.Min(100,healthPercent))/100f));_dog.Health=health;NativeFunction.Natives.SET_ENTITY_HEALTH(_dog,health);_dog.IsInvincible=false;_dog.BlockPermanentEvents=true;ConfigureAmbientGunfireImmunity();}
 
-        private void ToggleCarryK9(){if(_carryingDog){SetDownCarriedK9(true);return;}if(!DogEntityExists()){Game.DisplayNotification("~y~No deployed K9 is available to carry.");return;}if(!_downed&&_state!=K9State.Injured&&_profile.Health>=95){Game.DisplayNotification("~g~"+_profile.Name+" does not need to be carried.");return;}var handler=Game.LocalPlayer.Character;if(_dog.DistanceTo(handler)>3f){Game.DisplayNotification("~y~Move closer to "+_profile.Name+" before carrying.");return;}DeleteLeashRope();ReleaseVehicleSeat();NativeFunction.Natives.FREEZE_ENTITY_POSITION(_dog,false);NativeFunction.Natives.SET_PED_CAN_RAGDOLL(_dog,false);_dog.IsInvincible=true;_dog.Tasks.ClearImmediately();handler.Tasks.PlayAnimation("anim@heists@box_carry@","idle",4f,AnimationFlags.Loop);int spine=NativeFunction.Natives.GET_PED_BONE_INDEX<int>(handler,24818);NativeFunction.Natives.SET_ENTITY_COLLISION(_dog,false,false);NativeFunction.Natives.ATTACH_ENTITY_TO_ENTITY(_dog,handler,spine,.18f,.42f,-.08f,0f,90f,90f,false,false,false,false,2,true);PlayDogAnimation("creatures@rottweiler@move","dead_left",-1,1);_carryingDog=true;_state=K9State.Injured;K9IncidentLog.Write(_profile.Name,"Medical","Handler began K9 evacuation carry",handler.Position);Game.DisplayNotification("~b~Carrying "+_profile.Name+".~s~~n~Select Carry / Set Down K9 again to place the K9 down.");}
+        private void ToggleCarryK9()
+        {
+            if(_carryingDog){SetDownCarriedK9(true);return;}
+            if(!DogEntityExists()){Game.DisplayNotification("~y~No deployed K9 is available to carry.");return;}
+            var handler=Game.LocalPlayer.Character;
+            if(_dog.DistanceTo(handler)>3f){Game.DisplayNotification("~y~Move closer to "+_profile.Name+" before carrying.");return;}
+            _carriedForAccess=!_downed&&_state!=K9State.Injured;
+            DeleteLeashRope();ReleaseVehicleSeat();
+            NativeFunction.Natives.FREEZE_ENTITY_POSITION(_dog,false);
+            NativeFunction.Natives.SET_PED_CAN_RAGDOLL(_dog,false);
+            _dog.IsInvincible=true;_dog.Tasks.ClearImmediately();
+            handler.Tasks.PlayAnimation("anim@heists@box_carry@","idle",4f,AnimationFlags.Loop);
+            int spine=NativeFunction.Natives.GET_PED_BONE_INDEX<int>(handler,24818);
+            NativeFunction.Natives.SET_ENTITY_COLLISION(_dog,false,false);
+            NativeFunction.Natives.ATTACH_ENTITY_TO_ENTITY(_dog,handler,spine,.18f,.42f,-.08f,0f,90f,90f,false,false,false,false,2,true);
+            PlayDogAnimation("creatures@rottweiler@move","dead_left",-1,1);
+            _carryingDog=true;_state=K9State.Injured;
+            K9IncidentLog.Write(_profile.Name,_carriedForAccess?"Access carry":"Medical","Handler began K9 carry",handler.Position);
+            Game.DisplayNotification("~b~Carrying "+_profile.Name+".~s~~n~Use this for stairs, obstacles, or inaccessible terrain. Select Carry / Set Down K9 again to place him down.");
+        }
 
-        private void SetDownCarriedK9(bool notify){if(!_carryingDog)return;var handler=Game.LocalPlayer.Character;handler.Tasks.Clear();NativeFunction.Natives.DETACH_ENTITY(_dog,true,true);NativeFunction.Natives.SET_ENTITY_COLLISION(_dog,true,true);NativeFunction.Natives.FREEZE_ENTITY_POSITION(_dog,false);_dog.Position=handler.GetOffsetPosition(new Vector3(.65f,1.1f,0f));_carryingDog=false;if(_downed)PlaceDogInDownedPose();else{_dog.IsInvincible=false;NativeFunction.Natives.SET_PED_CAN_RAGDOLL(_dog,true);LieDown();_state=K9State.Injured;}K9IncidentLog.Write(_profile.Name,"Medical","Handler set carried K9 down",_dog.Position);if(notify)Game.DisplayNotification("~b~"+_profile.Name+" placed down safely.");}
+        private void SetDownCarriedK9(bool notify)
+        {
+            if(!_carryingDog)return;
+            var handler=Game.LocalPlayer.Character;handler.Tasks.Clear();
+            NativeFunction.Natives.DETACH_ENTITY(_dog,true,true);
+            NativeFunction.Natives.SET_ENTITY_COLLISION(_dog,true,true);
+            NativeFunction.Natives.FREEZE_ENTITY_POSITION(_dog,false);
+            _dog.Position=handler.GetOffsetPosition(new Vector3(.65f,1.1f,0f));
+            _carryingDog=false;
+            bool accessCarry=_carriedForAccess;_carriedForAccess=false;
+            if(_downed)PlaceDogInDownedPose();
+            else
+            {
+                _dog.IsInvincible=false;NativeFunction.Natives.SET_PED_CAN_RAGDOLL(_dog,true);
+                if(accessCarry){_state=K9State.Following;Follow();}
+                else{LieDown();_state=K9State.Injured;}
+            }
+            K9IncidentLog.Write(_profile.Name,accessCarry?"Access carry":"Medical","Handler set carried K9 down",_dog.Position);
+            if(notify)Game.DisplayNotification("~b~"+_profile.Name+" placed down safely."+ (accessCarry?" He is ready to continue working.":""));
+        }
 
         private void EmergencyLoadK9()
         {
