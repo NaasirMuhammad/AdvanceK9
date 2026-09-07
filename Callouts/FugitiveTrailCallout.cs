@@ -23,7 +23,7 @@ namespace AdvancedK9.Callouts
         {
             try
             {
-                if(!Prepare("Fugitive trail from abandoned vehicle",StreetOffset(520f,Random.Next(-160,161)),110f))return false;
+                if(!Prepare("Traffic stop — driver fled on foot",StreetOffset(520f,Random.Next(-160,161)),110f))return false;
             }
             catch(System.Exception ex)
             {
@@ -33,6 +33,7 @@ namespace AdvancedK9.Callouts
             }
             SceneVehicle=SpawnVehicle("primo",Scene,Random.Next(360));
             StagePoliceScene();
+            ConfigureTrafficStopScene();
             ControlSceneTraffic();
             return SceneVehicle!=null&&SceneVehicle.Exists();
         }
@@ -41,6 +42,7 @@ namespace AdvancedK9.Callouts
         {
             StartedAt=Game.GameTime;_outcome=Random.Next(4);
             StagePoliceScene();
+            ConfigureTrafficStopScene();
             float angle=Random.Next(360);float distance=Random.Next(55,76);
             Vector3 trailEnd=World.GetNextPositionOnStreet(Scene+new Vector3((float)System.Math.Sin(angle*System.Math.PI/180.0)*distance,(float)System.Math.Cos(angle*System.Math.PI/180.0)*distance,0f));
             Vector3 hidingPosition;
@@ -59,8 +61,23 @@ namespace AdvancedK9.Callouts
             _coverConfirmed=true;_nextCoverSearch=Game.GameTime+9000;
             Game.LogTrivial("AdvancedK9 Callouts: fugitive staged low and stationary at an off-road hiding point before scent collection.");
             Functions.PlayScannerAudioUsingPosition("WE_HAVE CRIME_RESIST_ARREST IN_OR_ON_POSITION",Scene);
-            RouteToScene("Respond to the abandoned vehicle. The on-scene officer has preserved a scent article from the driver seat.");
+            RouteToScene("Respond to the failed traffic stop. The driver abandoned the stopped vehicle and fled on foot; officers preserved the driver-seat scent.");
             return base.OnCalloutAccepted();
+        }
+
+        private void ConfigureTrafficStopScene()
+        {
+            if(SceneVehicle!=null&&SceneVehicle.Exists())
+            {
+                NativeFunction.Natives.SET_VEHICLE_ENGINE_ON(SceneVehicle,false,true,true);
+                SceneVehicle.IsPersistent=true;
+            }
+            if(PoliceVehicle!=null&&PoliceVehicle.Exists())
+            {
+                NativeFunction.Natives.SET_VEHICLE_SIREN(PoliceVehicle,true);
+                NativeFunction.Natives.SET_VEHICLE_LIGHTS(PoliceVehicle,2);
+            }
+            Game.LogTrivial("AdvancedK9 Callouts: failed-traffic-stop scene staged with suspect vehicle stopped and marked cruiser behind it.");
         }
 
         public override void Process()
