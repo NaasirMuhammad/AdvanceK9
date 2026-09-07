@@ -188,10 +188,10 @@ namespace AdvancedK9.Callouts
         {
             if(Game.GameTime<_nextSupportMove)return;
             K9ApiSnapshot snapshot;
-            if(!AdvancedK9Api.TryGetSnapshot(out snapshot)||snapshot.DogHandle<=0)return;
-            if(!NativeFunction.Natives.DOES_ENTITY_EXIST<bool>(snapshot.DogHandle))return;
+            Vector3 dogPosition=Game.LocalPlayer.Character.Position;
+            if(AdvancedK9Api.TryGetSnapshot(out snapshot)&&snapshot.DogHandle>0&&NativeFunction.Natives.DOES_ENTITY_EXIST<bool>(snapshot.DogHandle))
+                dogPosition=NativeFunction.Natives.GET_ENTITY_COORDS<Vector3>(snapshot.DogHandle,true);
             _nextSupportMove=Game.GameTime+3000;
-            Vector3 dogPosition=NativeFunction.Natives.GET_ENTITY_COORDS<Vector3>(snapshot.DogHandle,true);
             if(OfficerOne!=null&&OfficerOne.Exists()&&OfficerOne.DistanceTo(dogPosition)>6f)
             {
                 OfficerOne.Tasks.Clear();
