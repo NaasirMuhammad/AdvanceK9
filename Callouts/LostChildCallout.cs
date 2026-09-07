@@ -62,8 +62,8 @@ namespace AdvancedK9.Callouts
                     AssignCalloutScent(Subject,article,"parent-provided shirt belonging to the missing teen","The parents placed the teen's shirt on the ground. Bring Rex to the visible clothing and command COLLECT SCENT or TRACK.");
                     if(ApiRequested){ClearSceneRoute();Game.LogTrivial("AdvancedK9 Callouts: Missing Teen physical clothing scent article registered.");}
                 }
-                if(ApiRequested&&!_subjectLocated)SupportOfficersFollowK9();
-                if(ApiRequested&&!_subjectLocated&&K9DistanceTo(Subject.Position)<12f)
+                if(ApiRequested&&!_subjectLocated&&K9TrackingActive())SupportOfficersFollowK9();
+                if(ApiRequested&&!_subjectLocated&&System.Math.Min(K9DistanceTo(Subject.Position),player.DistanceTo(Subject))<12f)
                 {
                     _subjectLocated=true;SubjectBlip.Alpha=1;SubjectBlip.IsRouteEnabled=true;
                     string result=_outcome==0?"~g~Rex located the missing teen safely behind cover.":_outcome==1?"~g~Rex located the frightened teen hiding nearby.":"~o~Rex located the teen with a minor injury; request medical assistance.";
