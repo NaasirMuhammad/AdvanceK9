@@ -14,8 +14,7 @@ namespace AdvancedK9.Callouts
         private bool _transportStarted;
         private uint _locatedAt;
         private uint _nextCoverSearch;
-        private bool _hideSpotAssigned;
-        private Vector3 _hidePosition;
+        private bool _coverConfirmed;
 
         public override bool OnBeforeCalloutDisplayed()
         {
@@ -43,9 +42,9 @@ namespace AdvancedK9.Callouts
             Vector3 startPosition=World.GetNextPositionOnStreet(Scene+new Vector3((float)System.Math.Sin(angle*System.Math.PI/180.0)*distance,(float)System.Math.Cos(angle*System.Math.PI/180.0)*distance,0f));
             Subject=SpawnPed("a_m_m_hillbilly_01",startPosition,Random.Next(360));if(Subject==null)return false;
             Subject.MaxHealth=250;Subject.Health=250;
-            NativeFunction.Natives.TASK_SMART_FLEE_COORD(Subject,Scene.X,Scene.Y,Scene.Z,260f,-1,false,false);
-            _nextCoverSearch=Game.GameTime+1000;
-            Game.LogTrivial("AdvancedK9 Callouts: fugitive is running from the scene while searching for existing environmental cover.");
+            NativeFunction.Natives.TASK_SEEK_COVER_FROM_POS(Subject,Scene.X,Scene.Y,Scene.Z,15000,true);
+            _nextCoverSearch=Game.GameTime+9000;
+            Game.LogTrivial("AdvancedK9 Callouts: fugitive tasked through GTA cover navigation; he will keep moving until engine-valid cover is reached.");
             Functions.PlayScannerAudioUsingPosition("WE_HAVE CRIME_RESIST_ARREST IN_OR_ON_POSITION",Scene);
             RouteToScene("Respond to the abandoned vehicle. The on-scene officer has preserved a scent article from the driver seat.");
             return base.OnCalloutAccepted();
@@ -68,20 +67,17 @@ namespace AdvancedK9.Callouts
                 if(ApiRequested){ClearSceneRoute();Game.LogTrivial("AdvancedK9 Callouts: fugitive vehicle scent source registered; awaiting handler command.");}
             }
 
-            if(!_suspectLocated&&!_hideSpotAssigned&&Game.GameTime>=_nextCoverSearch)
+            if(!_suspectLocated&&Game.GameTime>=_nextCoverSearch)
             {
-                _nextCoverSearch=Game.GameTime+3500;
-                Vector3 cover;
-                if(TryFindExistingCover(Subject.Position,out cover))
+                _nextCoverSearch=Game.GameTime+9000;
+                _coverConfirmed=NativeFunction.Natives.IS_PED_IN_COVER<bool>(Subject,false);
+                if(!_coverConfirmed)
                 {
-                    _hideSpotAssigned=true;_hidePosition=cover;
-                    Subject.Tasks.Clear();
-                    Subject.Tasks.FollowNavigationMeshToPosition(_hidePosition,Subject.Heading,4.6f);
-                    Game.LogTrivial("AdvancedK9 Callouts: fugitive committed to existing cover at "+_hidePosition+".");
+                    NativeFunction.Natives.TASK_SEEK_COVER_FROM_POS(Subject,Scene.X,Scene.Y,Scene.Z,15000,true);
+                    Game.LogTrivial("AdvancedK9 Callouts: fugitive has not reached valid cover; cover-seeking run reissued.");
                 }
-                else NativeFunction.Natives.TASK_SMART_FLEE_COORD(Subject,Scene.X,Scene.Y,Scene.Z,260f,-1,false,false);
+                else Game.LogTrivial("AdvancedK9 Callouts: fugitive reached GTA engine-valid environmental cover.");
             }
-            if(!_suspectLocated&&_hideSpotAssigned&&Subject.DistanceTo(_hidePosition)<3.5f)NativeFunction.Natives.TASK_STAND_STILL(Subject,-1);
             if(ApiRequested&&!_suspectLocated)SupportOfficersFollowK9();
             if(ApiRequested&&!_suspectLocated&&K9DistanceTo(Subject.Position)<18f)
             {
@@ -98,9 +94,9 @@ namespace AdvancedK9.Callouts
                 if(ProcessPostApprehensionMedical("~g~Fugitive Trail complete: EMS treated the suspect and patrol completed custody.")){}
                 else if(Subject.IsDead)Resolve("~o~Fugitive Trail concluded: suspect is deceased.");
                 else if(NativeFunction.Natives.IS_PED_CUFFED<bool>(Subject)&&!_transportStarted){_transportStarted=true;BeginAutomaticTransport("~g~Fugitive Trail complete: on-scene units transported the prisoner.");}
-                else if(Game.GameTime-_locatedAt>300000)Resolve("~o~Fugitive Trail concluded after suspect location.");
+                else if(Game.GameTime-_locatedAt>600000)Resolve("~o~Fugitive Trail concluded after suspect location.");
             }
-            else if(Game.GameTime-StartedAt>480000)Resolve("~r~Fugitive Trail: scent trail expired.");
+            else if(!ApiRequested&&Game.GameTime-StartedAt>900000)Resolve("~r~Fugitive Trail: response expired before scent collection.");
             base.Process();
         }
     }
