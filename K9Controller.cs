@@ -1139,7 +1139,7 @@ namespace AdvancedK9
                 if(_state==K9State.InVehicle)DoorPop(false);
                 if(_state==K9State.InVehicle){_pursuitTrackStarted=false;Game.DisplayNotification("~y~Automatic K9 track held for safety.~s~~n~Stop the patrol vehicle, then command TRACK.");return;}
             }
-            _automaticTrackRequested=true;try{Track();}finally{_automaticTrackRequested=false;}
+            _automaticTrackRequested=true;try{BeginTrack();}finally{_automaticTrackRequested=false;}
         }
         private void CollectScent()
         {
@@ -1710,7 +1710,7 @@ namespace AdvancedK9
             _state=K9State.Tracking;var center=_dog.Position;Game.DisplayNotification("~b~K9 trail reacquisition started.~s~ The dog will cast around the last-known point.");
             foreach(var offset in new[]{new Vector3(-3f,2f,0f),new Vector3(3f,2f,0f),new Vector3(0f,-3f,0f)}){_dog.Tasks.FollowNavigationMeshToPosition(new Vector3(center.X+offset.X,center.Y+offset.Y,center.Z),_dog.Heading,1.7f).WaitForCompletion(3000);PlayDogAnimation("creatures@rottweiler@indication@","indicate_low",550,0);GameFiber.Wait(150);}
             var route=BuildRecordedTrailRoute(_scentTarget);if(route.Count==0){_trailLost=true;Sit();Game.DisplayNotification("~r~Trail reacquisition unsuccessful.~s~ Move closer to the last-known route or collect a fresher scent article.");return;}
-            _trailLost=false;Game.DisplayNotification("~g~Recorded trail reacquired.~s~ K9 is committing to the recovered direction.");Track();
+            _trailLost=false;Game.DisplayNotification("~g~Recorded trail reacquired.~s~ K9 is committing to the recovered direction.");BeginTrack();
         }
 
         private void Apprehend()
