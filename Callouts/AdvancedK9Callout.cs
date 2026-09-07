@@ -114,8 +114,8 @@ namespace AdvancedK9.Callouts
             if(PoliceVehicle==null||!PoliceVehicle.Exists())PoliceVehicle=SpawnPoliceVehicle(cruiserPosition,SceneVehicle!=null&&SceneVehicle.Exists()?SceneVehicle.Heading:Game.LocalPlayer.Character.Heading);
             if(OfficerOne==null||!OfficerOne.Exists())OfficerOne=SpawnPoliceOfficer(officerOnePosition,0f);
             if(OfficerTwo==null||!OfficerTwo.Exists())OfficerTwo=SpawnPoliceOfficer(officerTwoPosition,180f);
-            if(OfficerOne!=null&&OfficerOne.Exists())NativeFunction.Natives.TASK_STAND_STILL(OfficerOne,-1);
-            if(OfficerTwo!=null&&OfficerTwo.Exists())NativeFunction.Natives.TASK_STAND_STILL(OfficerTwo,-1);
+            if(OfficerOne!=null&&OfficerOne.Exists()){OfficerOne.BlockPermanentEvents=true;NativeFunction.Natives.TASK_START_SCENARIO_IN_PLACE(OfficerOne,"WORLD_HUMAN_COP_IDLES",0,true);}
+            if(OfficerTwo!=null&&OfficerTwo.Exists()){OfficerTwo.BlockPermanentEvents=true;NativeFunction.Natives.TASK_START_SCENARIO_IN_PLACE(OfficerTwo,"WORLD_HUMAN_STAND_MOBILE",0,true);}
             bool vehicleReady=PoliceVehicle!=null&&PoliceVehicle.Exists();
             bool officersReady=OfficerOne!=null&&OfficerOne.Exists()&&OfficerTwo!=null&&OfficerTwo.Exists();
             Game.LogTrivial("AdvancedK9 Callouts: police scene verification for "+GetType().Name+
@@ -233,20 +233,20 @@ namespace AdvancedK9.Callouts
             if(_cachedDogHandle>0&&NativeFunction.Natives.DOES_ENTITY_EXIST<bool>(_cachedDogHandle))
                 dogPosition=NativeFunction.Natives.GET_ENTITY_COORDS<Vector3>(_cachedDogHandle,true);
             _nextSupportMove=Game.GameTime+1500;
-            var handler=Game.LocalPlayer.Character;int handlerHandle=HandleOf(handler);
+            var handler=Game.LocalPlayer.Character;
             if(OfficerOne!=null&&OfficerOne.Exists())
             {
                 OfficerOne.BlockPermanentEvents=true;OfficerOne.Tasks.Clear();
-                NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(OfficerOne,handlerHandle,-2.2f,-3.5f,0f,4.8f,-1,2.2f,true);
+                NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(OfficerOne,handler,-2.2f,-3.5f,0f,4.8f,-1,2.2f,true);
                 NativeFunction.Natives.SET_PED_KEEP_TASK(OfficerOne,true);
             }
             if(OfficerTwo!=null&&OfficerTwo.Exists())
             {
                 OfficerTwo.BlockPermanentEvents=true;OfficerTwo.Tasks.Clear();
-                NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(OfficerTwo,handlerHandle,2.2f,-4.8f,0f,4.6f,-1,2.5f,true);
+                NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(OfficerTwo,handler,2.2f,-4.8f,0f,4.6f,-1,2.5f,true);
                 NativeFunction.Natives.SET_PED_KEEP_TASK(OfficerTwo,true);
             }
-            Game.LogTrivial("AdvancedK9 Callouts: both support officers retasked directly behind handler entity "+handlerHandle+"; cross-AppDomain K9 handle="+_cachedDogHandle+".");
+            Game.LogTrivial("AdvancedK9 Callouts: both support officers retasked directly behind the live handler ped; cross-AppDomain K9 handle="+_cachedDogHandle+".");
         }
 
         protected bool TryFindExistingCover(Vector3 center,out Vector3 hidingPosition)
