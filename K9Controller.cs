@@ -977,7 +977,7 @@ namespace AdvancedK9
             handler.Tasks.PlayAnimation("anim@heists@box_carry@","idle",4f,AnimationFlags.Loop|AnimationFlags.UpperBodyOnly|AnimationFlags.SecondaryTask);
             int spine=NativeFunction.Natives.GET_PED_BONE_INDEX<int>(handler,24818);
             NativeFunction.Natives.SET_ENTITY_COLLISION(_dog,false,false);
-            NativeFunction.Natives.ATTACH_ENTITY_TO_ENTITY(_dog,handler,spine,.05f,.30f,-.16f,90f,0f,90f,false,false,false,false,2,true);
+            NativeFunction.Natives.ATTACH_ENTITY_TO_ENTITY(_dog,handler,spine,.08f,.28f,-.12f,0f,90f,0f,false,false,false,false,2,true);
             PlayDogAnimation("creatures@rottweiler@amb@sleep_in_kennel@","sleep_in_kennel",-1,1);
             NativeFunction.Natives.SET_PED_CAN_SWITCH_WEAPON(handler,false);
             _carryingDog=true;_state=K9State.Injured;
@@ -1526,6 +1526,8 @@ namespace AdvancedK9
             }
             if(aimed!=null){_scentTarget=aimed;_scentCollectedAt=Game.GameTime;_scentRainAtCollection=NativeFunction.Natives.GET_RAIN_LEVEL<float>();_activeScentSample=NewScentSample(ScentArticleType.DirectPerson,"handler aim","direct person identification");_activeScentSource="Handler aim";_trailLost=false;Game.DisplayNotification("~b~Track subject identified by handler aim.~s~~n~"+_profile.Name+" is acquiring that person's recorded trail.");}
             _state = K9State.Tracking;
+            PublishSharedApi();
+            Game.LogTrivial("AdvancedK9 API snapshot published immediately at tracking start for callout support synchronization.");
             if(_workingLeashed)ActionNotification("~b~Working leash retained.~s~ The K9 will lead the handler along the scent trail.");
             float rain=NativeFunction.Natives.GET_RAIN_LEVEL<float>();float ageMinutes=_scentCollectedAt==0?0:(Game.GameTime-_scentCollectedAt)/60000f;float initialDistance=target.DistanceTo(Game.LocalPlayer.Character);bool inVehicle=target.CurrentVehicle!=null;int baseQuality=_activeScentSample==null?85:_activeScentSample.BaseQuality;int scentQuality=Math.Max(5,baseQuality-(int)(ageMinutes*8)-(int)(rain*35)-(int)(initialDistance/12)-(inVehicle?22:0));
             if(scentQuality<18){Game.DisplayNotification("~r~Scent trail is too degraded.~s~~n~Collect a fresh scent article; rain, age, distance, and vehicles weaken odor.");return;}
