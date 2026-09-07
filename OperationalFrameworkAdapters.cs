@@ -15,7 +15,8 @@ namespace AdvancedK9
         private readonly bool _blrEnabled,_pdCompEnabled,_damageEnabled;
         private readonly string _statePath=Path.Combine("Plugins","LSPDFR","AdvancedK9","OperationalAdapters.state");
         private readonly string _eventPath=Path.Combine("Plugins","LSPDFR","AdvancedK9","OperationalAdapters.event");
-        private Assembly _blr,_pdComp,_damage;
+        private Assembly _blr,_pdComp,_damage,_npci;
+        private string _damageFile="",_npciFile="";
         private string _activePedHandle="",_activeVehicleHandle="";
         private readonly HashSet<string> _protectedHandles=new HashSet<string>();
         private uint _nextRefresh,_nextDiagnostic;
@@ -30,9 +31,9 @@ namespace AdvancedK9
             if(Game.GameTime>=_nextDiagnostic)
             {
                 _nextDiagnostic=Game.GameTime+60000;
-                Game.LogTrivial("AdvancedK9 optional adapters: contract=v"+ContractVersion+", BLR="+Label(_blr,_blrEnabled)+", PD Comp="+Label(_pdComp,_pdCompEnabled)+", Damage Tracker="+Label(_damage,_damageEnabled)+".");
+                Game.LogTrivial("AdvancedK9 optional adapters: contract=v"+ContractVersion+", BLR="+Label(_blr,_blrEnabled)+", PD Comp="+Label(_pdComp,_pdCompEnabled)+", Damage Tracker="+DamageLabel()+", NPCI="+NpcInfoLabel()+".");
             }
-            if(_damageEnabled&&_damage!=null)
+            if(_damageEnabled&&(_damage!=null||!string.IsNullOrWhiteSpace(_damageFile)))
             {
                 TrackHealth("Handler",handler,ref _handlerHealth);
                 TrackHealth("K9",dog,ref _dogHealth);
@@ -65,7 +66,10 @@ namespace AdvancedK9
         {
             if(_blrEnabled&&_blr==null)_blr=FindAssembly("BLR","BetterLawEnforcement","Better Law Response");
             if(_pdCompEnabled&&_pdComp==null)_pdComp=FindAssembly("PDComp","PD Comp","PoliceDepartmentComputer");
-            if(_damageEnabled&&_damage==null)_damage=FindAssembly("DamageTracker","Damage Tracker Framework","DamageTrackerFramework");
+            if(_damageEnabled&&_damage==null)_damage=FindAssembly("DamageTracker","DamageTrackingFramework","Damage Tracker Framework","DamageTrackerFramework");
+            if(_npci==null)_npci=FindAssembly("NPCI");
+            if(_damageEnabled&&_damage==null&&string.IsNullOrWhiteSpace(_damageFile))_damageFile=FindPluginFile("*Damage*Track*.dll");
+            if(_npci==null&&string.IsNullOrWhiteSpace(_npciFile))_npciFile=FindPluginFile("NPCI.dll");
         }
 
         private void ReadState()
@@ -85,6 +89,21 @@ namespace AdvancedK9
 
         private static string Read(IDictionary<string,string> map,string key){string value;return map.TryGetValue(key,out value)?value:"";}
         private static string Safe(string value)=>(value??"").Replace("\r"," ").Replace("\n"," ").Replace("=","-").Trim();
+        private string DamageLabel()
+        {
+            if(!_damageEnabled)return "disabled";
+            if(_damage!=null)return _damage.GetName().Name+" "+_damage.GetName().Version;
+            return string.IsNullOrWhiteSpace(_damageFile)?"not detected":"file detected: "+Path.GetFileName(_damageFile);
+        }
+        private string NpcInfoLabel()
+        {
+            if(_npci!=null)return _npci.GetName().Name+" "+_npci.GetName().Version+" (informational)";
+            return string.IsNullOrWhiteSpace(_npciFile)?"not detected":"file detected: "+Path.GetFileName(_npciFile)+" (informational)";
+        }
+        private static string FindPluginFile(string pattern)
+        {
+            try{return Directory.Exists("Plugins")?Directory.GetFiles("Plugins",pattern,SearchOption.AllDirectories).FirstOrDefault()??"":"";}catch{return "";}
+        }
         private static string Label(Assembly assembly,bool enabled)=>!enabled?"disabled":assembly==null?"not detected":assembly.GetName().Name+" "+assembly.GetName().Version;
         private static Assembly FindAssembly(params string[] names)=>AppDomain.CurrentDomain.GetAssemblies().FirstOrDefault(a=>names.Any(n=>a.GetName().Name.IndexOf(n,StringComparison.OrdinalIgnoreCase)>=0));
         private static Ped FindPed(string handle)=>string.IsNullOrWhiteSpace(handle)?null:World.GetAllPeds().FirstOrDefault(x=>x!=null&&x.Exists()&&x.Handle.ToString()==handle);
