@@ -35,6 +35,7 @@ namespace AdvancedK9.Callouts
         private uint _nextSupportMove;
         private bool _medicalResponseStarted;
         private int _cachedDogHandle;
+        private bool _supportFiberStarted;
 
         protected bool Prepare(string message,Vector3 scene,float radius,bool snapToStreet=true)
         {
@@ -178,6 +179,7 @@ namespace AdvancedK9.Callouts
             if(ApiRequested||target==null||!target.Exists())return;
             ApiRequested=true;
             AdvancedK9Api.SendCommand("AssignScent",ContextId,HandleOf(target),"Ped",Scene.X,Scene.Y,Scene.Z,details,target.Position.X,target.Position.Y,target.Position.Z);
+            BeginSupportTrackingFiber();
             Game.DisplayNotification("~b~AdvancedK9 callout:~s~ preserved vehicle scent is ready. Command Rex to COLLECT SCENT or TRACK beside the abandoned vehicle.");
         }
 
@@ -186,6 +188,7 @@ namespace AdvancedK9.Callouts
             if(ApiRequested||target==null||!target.Exists())return;
             ApiRequested=true;
             AdvancedK9Api.SendCommand("AssignScent",ContextId,HandleOf(target),"Ped",collectionPosition.X,collectionPosition.Y,collectionPosition.Z,details,target.Position.X,target.Position.Y,target.Position.Z);
+            BeginSupportTrackingFiber();
             Game.DisplayNotification("~b~AdvancedK9 callout:~s~ "+instruction);
         }
 
@@ -193,6 +196,31 @@ namespace AdvancedK9.Callouts
         {
             K9ApiSnapshot snapshot;
             return AdvancedK9Api.TryGetSnapshot(out snapshot)&&string.Equals(snapshot.State,"Tracking",StringComparison.OrdinalIgnoreCase);
+        }
+
+        protected void BeginSupportTrackingFiber()
+        {
+            if(_supportFiberStarted)return;_supportFiberStarted=true;
+            GameFiber.StartNew(delegate
+            {
+                bool committed=false;uint expires=Game.GameTime+600000;
+                try
+                {
+                    while(!Finished&&Game.GameTime<expires)
+                    {
+                        float departure=K9DistanceTo(Scene);
+                        if(!committed&&departure<float.MaxValue&&departure>2.5f)
+                        {
+                            committed=true;
+                            Game.DisplayNotification("~b~On-scene officers:~s~ Moving behind Rex and the handler.");
+                            Game.LogTrivial("AdvancedK9 Callouts: dedicated support fiber detected K9 departure and committed both officers.");
+                        }
+                        if(committed)SupportOfficersFollowK9();
+                        GameFiber.Wait(750);
+                    }
+                }
+                catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: support tracking fiber contained: "+ex);}
+            },"AdvancedK9 callout support tracking");
         }
 
         protected void SupportOfficersFollowK9()
@@ -203,18 +231,19 @@ namespace AdvancedK9.Callouts
             if(AdvancedK9Api.TryGetSnapshot(out snapshot)&&snapshot.DogHandle>0)_cachedDogHandle=snapshot.DogHandle;
             if(_cachedDogHandle>0&&NativeFunction.Natives.DOES_ENTITY_EXIST<bool>(_cachedDogHandle))
                 dogPosition=NativeFunction.Natives.GET_ENTITY_COORDS<Vector3>(_cachedDogHandle,true);
-            _nextSupportMove=Game.GameTime+3000;
-            if(OfficerOne!=null&&OfficerOne.Exists()&&OfficerOne.DistanceTo(dogPosition)>6f)
+            _nextSupportMove=Game.GameTime+2000;
+            if(OfficerOne!=null&&OfficerOne.Exists()&&OfficerOne.DistanceTo(dogPosition)>5f)
             {
                 OfficerOne.Tasks.Clear();
-                OfficerOne.Tasks.FollowNavigationMeshToPosition(dogPosition,OfficerOne.Heading,4.2f);
+                NativeFunction.Natives.TASK_GO_TO_ENTITY(OfficerOne,_cachedDogHandle,-1,4.5f,4.6f,0f,0);
             }
-            if(OfficerTwo!=null&&OfficerTwo.Exists()&&PoliceVehicle!=null&&PoliceVehicle.Exists())
+            if(OfficerTwo!=null&&OfficerTwo.Exists()&&OfficerTwo.DistanceTo(dogPosition)>7f)
             {
-                if(!OfficerTwo.IsInVehicle(PoliceVehicle,false))NativeFunction.Natives.SET_PED_INTO_VEHICLE(OfficerTwo,PoliceVehicle,-1);
-                NativeFunction.Natives.TASK_VEHICLE_DRIVE_TO_COORD_LONGRANGE(OfficerTwo,PoliceVehicle,dogPosition.X,dogPosition.Y,dogPosition.Z,18f,786603,10f);
+                if(OfficerTwo.CurrentVehicle!=null)OfficerTwo.Tasks.LeaveVehicle(LeaveVehicleFlags.None);
+                OfficerTwo.Tasks.Clear();
+                NativeFunction.Natives.TASK_GO_TO_ENTITY(OfficerTwo,_cachedDogHandle,-1,6f,4.3f,0f,0);
             }
-            Game.LogTrivial("AdvancedK9 Callouts: support officers committed to live K9 position "+dogPosition+".");
+            Game.LogTrivial("AdvancedK9 Callouts: both foot-support officers retasked directly to live K9 entity "+_cachedDogHandle+" at "+dogPosition+".");
         }
 
         protected bool TryFindExistingCover(Vector3 center,out Vector3 hidingPosition)
