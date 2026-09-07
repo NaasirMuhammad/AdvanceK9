@@ -84,6 +84,7 @@ namespace AdvancedK9
         private VehicleSeatProfile _activeSeatProfile;
         private bool _seatCalibrationDoorOpen;
         private float _carryX=.08f,_carryY=.28f,_carryZ=-.12f,_carryPitch=0f,_carryRoll=90f,_carryYaw=0f;
+        private int _carryHorizontalPreset=-1;
         private uint _nextCarryPresentation;
         private int _bladder=100;
         private int _bowel=100;
@@ -576,7 +577,7 @@ namespace AdvancedK9
             _menuMode="carry_config";RefreshCarryMenu();
             Game.DisplaySubtitle("~b~Live carry adjuster~s~: use left/right on each axis. Save when Rex and the handler's arms line up.",3500);
         }
-        private void RefreshCarryMenu(){_menu.Update("LIVE K9 CARRY POSITION",new[]{"X left/right: "+_carryX.ToString("0.000"),"Y forward/back: "+_carryY.ToString("0.000"),"Z up/down: "+_carryZ.ToString("0.000"),"Pitch: "+_carryPitch.ToString("0.0")+"°","Roll: "+_carryRoll.ToString("0.0")+"°","Yaw: "+_carryYaw.ToString("0.0")+"°","Save carry position","Reset preview to defaults","← Back to K9 Profile"});}
+        private void RefreshCarryMenu(){_menu.Update("LIVE K9 CARRY POSITION",new[]{"X left/right: "+_carryX.ToString("0.000"),"Y forward/back: "+_carryY.ToString("0.000"),"Z up/down: "+_carryZ.ToString("0.000"),"Pitch: "+_carryPitch.ToString("0.0")+"°","Roll: "+_carryRoll.ToString("0.0")+"°","Yaw: "+_carryYaw.ToString("0.0")+"°","Force horizontal — cycle orientation","Save carry position","Reset preview to defaults","← Back to K9 Profile"});}
         private void AdjustCarry(int index,int delta)
         {
             if(!_carryingDog||delta==0)return;float positionStep=.02f*delta,rotationStep=5f*delta;
@@ -585,9 +586,18 @@ namespace AdvancedK9
         }
         private void HandleCarryMenu(int index)
         {
-            if(index==6){SaveCarryPosition();Game.DisplayNotification("~g~Rex carry position saved.~s~~n~It will load automatically next time.");}
-            else if(index==7){_carryX=.08f;_carryY=.28f;_carryZ=-.12f;_carryPitch=0f;_carryRoll=90f;_carryYaw=0f;ApplyCarryAttachment();}
-            else if(index==8){_menuMode="profile";RefreshProfileMenu();return;}
+            if(index==6)
+            {
+                _carryHorizontalPreset=(_carryHorizontalPreset+1)%4;
+                if(_carryHorizontalPreset==0){_carryPitch=90f;_carryRoll=0f;_carryYaw=90f;}
+                else if(_carryHorizontalPreset==1){_carryPitch=-90f;_carryRoll=0f;_carryYaw=90f;}
+                else if(_carryHorizontalPreset==2){_carryPitch=90f;_carryRoll=0f;_carryYaw=-90f;}
+                else{_carryPitch=-90f;_carryRoll=0f;_carryYaw=-90f;}
+                ApplyCarryAttachment();Game.DisplayNotification("~b~Horizontal carry orientation "+(_carryHorizontalPreset+1)+"/4 applied.~s~~n~Cycle until Rex faces the correct direction, then fine-tune and save.");
+            }
+            else if(index==7){SaveCarryPosition();Game.DisplayNotification("~g~Rex carry position saved.~s~~n~It will load automatically next time.");}
+            else if(index==8){_carryX=.08f;_carryY=.28f;_carryZ=-.12f;_carryPitch=0f;_carryRoll=90f;_carryYaw=0f;_carryHorizontalPreset=-1;ApplyCarryAttachment();}
+            else if(index==9){_menuMode="profile";RefreshProfileMenu();return;}
             RefreshCarryMenu();
         }
         private static float NormalizeSignedAngle(float value){while(value>180f)value-=360f;while(value<-180f)value+=360f;return value;}
