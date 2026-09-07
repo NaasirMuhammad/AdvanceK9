@@ -1517,6 +1517,7 @@ namespace AdvancedK9
             var aimed=_automaticTrackRequested?null:GetValidAimedSuspect(false);
             if(aimed==null&&_voiceAimedTarget!=null&&_voiceAimedTarget.Exists()&&!_voiceAimedTarget.IsDead&&!LspdfrBridge.IsPedCop(_voiceAimedTarget))aimed=_voiceAimedTarget;
             var target=aimed??(_scentTarget!=null&&_scentTarget.Exists()&&!_scentTarget.IsDead?_scentTarget:null)??CurrentPursuitSuspect();
+            bool calloutTrack=_pendingCalloutScentTarget!=null&&_pendingCalloutScentTarget.Exists()&&target!=null&&target.Exists()&&target.Handle==_pendingCalloutScentTarget.Handle;
             _voiceAimedTarget=null;
             if (target == null)
             {
@@ -1534,10 +1535,11 @@ namespace AdvancedK9
             GameFiber.Wait(250);
             var end = Game.GameTime + 120000;
             uint nextScentCheck=Game.GameTime+(uint)_random.Next(18000,28001);
-            var route=BuildRecordedTrailRoute(target);int routeIndex=0;Vector3 initialDirection=route.Count>0?route[0]:target.Position;PerformFullCircleDirectionTest(initialDirection,scentQuality,rain);_activeTrackDistance=0f;_activeTrackStarted=Game.GameTime;Vector3 previous=_dog.Position;
+            var route=calloutTrack?new List<Vector3>{target.Position}:BuildRecordedTrailRoute(target);int routeIndex=0;Vector3 initialDirection=route.Count>0?route[0]:target.Position;PerformFullCircleDirectionTest(initialDirection,scentQuality,rain);_activeTrackDistance=0f;_activeTrackStarted=Game.GameTime;Vector3 previous=_dog.Position;
+            if(calloutTrack)Game.LogTrivial("AdvancedK9 callout track: using stable assigned final scent position instead of sparse moving-subject history.");
             while (_running && DogExists() && target.Exists() && !target.IsDead && Game.GameTime < end && _state == K9State.Tracking)
             {
-                CaptureTargetTrailPoint(target);
+                if(!calloutTrack)CaptureTargetTrailPoint(target);
                 if (_dog.DistanceTo(target) < 3f)
                 {
                     _dog.Tasks.Clear();
@@ -1552,8 +1554,8 @@ namespace AdvancedK9
                 }
                 if(routeIndex>=route.Count)
                 {
-                    route=BuildRecordedTrailRoute(target);routeIndex=0;if(route.Count>0)IndicateTrackDirection(route[0]);
-                    if(route.Count==0&&_dog.DistanceTo(target)>25f)
+                    route=calloutTrack?new List<Vector3>{target.Position}:BuildRecordedTrailRoute(target);routeIndex=0;if(route.Count>0&&!calloutTrack)IndicateTrackDirection(route[0]);
+                    if(!calloutTrack&&route.Count==0&&_dog.DistanceTo(target)>25f)
                     {
                         _trailLost=true;_dog.Tasks.Clear();Sit();Game.DisplayNotification("~o~K9 lost the recorded scent trail.~s~~n~Move to the last-known area and command REACQUIRE TRAIL.");K9IncidentLog.Write(_profile.Name,"Track","Trail lost",_dog.Position);return;
                     }
