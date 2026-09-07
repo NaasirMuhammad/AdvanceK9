@@ -239,7 +239,6 @@ namespace AdvancedK9.Callouts
             }
             if(OfficerTwo!=null&&OfficerTwo.Exists()&&OfficerTwo.DistanceTo(dogPosition)>7f)
             {
-                if(OfficerTwo.CurrentVehicle!=null)OfficerTwo.Tasks.LeaveVehicle(LeaveVehicleFlags.None);
                 OfficerTwo.Tasks.Clear();
                 NativeFunction.Natives.TASK_GO_TO_ENTITY(OfficerTwo,_cachedDogHandle,-1,6f,4.3f,0f,0);
             }
