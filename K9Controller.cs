@@ -1056,13 +1056,13 @@ namespace AdvancedK9
 
         private void CaptureScentTrails()
         {
-            if(!_deployed||Game.GameTime<_nextTrailCapture)return;_nextTrailCapture=Game.GameTime+2500;var handler=Game.LocalPlayer.Character;uint cutoff=Game.GameTime>600000?Game.GameTime-600000:0;int captured=0;
+            if(!_deployed||Game.GameTime<_nextTrailCapture)return;_nextTrailCapture=Game.GameTime+2500;var handler=Game.LocalPlayer.Character;uint cutoff=Game.GameTime>1200000?Game.GameTime-1200000:0;int captured=0;
             foreach(var ped in World.GetAllPeds())
             {
                 if(ped==null||!ped.Exists()||ped==handler||ped==_dog||ped.IsDead||ped.DistanceTo(handler)>200f||LspdfrBridge.IsPedCop(ped))continue;
                 List<ScentTrailPoint> trail;if(!_recordedTrails.TryGetValue(ped.Handle,out trail)){trail=new List<ScentTrailPoint>();_recordedTrails[ped.Handle]=trail;}
                 if(trail.Count==0||trail[trail.Count-1].Position.DistanceTo(ped.Position)>=3f)trail.Add(new ScentTrailPoint(ped.Position,Game.GameTime));
-                trail.RemoveAll(p=>p.Time<cutoff);if(trail.Count>220)trail.RemoveRange(0,trail.Count-220);
+                trail.RemoveAll(p=>p.Time<cutoff);if(trail.Count>500)trail.RemoveRange(0,trail.Count-500);
                 if(++captured>=96)break;
             }
         }
@@ -1592,7 +1592,7 @@ namespace AdvancedK9
         private List<Vector3> BuildRecordedTrailRoute(Ped target)
         {
             var result=new List<Vector3>();if(target==null||!target.Exists())return result;List<ScentTrailPoint> trail;if(!_recordedTrails.TryGetValue(target.Handle,out trail)||trail.Count==0)return result;
-            uint cutoff=Game.GameTime>300000?Game.GameTime-300000:0;var available=trail.Where(p=>p.Time>=cutoff).ToList();if(available.Count==0)return result;
+            uint cutoff=Game.GameTime>900000?Game.GameTime-900000:0;var available=trail.Where(p=>p.Time>=cutoff).ToList();if(available.Count==0)return result;
             int start=0;float best=float.MaxValue;for(int i=0;i<available.Count;i++){float d=available[i].Position.DistanceTo(_dog.Position);if(d<best){best=d;start=i;}}
             for(int i=start;i<available.Count;i++)if(result.Count==0||result[result.Count-1].DistanceTo(available[i].Position)>=5f)result.Add(available[i].Position);
             Game.LogTrivial("AdvancedK9 recorded trail: target="+target.Handle+", points="+result.Count+", nearestDistance="+best.ToString("0.0")+"m.");return result;
@@ -1602,7 +1602,7 @@ namespace AdvancedK9
         {
             if(target==null||!target.Exists())return;List<ScentTrailPoint> trail;if(!_recordedTrails.TryGetValue(target.Handle,out trail)){trail=new List<ScentTrailPoint>();_recordedTrails[target.Handle]=trail;}
             if(trail.Count==0||trail[trail.Count-1].Position.DistanceTo(target.Position)>=3f)trail.Add(new ScentTrailPoint(target.Position,Game.GameTime));
-            uint cutoff=Game.GameTime>600000?Game.GameTime-600000:0;trail.RemoveAll(p=>p.Time<cutoff);if(trail.Count>220)trail.RemoveRange(0,trail.Count-220);
+            uint cutoff=Game.GameTime>1200000?Game.GameTime-1200000:0;trail.RemoveAll(p=>p.Time<cutoff);if(trail.Count>500)trail.RemoveRange(0,trail.Count-500);
         }
 
         private void IndicateTrackDirection(Vector3 destination)
