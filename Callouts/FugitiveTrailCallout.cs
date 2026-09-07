@@ -114,6 +114,19 @@ namespace AdvancedK9.Callouts
             Game.LogTrivial("AdvancedK9 Callouts: failed-traffic-stop scene staged with suspect vehicle stopped and marked cruiser behind it.");
         }
 
+        private bool SubjectInCustody()
+        {
+            if(Subject==null||!Subject.Exists())return false;
+            if(NativeFunction.Natives.IS_PED_CUFFED<bool>(Subject))return true;
+            try
+            {
+                var method=typeof(Functions).GetMethod("IsPedArrested",System.Reflection.BindingFlags.Public|System.Reflection.BindingFlags.Static);
+                if(method!=null)return (bool)method.Invoke(null,new object[]{Subject});
+            }
+            catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: LSPDFR arrest-state reflection fallback: "+ex.Message);}
+            return false;
+        }
+
         public override void Process()
         {
             if(Finished||Subject==null||!Subject.Exists()){if(!Finished)Resolve("~r~Fugitive Trail ended: suspect unavailable.");return;}
@@ -160,7 +173,7 @@ namespace AdvancedK9.Callouts
             {
                 if(ProcessPostApprehensionMedical("~g~Fugitive Trail complete: EMS treated the suspect and patrol completed custody.")){}
                 else if(Subject.IsDead)Resolve("~o~Fugitive Trail concluded: suspect is deceased.");
-                else if((NativeFunction.Natives.IS_PED_CUFFED<bool>(Subject)||Functions.IsPedArrested(Subject))&&!_transportStarted){_transportStarted=true;BeginAutomaticTransport("~g~Fugitive Trail complete: on-scene units transported the prisoner.");}
+                else if(SubjectInCustody()&&!_transportStarted){_transportStarted=true;BeginAutomaticTransport("~g~Fugitive Trail complete: on-scene units transported the prisoner.");}
                 else if(Game.GameTime-_locatedAt>600000)Resolve("~o~Fugitive Trail concluded after suspect location.");
             }
             else if(!ApiRequested&&Game.GameTime-StartedAt>900000)Resolve("~r~Fugitive Trail: response expired before scent collection.");
