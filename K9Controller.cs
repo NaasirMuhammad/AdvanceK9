@@ -83,9 +83,9 @@ namespace AdvancedK9
         private uint _nextNeedsWarning;
         private VehicleSeatProfile _activeSeatProfile;
         private bool _seatCalibrationDoorOpen;
-        private float _carryX=.08f,_carryY=.28f,_carryZ=-.12f,_carryPitch=0f,_carryRoll=90f,_carryYaw=0f;
-        private int _carryHorizontalPreset=-1;
+        private const float CarryX=.2f,CarryY=.52f,CarryZ=0f,CarryPitch=-110f,CarryRoll=90f,CarryYaw=-5f;
         private uint _nextCarryPresentation;
+        private bool _trackFiberRunning;
         private int _bladder=100;
         private int _bowel=100;
         private uint _nextReliefUpdate;
@@ -178,7 +178,6 @@ namespace AdvancedK9
             _trust = new TrustProfile(config.StartingTrust,config.ShowActionNotifications,_roster.ActiveId);
             _roster.UpdateActive(_profile.Name,_roster.Active.KennelKey,_profile.IsRehabilitating?"Rehabilitation":"Available");
             _seatProfiles = new VehicleSeatProfiles(config.VehicleSeatOffsetX,config.VehicleSeatOffsetY,config.VehicleSeatOffsetZ,_roster.ActiveId);
-            LoadCarryPosition();
             _menu.Selected += OnMenuSelected;
             _menu.Adjusted += OnMenuAdjusted;
         }
@@ -358,7 +357,7 @@ namespace AdvancedK9
             CloseSeatCalibrationDoor();_menuMode="profile"; RefreshProfileMenu();
         }
 
-        private void RefreshProfileMenu(){_menu.Update("K9 PROFILE — "+_profile.Name,new[]{L("Language")+": "+Localization.LanguageName,"K9 Roster ("+_roster.Entries.Count+")",L("Identity & Appearance"),L("HUD & Display"),L("Kennel Location Editor"),L("Vehicle Seat Configuration"),"Live Carry Position Adjuster",L("Profile, Health & Certifications"),VoiceMenuLabel()});}
+        private void RefreshProfileMenu(){_menu.Update("K9 PROFILE — "+_profile.Name,new[]{L("Language")+": "+Localization.LanguageName,"K9 Roster ("+_roster.Entries.Count+")",L("Identity & Appearance"),L("HUD & Display"),L("Kennel Location Editor"),L("Vehicle Seat Configuration"),L("Profile, Health & Certifications"),VoiceMenuLabel()});}
         private void OpenAppearanceMenu(){_menuMode="profile_appearance";_menu.Open("K9 PROFILE — "+L("Appearance").ToUpperInvariant(),new[]{L("Edit name")+": "+_profile.Name,L("Breed/model")+": "+_profile.Breed,L("Skin/coat")+": "+(_profile.CoatVariation+1),L("Equipment/vest")+": "+_profile.Vest,L("Vest texture")+": "+_profile.VestTextureName(_dog),"← "+L("Back to K9 Profile")});}
         private void OpenCalloutMenu(){_menuMode="callouts";_menu.Open("ADVANCED K9 — CALLOUTS",new[]{"Missing Vulnerable Teen","Fugitive Trail from an Abandoned Vehicle","Armed Burglary Suspect Hiding","← "+L("Back to Command Categories")});}
         private void RequestCallout(string name){_menu.Close();AdvancedK9Api.RequestCallout(name);Game.DisplayNotification("~b~AdvancedK9:~s~ requesting "+name+".");}
@@ -372,7 +371,6 @@ namespace AdvancedK9
             if(_menuMode=="kennel_list"){HandleKennelList(index);return;}
             if(_menuMode=="kennel_edit"){HandleKennelEditMenu(index);return;}
             if(_menuMode=="seat_config"){HandleSeatMenu(index);return;}
-            if(_menuMode=="carry_config"){HandleCarryMenu(index);return;}
             if(_menuMode=="roster"){HandleRosterMenu(index);return;}
             if(_menuMode=="profile_appearance")
             {
@@ -381,7 +379,7 @@ namespace AdvancedK9
                 OpenAppearanceMenu();return;
             }
             if(_menuMode!="profile")return;
-            if(index==0){ChangeLanguage(1);return;}if(index==1)OpenRosterMenu();else if(index==2)OpenAppearanceMenu();else if(index==3)OpenHudConfiguration();else if(index==4)OpenKennelLocationMenu();else if(index==5)OpenSeatConfiguration();else if(index==6)OpenCarryConfiguration();else if(index==7)Inspect();else if(index==8)ToggleVoice();
+            if(index==0){ChangeLanguage(1);return;}if(index==1)OpenRosterMenu();else if(index==2)OpenAppearanceMenu();else if(index==3)OpenHudConfiguration();else if(index==4)OpenKennelLocationMenu();else if(index==5)OpenSeatConfiguration();else if(index==6)Inspect();else if(index==7)ToggleVoice();
         }
 
         private void OpenRosterMenu()
@@ -424,7 +422,7 @@ namespace AdvancedK9
         private string VoiceMenuLabel()=>"Voice microphone: "+(_voice==null||!_voice.IsAvailable?"UNAVAILABLE — add ApiKey in INI":_voiceActive?"ON — hold "+_config.PushToTalkKey:"OFF — select to activate");
         private void ToggleVoice(){if(_voice==null)InitializeVoice();if(!_voice.IsAvailable){Game.DisplayNotification("~r~Voice cannot activate.~s~~n~Add your provider key after ~y~ApiKey=~s~ in AdvancedK9.ini, then reload the plugin.");return;}_voiceActive=!_voiceActive;if(_voiceActive){_voiceStatus="Ready (hold V)";ActionNotification("~g~K9 push-to-talk activated.~s~ Hold "+_config.PushToTalkKey+" while speaking.");}else{_voice.StopListening();_voiceStatus="Off";ActionNotification("~y~K9 voice microphone disabled.");}}
 
-        private void OnMenuAdjusted(int index,int delta){if(_menuMode=="profile"&&index==0){ChangeLanguage(delta);return;}if(_menuMode=="hud_config"){AdjustHudMenu(index,delta);return;}if(_menuMode=="kennel_edit"){AdjustKennel(index,delta);return;}if(_menuMode=="seat_config"){AdjustSeat(index,delta);return;}if(_menuMode=="carry_config"){AdjustCarry(index,delta);return;}if(_menuMode!="profile_appearance")return;if(index==1)PreviewBreed(delta);else if(index==2)_profile.AdjustSkin(_dog,delta);else if(index==3)_profile.AdjustEquipment(_dog,delta);else if(index==4)_profile.AdjustEquipmentTexture(_dog,delta);else return;OpenAppearanceMenu();}
+        private void OnMenuAdjusted(int index,int delta){if(_menuMode=="profile"&&index==0){ChangeLanguage(delta);return;}if(_menuMode=="hud_config"){AdjustHudMenu(index,delta);return;}if(_menuMode=="kennel_edit"){AdjustKennel(index,delta);return;}if(_menuMode=="seat_config"){AdjustSeat(index,delta);return;}if(_menuMode!="profile_appearance")return;if(index==1)PreviewBreed(delta);else if(index==2)_profile.AdjustSkin(_dog,delta);else if(index==3)_profile.AdjustEquipment(_dog,delta);else if(index==4)_profile.AdjustEquipmentTexture(_dog,delta);else return;OpenAppearanceMenu();}
 
         private static string OnOff(bool value)=>value?"ON":"OFF";
         private void OpenHudConfiguration(){_menuMode="hud_config";RefreshHudMenu();}
@@ -570,42 +568,11 @@ namespace AdvancedK9
         private void CloseSeatCalibrationDoor(){if(_seatCalibrationDoorOpen&&_dogVehicle!=null&&_dogVehicle.Exists())NativeFunction.Natives.SET_VEHICLE_DOOR_SHUT(_dogVehicle,_dogVehicleDoor,false);_seatCalibrationDoorOpen=false;}
         private void ApplySeatCalibration(){if(_dog==null||!_dog.Exists()||_dogVehicle==null||!_dogVehicle.Exists()||_activeSeatProfile==null)return;string boneName=_dogVehicleDoor==2?"seat_dside_r":_dogVehicleDoor==3?"seat_pside_r":"seat_pside_f";int bone=NativeFunction.Natives.GET_ENTITY_BONE_INDEX_BY_NAME<int>(_dogVehicle,boneName);if(bone<0){Game.DisplayNotification("~r~This vehicle has no compatible rear-seat bone.");return;}Vector3 bonePosition=NativeFunction.Natives.GET_WORLD_POSITION_OF_ENTITY_BONE<Vector3>(_dogVehicle,bone);_dog.Tasks.ClearImmediately();NativeFunction.Natives.DETACH_ENTITY(_dog,true,true);NativeFunction.Natives.SET_ENTITY_COORDS_NO_OFFSET(_dog,bonePosition.X,bonePosition.Y,bonePosition.Z,false,false,false);NativeFunction.Natives.SET_ENTITY_COLLISION(_dog,false,false);NativeFunction.Natives.ATTACH_ENTITY_TO_ENTITY(_dog,_dogVehicle,bone,_activeSeatProfile.X,_activeSeatProfile.Y,_activeSeatProfile.Z,0f,0f,0f,false,false,false,false,2,true);PlayDogAnimation("creatures@rottweiler@amb@world_dog_sitting@base","base",-1,1);_dogSeatAttached=true;Game.LogTrivial("AdvancedK9 live seat preview: "+_seatProfiles.VehicleName(_dogVehicle)+" X="+_activeSeatProfile.X.ToString("0.000")+" Y="+_activeSeatProfile.Y.ToString("0.000")+" Z="+_activeSeatProfile.Z.ToString("0.000"));}
 
-        private const string CarryPositionPath="Plugins\\LSPDFR\\AdvancedK9\\CarryPosition.ini";
-        private void OpenCarryConfiguration()
-        {
-            if(!DogEntityExists()||!_carryingDog){Game.DisplayNotification("~y~Carry Rex first, then open this adjuster for a live preview.");return;}
-            _menuMode="carry_config";RefreshCarryMenu();
-            Game.DisplaySubtitle("~b~Live carry adjuster~s~: use left/right on each axis. Save when Rex and the handler's arms line up.",3500);
-        }
-        private void RefreshCarryMenu(){_menu.Update("LIVE K9 CARRY POSITION",new[]{"X left/right: "+_carryX.ToString("0.000"),"Y forward/back: "+_carryY.ToString("0.000"),"Z up/down: "+_carryZ.ToString("0.000"),"Pitch: "+_carryPitch.ToString("0.0")+"°","Roll: "+_carryRoll.ToString("0.0")+"°","Yaw: "+_carryYaw.ToString("0.0")+"°","Force horizontal — cycle orientation","Save carry position","Reset preview to defaults","← Back to K9 Profile"});}
-        private void AdjustCarry(int index,int delta)
-        {
-            if(!_carryingDog||delta==0)return;float positionStep=.02f*delta,rotationStep=5f*delta;
-            if(index==0)_carryX+=positionStep;else if(index==1)_carryY+=positionStep;else if(index==2)_carryZ+=positionStep;else if(index==3)_carryPitch=NormalizeSignedAngle(_carryPitch+rotationStep);else if(index==4)_carryRoll=NormalizeSignedAngle(_carryRoll+rotationStep);else if(index==5)_carryYaw=NormalizeSignedAngle(_carryYaw+rotationStep);else return;
-            ApplyCarryAttachment();RefreshCarryMenu();
-        }
-        private void HandleCarryMenu(int index)
-        {
-            if(index==6)
-            {
-                _carryHorizontalPreset=(_carryHorizontalPreset+1)%4;
-                if(_carryHorizontalPreset==0){_carryPitch=90f;_carryRoll=0f;_carryYaw=90f;}
-                else if(_carryHorizontalPreset==1){_carryPitch=-90f;_carryRoll=0f;_carryYaw=90f;}
-                else if(_carryHorizontalPreset==2){_carryPitch=90f;_carryRoll=0f;_carryYaw=-90f;}
-                else{_carryPitch=-90f;_carryRoll=0f;_carryYaw=-90f;}
-                ApplyCarryAttachment();Game.DisplayNotification("~b~Horizontal carry orientation "+(_carryHorizontalPreset+1)+"/4 applied.~s~~n~Cycle until Rex faces the correct direction, then fine-tune and save.");
-            }
-            else if(index==7){SaveCarryPosition();Game.DisplayNotification("~g~Rex carry position saved.~s~~n~It will load automatically next time.");}
-            else if(index==8){_carryX=.08f;_carryY=.28f;_carryZ=-.12f;_carryPitch=0f;_carryRoll=90f;_carryYaw=0f;_carryHorizontalPreset=-1;ApplyCarryAttachment();}
-            else if(index==9){_menuMode="profile";RefreshProfileMenu();return;}
-            RefreshCarryMenu();
-        }
-        private static float NormalizeSignedAngle(float value){while(value>180f)value-=360f;while(value<-180f)value+=360f;return value;}
         private void ApplyCarryAttachment()
         {
             if(!_carryingDog||!DogEntityExists())return;var handler=Game.LocalPlayer.Character;int spine=NativeFunction.Natives.GET_PED_BONE_INDEX<int>(handler,24818);
             NativeFunction.Natives.DETACH_ENTITY(_dog,true,true);NativeFunction.Natives.SET_ENTITY_COLLISION(_dog,false,false);
-            NativeFunction.Natives.ATTACH_ENTITY_TO_ENTITY(_dog,handler,spine,_carryX,_carryY,_carryZ,_carryPitch,_carryRoll,_carryYaw,false,false,false,true,2,true);
+            NativeFunction.Natives.ATTACH_ENTITY_TO_ENTITY(_dog,handler,spine,CarryX,CarryY,CarryZ,CarryPitch,CarryRoll,CarryYaw,false,false,false,true,2,true);
         }
         private void MaintainCarryPresentation()
         {
@@ -617,29 +584,16 @@ namespace AdvancedK9
                 PlayDogAnimation("creatures@rottweiler@amb@sleep_in_kennel@","sleep_in_kennel",-1,1);
             ApplyCarryAttachment();
         }
-        private void LoadCarryPosition()
-        {
-            try
-            {
-                if(!File.Exists(CarryPositionPath))return;
-                foreach(string raw in File.ReadAllLines(CarryPositionPath)){string[] pair=raw.Split(new[]{'='},2);float value;if(pair.Length!=2||!float.TryParse(pair[1],System.Globalization.NumberStyles.Float,System.Globalization.CultureInfo.InvariantCulture,out value))continue;switch(pair[0].Trim()){case "X":_carryX=value;break;case "Y":_carryY=value;break;case "Z":_carryZ=value;break;case "Pitch":_carryPitch=value;break;case "Roll":_carryRoll=value;break;case "Yaw":_carryYaw=value;break;}}
-            }
-            catch(Exception ex){Game.LogTrivial("AdvancedK9 carry position load fallback: "+ex.Message);}
-        }
-        private void SaveCarryPosition()
-        {
-            try
-            {
-                Directory.CreateDirectory(Path.GetDirectoryName(CarryPositionPath));
-                File.WriteAllLines(CarryPositionPath,new[]{"# AdvancedK9 live carry attachment calibration","X="+_carryX.ToString(System.Globalization.CultureInfo.InvariantCulture),"Y="+_carryY.ToString(System.Globalization.CultureInfo.InvariantCulture),"Z="+_carryZ.ToString(System.Globalization.CultureInfo.InvariantCulture),"Pitch="+_carryPitch.ToString(System.Globalization.CultureInfo.InvariantCulture),"Roll="+_carryRoll.ToString(System.Globalization.CultureInfo.InvariantCulture),"Yaw="+_carryYaw.ToString(System.Globalization.CultureInfo.InvariantCulture)});
-            }
-            catch(Exception ex){Game.LogTrivial("AdvancedK9 carry position save failed: "+ex);Game.DisplayNotification("~r~Unable to save carry position.~s~ See RagePluginHook.log.");}
-        }
 
         private void Execute(K9Command command)
         {
             try
             {
+                if(_trackFiberRunning&&command!=K9Command.Track)
+                {
+                    _dog?.Tasks.Clear();_state=K9State.Following;
+                    Game.LogTrivial("AdvancedK9: active tracking interrupted by "+CommandLabel(command)+".");
+                }
                 if(_searchInProgress&&!IsSearchCommand(command))CancelActiveSearch(command);
                 _hudCommand=CommandLabel(command);
                 bool leashed=_leashRope>=0;
@@ -673,7 +627,7 @@ namespace AdvancedK9
                         Game.DisplayNotification("~g~K9 evidence map markers cleared.~s~~n~CSV records remain available for reports.");
                         break;
                     case K9Command.CollectScent: CollectScent(); break;
-                    case K9Command.Track: Track(); break;
+                    case K9Command.Track: BeginTrack(); break;
                     case K9Command.FindTrail: ReacquireTrail(); break;
                     case K9Command.K9Warning: K9Warning(); break;
                     case K9Command.Apprehend: Apprehend(); break;
@@ -1566,7 +1520,19 @@ namespace AdvancedK9
             return DogExists()&&vehicle.Exists();
         }
 
-        private void Track()
+        private void BeginTrack()
+        {
+            if(_trackFiberRunning){Game.DisplayNotification("~y~Rex is already tracking.~s~~n~Issue any other K9 command to cancel or redirect him.");return;}
+            _trackFiberRunning=true;
+            GameFiber.StartNew(delegate
+            {
+                try{TrackRoutine();}
+                catch(Exception ex){Game.LogTrivial("AdvancedK9 tracking fiber contained: "+ex);if(DogEntityExists())Follow();}
+                finally{_trackFiberRunning=false;}
+            },"AdvancedK9 interruptible tracking");
+        }
+
+        private void TrackRoutine()
         {
             if(_state==K9State.InVehicle)
             {
@@ -1601,7 +1567,7 @@ namespace AdvancedK9
             Game.LogTrivial("AdvancedK9 API snapshot published immediately at tracking start for callout support synchronization.");
             if(_workingLeashed)ActionNotification("~b~Working leash retained.~s~ The K9 will lead the handler along the scent trail.");
             float rain=NativeFunction.Natives.GET_RAIN_LEVEL<float>();float ageMinutes=_scentCollectedAt==0?0:(Game.GameTime-_scentCollectedAt)/60000f;float initialDistance=target.DistanceTo(Game.LocalPlayer.Character);bool inVehicle=target.CurrentVehicle!=null;int baseQuality=_activeScentSample==null?85:_activeScentSample.BaseQuality;int scentQuality=Math.Max(5,baseQuality-(int)(ageMinutes*8)-(int)(rain*35)-(int)(initialDistance/12)-(inVehicle?22:0));
-            if(scentQuality<18){Game.DisplayNotification("~r~Scent trail is too degraded.~s~~n~Collect a fresh scent article; rain, age, distance, and vehicles weaken odor.");return;}
+            if(scentQuality<18){Game.DisplayNotification("~r~Scent trail is too degraded.~s~~n~Collect a fresh scent article; rain, age, distance, and vehicles weaken odor.");Follow();return;}
             Game.DisplayNotification("~b~K9 recorded scent track started.~s~ Quality "+scentQuality+"%~n~The K9 follows trail points instead of continuously reading the suspect's live position.");K9IncidentLog.Write(_profile.Name,"Track","Started quality "+scentQuality+"% from "+_activeScentSource,target.Position);
             _dog.Tasks.Clear();
             PlayDogAnimation("creatures@rottweiler@indication@","indicate_low",700,0);
