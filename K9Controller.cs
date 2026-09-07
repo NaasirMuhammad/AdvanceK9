@@ -595,7 +595,7 @@ namespace AdvancedK9
         {
             if(!_carryingDog||!DogEntityExists())return;var handler=Game.LocalPlayer.Character;int spine=NativeFunction.Natives.GET_PED_BONE_INDEX<int>(handler,24818);
             NativeFunction.Natives.DETACH_ENTITY(_dog,true,true);NativeFunction.Natives.SET_ENTITY_COLLISION(_dog,false,false);
-            NativeFunction.Natives.ATTACH_ENTITY_TO_ENTITY(_dog,handler,spine,_carryX,_carryY,_carryZ,_carryPitch,_carryRoll,_carryYaw,false,false,false,false,2,true);
+            NativeFunction.Natives.ATTACH_ENTITY_TO_ENTITY(_dog,handler,spine,_carryX,_carryY,_carryZ,_carryPitch,_carryRoll,_carryYaw,false,false,false,true,2,true);
         }
         private void MaintainCarryPresentation()
         {
