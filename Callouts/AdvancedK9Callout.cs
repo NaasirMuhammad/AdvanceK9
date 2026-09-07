@@ -36,6 +36,9 @@ namespace AdvancedK9.Callouts
         private bool _medicalResponseStarted;
         private int _cachedDogHandle;
         private bool _supportFiberStarted;
+        private bool _supportTrackingEnded;
+        protected bool MedicalResponseComplete;
+        protected bool SeriousMedicalTransport;
 
         protected bool Prepare(string message,Vector3 scene,float radius,bool snapToStreet=true)
         {
@@ -168,7 +171,14 @@ namespace AdvancedK9.Callouts
             SceneBlip=null;
         }
 
-        protected int HandleOf(Entity entity){int value;return entity!=null&&entity.Exists()&&int.TryParse(entity.Handle.ToString(),out value)?value:0;}
+        protected int HandleOf(Entity entity)
+        {
+            if(entity==null||!entity.Exists())return 0;
+            string raw=entity.Handle.ToString();int value;
+            if(int.TryParse(raw,out value))return value;
+            raw=raw.StartsWith("0x",StringComparison.OrdinalIgnoreCase)?raw.Substring(2):raw;
+            return int.TryParse(raw,System.Globalization.NumberStyles.HexNumber,System.Globalization.CultureInfo.InvariantCulture,out value)?value:0;
+        }
 
         protected bool K9Available()
         {
@@ -207,7 +217,7 @@ namespace AdvancedK9.Callouts
                 bool committed=false;uint expires=Game.GameTime+600000;
                 try
                 {
-                    while(!Finished&&Game.GameTime<expires)
+                    while(!Finished&&!_supportTrackingEnded&&Game.GameTime<expires)
                     {
                         float departure=K9DistanceTo(Scene);
                         if(!committed&&(K9TrackingActive()||(ApiRequested&&Game.LocalPlayer.Character.DistanceTo(Scene)>15f)||(departure<float.MaxValue&&departure>12f)))
@@ -224,8 +234,16 @@ namespace AdvancedK9.Callouts
             },"AdvancedK9 callout support tracking");
         }
 
+        protected void EndSupportTracking()
+        {
+            if(_supportTrackingEnded)return;
+            _supportTrackingEnded=true;
+            Game.LogTrivial("AdvancedK9 Callouts: search-follow controller stopped; later phases now own officer tasks.");
+        }
+
         protected void SupportOfficersFollowK9()
         {
+            if(_supportTrackingEnded)return;
             if(Game.GameTime<_nextSupportMove)return;
             K9ApiSnapshot snapshot;
             Vector3 dogPosition=Game.LocalPlayer.Character.Position;
@@ -364,19 +382,20 @@ namespace AdvancedK9.Callouts
                         Game.DisplayNotification("~o~EMS:~s~ Serious injuries require hospital transport. The on-scene patrol unit is following to complete the arrest.");
                         Game.LogTrivial("AdvancedK9 Callouts: serious suspect injury transported toward hospital "+hospital+" with patrol follow.");
                         GameFiber.Wait(5000);
+                        SeriousMedicalTransport=true;
+                        MedicalResponseComplete=true;
+                        return;
                     }
                     else
                     {
-                        NativeFunction.Natives.SET_ENABLE_HANDCUFFS(suspect,true);
-                        NativeFunction.Natives.TASK_HANDS_UP(suspect,-1,Game.LocalPlayer.Character,-1,true);
-                        Game.DisplayNotification("~g~EMS:~s~ Suspect treated and cleared on scene. Patrol will complete arrest and transport.");
-                        GameFiber.Wait(1200);
-                        BeginAutomaticTransport(completionMessage);
+                        suspect.IsInvincible=false;
+                        Game.DisplayNotification("~g~EMS:~s~ Suspect treated and cleared on scene. LSPDFR retains official custody and transport control.");
+                        MedicalResponseComplete=true;
                         return;
                     }
                 }
                 catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: live-position EMS response contained: "+ex);}
-                Resolve(completionMessage);
+                MedicalResponseComplete=true;
             },"AdvancedK9 live-position EMS response");
             return true;
         }

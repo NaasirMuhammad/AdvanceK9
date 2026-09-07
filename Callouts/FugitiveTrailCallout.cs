@@ -8,6 +8,10 @@ namespace AdvancedK9.Callouts
     [CalloutInfo("AdvancedK9: Fugitive Trail",CalloutProbability.Medium)]
     public sealed class FugitiveTrailCallout : AdvancedK9Callout
     {
+        private enum FugitivePhase{EnRoute,AwaitingScent,Tracking,Located,Medical,Custody,Transport,Complete}
+        private FugitivePhase _phase=FugitivePhase.EnRoute;
+        private uint _phaseStarted;
+        private bool _custodyConfirmed;
         private int _outcome;
         private bool _sceneBriefed;
         private bool _suspectLocated;
@@ -47,7 +51,7 @@ namespace AdvancedK9.Callouts
 
         public override bool OnCalloutAccepted()
         {
-            StartedAt=Game.GameTime;_outcome=Random.Next(4);
+            StartedAt=Game.GameTime;_phaseStarted=StartedAt;_phase=FugitivePhase.EnRoute;_outcome=Random.Next(4);
             StagePoliceScene();
             ConfigureTrafficStopScene();
             float angle=Random.Next(360);float distance=Random.Next(85,116);Vector3 trailEnd=Scene;
@@ -146,7 +150,7 @@ namespace AdvancedK9.Callouts
 
             if(!_sceneBriefed&&player.DistanceTo(Scene)<28f)
             {
-                _sceneBriefed=true;
+                _sceneBriefed=true;_phase=FugitivePhase.AwaitingScent;_phaseStarted=Game.GameTime;
                 Game.DisplayNotification("~b~On-scene officer:~s~ The suspect fled on foot. I preserved their scent from the driver seat.~n~~y~Deploy Rex beside the abandoned vehicle and command TRACK.");
             }
             if(!ApiRequested&&_sceneBriefed)
@@ -155,13 +159,14 @@ namespace AdvancedK9.Callouts
                 if(ApiRequested){ClearSceneRoute();Game.LogTrivial("AdvancedK9 Callouts: fugitive vehicle scent source registered; awaiting handler command.");}
             }
 
-            if(ApiRequested&&!_suspectLocated&&!_supportCommitted&&(K9TrackingActive()||player.DistanceTo(Scene)>15f||K9DistanceTo(Scene)>12f))
+            if(ApiRequested&&K9TrackingActive()&&_phase==FugitivePhase.AwaitingScent){_phase=FugitivePhase.Tracking;_phaseStarted=Game.GameTime;Game.LogTrivial("AdvancedK9 Callouts: FugitiveTrail phase -> Tracking.");}
+            if(_phase==FugitivePhase.Tracking&&!_suspectLocated&&!_supportCommitted&&(K9TrackingActive()||player.DistanceTo(Scene)>15f||K9DistanceTo(Scene)>12f))
             {
                 _supportCommitted=true;
                 Game.DisplayNotification("~b~On-scene officers:~s~ We are moving behind the K9 team.");
                 Game.LogTrivial("AdvancedK9 Callouts: support movement armed by handler departure from scent scene.");
             }
-            if(_supportCommitted&&!_suspectLocated)SupportOfficersFollowK9();
+            if(_phase==FugitivePhase.Tracking&&_supportCommitted&&!_suspectLocated)SupportOfficersFollowK9();
 
             float rexDistance=K9DistanceTo(Subject.Position);
             if(ApiRequested&&!_suspectLocated&&!_rexReachedSubject&&rexDistance<3f)
@@ -171,7 +176,8 @@ namespace AdvancedK9.Callouts
             }
             if(_rexReachedSubject&&!_suspectLocated&&Game.GameTime-_rexReachedAt>=2800)
             {
-                _suspectLocated=true;_locatedAt=Game.GameTime;
+                _suspectLocated=true;_locatedAt=Game.GameTime;_phase=FugitivePhase.Located;_phaseStarted=Game.GameTime;
+                EndSupportTracking();
                 SubjectBlip=Subject.AttachBlip();SubjectBlip.IsRouteEnabled=true;Subject.IsInvincible=true;
                 if(_outcome==0)NativeFunction.Natives.TASK_HANDS_UP(Subject,120000,player,-1,true);
                 else NativeFunction.Natives.TASK_SMART_FLEE_PED(Subject,player,700f,-1,false,false);
@@ -182,9 +188,32 @@ namespace AdvancedK9.Callouts
 
             if(_suspectLocated)
             {
-                if(ProcessPostApprehensionMedical("~g~Fugitive Trail complete: EMS treated the suspect and patrol completed custody.")){}
-                else if(Subject.IsDead)Resolve("~o~Fugitive Trail concluded: suspect is deceased.");
-                else if(SubjectInCustody()&&!_transportStarted){_transportStarted=true;BeginAutomaticTransport("~g~Fugitive Trail complete: on-scene units transported the prisoner.");}
+                bool injured=!Subject.IsDead&&(Subject.Health<Subject.MaxHealth-5||Subject.IsRagdoll);
+                if(Subject.IsDead){_phase=FugitivePhase.Complete;Resolve("~o~Fugitive Trail concluded: suspect is deceased.");}
+                else if(injured&&!MedicalResponseComplete)
+                {
+                    if(ProcessPostApprehensionMedical("")){_phase=FugitivePhase.Medical;_phaseStarted=Game.GameTime;}
+                }
+                else if(SeriousMedicalTransport&&MedicalResponseComplete)
+                {
+                    _phase=FugitivePhase.Complete;
+                    Resolve("~g~Fugitive Trail complete: EMS transported the seriously injured suspect under LSPDFR custody.");
+                }
+                else if(SubjectInCustody())
+                {
+                    if(!_custodyConfirmed)
+                    {
+                        _custodyConfirmed=true;_phase=FugitivePhase.Custody;_phaseStarted=Game.GameTime;
+                        Subject.IsInvincible=false;
+                        Game.DisplayNotification("~b~Custody confirmed:~s~ LSPDFR now owns the arrest and transport. AdvancedK9 will remain active until handoff.");
+                        Game.LogTrivial("AdvancedK9 Callouts: FugitiveTrail phase -> Custody; no AdvancedK9 ped arrest or transport tasks will be issued.");
+                    }
+                    if(NativeFunction.Natives.IS_PED_IN_ANY_VEHICLE<bool>(Subject,false))
+                    {
+                        if(_phase!=FugitivePhase.Transport){_phase=FugitivePhase.Transport;_phaseStarted=Game.GameTime;Game.LogTrivial("AdvancedK9 Callouts: FugitiveTrail phase -> Transport (LSPDFR vehicle handoff confirmed).");}
+                        else if(Game.GameTime-_phaseStarted>3000){_phase=FugitivePhase.Complete;Resolve("~g~Fugitive Trail complete: LSPDFR custody and prisoner transport confirmed.");}
+                    }
+                }
                 else if(Game.GameTime-_locatedAt>600000)Resolve("~o~Fugitive Trail concluded after suspect location.");
             }
             else if(!ApiRequested&&Game.GameTime-StartedAt>900000)Resolve("~r~Fugitive Trail: response expired before scent collection.");

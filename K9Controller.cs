@@ -1716,8 +1716,17 @@ namespace AdvancedK9
         private void Apprehend()
         {
             var handler=Game.LocalPlayer.Character;
-            var target=GetValidAimedSuspect(false);
-            if(target==null&&_voiceAimedTarget!=null&&_voiceAimedTarget.Exists()&&!_voiceAimedTarget.IsDead&&_voiceAimedTarget.DistanceTo(handler)<=250f&&!LspdfrBridge.IsPedCop(_voiceAimedTarget))target=_voiceAimedTarget;
+            var aimedTarget=GetValidAimedSuspect(false);
+            if(aimedTarget==null&&_voiceAimedTarget!=null&&_voiceAimedTarget.Exists()&&!_voiceAimedTarget.IsDead&&_voiceAimedTarget.DistanceTo(handler)<=250f&&!LspdfrBridge.IsPedCop(_voiceAimedTarget))aimedTarget=_voiceAimedTarget;
+            Ped calloutTarget=null;
+            if(!string.IsNullOrWhiteSpace(_activeSharedApiContextId))
+            {
+                if(_pendingCalloutScentTarget!=null&&_pendingCalloutScentTarget.Exists()&&!_pendingCalloutScentTarget.IsDead)calloutTarget=_pendingCalloutScentTarget;
+                else if(_scentTarget!=null&&_scentTarget.Exists()&&!_scentTarget.IsDead&&_activeScentSource.StartsWith("Callout",StringComparison.OrdinalIgnoreCase))calloutTarget=_scentTarget;
+            }
+            var target=calloutTarget??aimedTarget;
+            if(calloutTarget!=null&&aimedTarget!=null&&aimedTarget!=calloutTarget)
+                Game.DisplayNotification("~y~Callout suspect lock active.~s~~n~Ignored the aimed bystander and deployed only on the assigned fugitive.");
             _voiceAimedTarget=null;
             if(target==null){Game.DisplayNotification("~y~No valid target identified.~s~~n~Aim your taser or firearm directly at a non-officer, then issue APPREHEND. No ped stop is required.");return;}
             if(_warnedTarget==target&&_warningSurrendered){Game.DisplayNotification("~r~K9 safety interlock: the warned suspect surrendered.~s~~n~Move in for arrest; apprehension was not deployed.");return;}
@@ -1725,9 +1734,9 @@ namespace AdvancedK9
             if(_state==K9State.InVehicle)DoorPop(false);
             _state = K9State.Apprehending;
             _dog.Tasks.Clear();
-            string reaction="Immediate aimed deployment";K9IncidentLog.Write(_profile.Name,"Apprehension",reaction,target.Position);_biteStarted=Game.GameTime;
+            string reaction=calloutTarget!=null?"Callout-authorized suspect deployment":"Immediate aimed deployment";K9IncidentLog.Write(_profile.Name,"Apprehension",reaction,target.Position);_biteStarted=Game.GameTime;
             NativeFunction.Natives.TASK_COMBAT_PED(_dog, target, 0, 16);
-            Game.DisplayNotification("~o~K9 deploying immediately on aimed target.~s~~n~No traffic stop or close-range contact is required.");
+            Game.DisplayNotification(calloutTarget!=null?"~o~K9 deploying on the verified callout suspect.~s~~n~Bystanders are excluded by the active suspect lock.":"~o~K9 deploying immediately on aimed target.~s~~n~No traffic stop or close-range contact is required.");
             var end = Game.GameTime + 25000;
             while (DogExists() && target.Exists() && !target.IsDead && Game.GameTime < end && _state == K9State.Apprehending)
             {
@@ -2208,7 +2217,11 @@ namespace AdvancedK9
 
         private static int ApiHandleOf(Entity entity)
         {
-            int value;return entity!=null&&entity.Exists()&&int.TryParse(entity.Handle.ToString(),out value)?value:0;
+            if(entity==null||!entity.Exists())return 0;
+            string raw=entity.Handle.ToString();int value;
+            if(int.TryParse(raw,out value))return value;
+            raw=raw.StartsWith("0x",StringComparison.OrdinalIgnoreCase)?raw.Substring(2):raw;
+            return int.TryParse(raw,System.Globalization.NumberStyles.HexNumber,System.Globalization.CultureInfo.InvariantCulture,out value)?value:0;
         }
 
         private void DrainSharedApiRequests()
@@ -2264,6 +2277,13 @@ namespace AdvancedK9
                     return;
                 }
                 Execute(command);
+                if(command==K9Command.ClearEvidenceMarkers)
+                {
+                    _pendingCalloutScentTarget=null;_pendingCalloutScentDetails="";
+                    if(_activeScentSource.StartsWith("Callout",StringComparison.OrdinalIgnoreCase)){_scentTarget=null;_activeScentSource="None";}
+                    _activeSharedApiContextId="";
+                    Game.LogTrivial("AdvancedK9 API: active callout suspect lock and scent context released.");
+                }
                 AdvancedK9ApiHost.PublishResult(request.RequestId,true,_profile.Name+" accepted "+command+".");
                 Game.LogTrivial("AdvancedK9 API command accepted: context="+_activeSharedApiContextId+", command="+command+".");
             }
