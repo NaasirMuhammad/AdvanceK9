@@ -111,7 +111,7 @@ namespace AdvancedK9.Callouts
             Vector3 officerTwoPosition=SceneVehicle!=null&&SceneVehicle.Exists()
                 ?SceneVehicle.GetOffsetPosition(new Vector3(2.5f,-3.5f,0f))
                 :new Vector3(Scene.X+4f,Scene.Y-3f,Scene.Z);
-            if(PoliceVehicle==null||!PoliceVehicle.Exists())PoliceVehicle=SpawnPoliceVehicle(cruiserPosition,Game.LocalPlayer.Character.Heading);
+            if(PoliceVehicle==null||!PoliceVehicle.Exists())PoliceVehicle=SpawnPoliceVehicle(cruiserPosition,SceneVehicle!=null&&SceneVehicle.Exists()?SceneVehicle.Heading:Game.LocalPlayer.Character.Heading);
             if(OfficerOne==null||!OfficerOne.Exists())OfficerOne=SpawnPoliceOfficer(officerOnePosition,0f);
             if(OfficerTwo==null||!OfficerTwo.Exists())OfficerTwo=SpawnPoliceOfficer(officerTwoPosition,180f);
             if(OfficerOne!=null&&OfficerOne.Exists())NativeFunction.Natives.TASK_STAND_STILL(OfficerOne,-1);
@@ -209,7 +209,7 @@ namespace AdvancedK9.Callouts
                     while(!Finished&&Game.GameTime<expires)
                     {
                         float departure=K9DistanceTo(Scene);
-                        if(!committed&&departure<float.MaxValue&&departure>2.5f)
+                        if(!committed&&((departure<float.MaxValue&&departure>2.5f)||K9TrackingActive()))
                         {
                             committed=true;
                             Game.DisplayNotification("~b~On-scene officers:~s~ Moving behind Rex and the handler.");
@@ -365,6 +365,38 @@ namespace AdvancedK9.Callouts
             if(Finished)return;Finished=true;Game.DisplayNotification(message);End();
         }
 
+        private void BeginPoliceSceneDeparture()
+        {
+            var officerOne=OfficerOne;var officerTwo=OfficerTwo;var cruiser=PoliceVehicle;
+            OfficerOne=null;OfficerTwo=null;PoliceVehicle=null;
+            if(cruiser==null||!cruiser.Exists())
+            {
+                if(officerOne!=null&&officerOne.Exists())officerOne.Dismiss();
+                if(officerTwo!=null&&officerTwo.Exists())officerTwo.Dismiss();
+                return;
+            }
+            GameFiber.StartNew(delegate
+            {
+                try
+                {
+                    if(officerOne!=null&&officerOne.Exists()){officerOne.BlockPermanentEvents=false;officerOne.Tasks.Clear();officerOne.Tasks.EnterVehicle(cruiser,0).WaitForCompletion(7000);}
+                    if(officerTwo!=null&&officerTwo.Exists()){officerTwo.BlockPermanentEvents=false;officerTwo.Tasks.Clear();officerTwo.Tasks.EnterVehicle(cruiser,-1).WaitForCompletion(7000);}
+                    Ped driver=officerTwo!=null&&officerTwo.Exists()?officerTwo:officerOne;
+                    if(driver!=null&&driver.Exists()&&cruiser.Exists())
+                    {
+                        NativeFunction.Natives.SET_VEHICLE_SIREN(cruiser,false);
+                        NativeFunction.Natives.TASK_VEHICLE_DRIVE_WANDER(driver,cruiser,18f,786603);
+                        Game.LogTrivial("AdvancedK9 Callouts: scene officers entered their cruiser and began a staged drive-away.");
+                        GameFiber.Wait(7000);
+                    }
+                }
+                catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: police departure fallback contained: "+ex);}
+                if(officerOne!=null&&officerOne.Exists())officerOne.Dismiss();
+                if(officerTwo!=null&&officerTwo.Exists())officerTwo.Dismiss();
+                if(cruiser.Exists())cruiser.Dismiss();
+            },"AdvancedK9 police scene departure");
+        }
+
         public override void End()
         {
             if(_cleanupCompleted)return;
@@ -380,9 +412,7 @@ namespace AdvancedK9.Callouts
             if(MedicOne!=null&&MedicOne.Exists())MedicOne.Dismiss();
             if(MedicTwo!=null&&MedicTwo.Exists())MedicTwo.Dismiss();
             if(MedicalVehicle!=null&&MedicalVehicle.Exists())MedicalVehicle.Dismiss();
-            if(OfficerOne!=null&&OfficerOne.Exists())OfficerOne.Dismiss();
-            if(OfficerTwo!=null&&OfficerTwo.Exists())OfficerTwo.Dismiss();
-            if(PoliceVehicle!=null&&PoliceVehicle.Exists())PoliceVehicle.Dismiss();
+            BeginPoliceSceneDeparture();
             if(_trafficControlled)
             {
                 NativeFunction.Natives.SET_ROADS_IN_AREA(Scene.X-32f,Scene.Y-32f,Scene.Z-8f,Scene.X+32f,Scene.Y+32f,Scene.Z+8f,true,true);
