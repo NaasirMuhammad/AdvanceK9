@@ -184,6 +184,12 @@ namespace AdvancedK9.Callouts
             Game.DisplayNotification("~b~AdvancedK9 callout:~s~ "+instruction);
         }
 
+        protected bool K9TrackingActive()
+        {
+            K9ApiSnapshot snapshot;
+            return AdvancedK9Api.TryGetSnapshot(out snapshot)&&string.Equals(snapshot.State,"Tracking",StringComparison.OrdinalIgnoreCase);
+        }
+
         protected void SupportOfficersFollowK9()
         {
             if(Game.GameTime<_nextSupportMove)return;
@@ -251,7 +257,7 @@ namespace AdvancedK9.Callouts
             K9ApiSnapshot snapshot;
             if(AdvancedK9Api.TryGetSnapshot(out snapshot)&&string.Equals(snapshot.State,"Apprehending",StringComparison.OrdinalIgnoreCase))return false;
             _medicalResponseStarted=true;
-            var suspect=Subject;
+            var suspect=Subject;suspect.IsInvincible=true;
             GameFiber.StartNew(delegate
             {
                 try
