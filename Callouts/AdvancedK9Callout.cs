@@ -430,7 +430,7 @@ namespace AdvancedK9.Callouts
                 try
                 {
                     Vector3 downedPosition=suspect.Position;
-                    Functions.RequestBackup(downedPosition,EBackupResponseType.Code3,EBackupUnitType.Ambulance);
+                    RequestAmbulanceBackup(downedPosition);
                     Functions.PlayScannerAudioUsingPosition("ATTENTION_ALL_UNITS AMBULANCE_RESPOND_CODE_3",downedPosition);
                     Game.DisplayNotification("~b~Dispatch:~s~ K9 apprehension injury reported. EMS has been requested Code 3 to the suspect's live location.");
                     Game.LogTrivial("AdvancedK9 Callouts: requested LSPDFR ambulance response to live downed suspect position "+downedPosition+".");
@@ -475,6 +475,27 @@ namespace AdvancedK9.Callouts
                 if(!MedicalResponseComplete)_medicalResponseStarted=false;
             },"AdvancedK9 live-position EMS response");
             return true;
+        }
+
+        private static void RequestAmbulanceBackup(Vector3 position)
+        {
+            try
+            {
+                var methods=typeof(Functions).GetMethods(System.Reflection.BindingFlags.Public|System.Reflection.BindingFlags.Static);
+                foreach(var method in methods)
+                {
+                    if(!string.Equals(method.Name,"RequestBackup",StringComparison.Ordinal)||method.GetParameters().Length!=3)continue;
+                    var parameters=method.GetParameters();
+                    if(parameters[0].ParameterType!=typeof(Vector3)||!parameters[1].ParameterType.IsEnum||!parameters[2].ParameterType.IsEnum)continue;
+                    object response=System.Enum.Parse(parameters[1].ParameterType,"Code3",true);
+                    object unit=System.Enum.Parse(parameters[2].ParameterType,"Ambulance",true);
+                    method.Invoke(null,new object[]{position,response,unit});
+                    Game.LogTrivial("AdvancedK9 Callouts: LSPDFR ambulance backup request accepted through the installed API.");
+                    return;
+                }
+                Game.LogTrivial("AdvancedK9 Callouts: installed LSPDFR API exposes no compatible ambulance backup request; scanner dispatch remains active.");
+            }
+            catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: ambulance backup request fallback contained: "+ex.Message);}
         }
 
         private static Vector3 NearestHospital(Vector3 position)
