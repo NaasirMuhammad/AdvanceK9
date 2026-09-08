@@ -26,11 +26,12 @@ namespace AdvancedK9.Callouts
         private bool _deathReported;
         private Vector3 _hidingPosition;
         private uint _nextHideTask;
+        private static int _lastRoadsideScene=-1;
 
         private static readonly Vector3[] RoadsideScenes={
             new Vector3(-565f,-675f,33f),new Vector3(-1310f,-1261f,4f),new Vector3(-1430f,-590f,30f),
             new Vector3(1208f,-1396f,35f),new Vector3(1110f,-1730f,35f),new Vector3(830f,-1830f,29f),
-            new Vector3(1000f,-2535f,28f),new Vector3(-296f,-2732f,6f),new Vector3(-340f,-1200f,37f),
+            new Vector3(1000f,-2535f,28f),new Vector3(-296f,-2732f,6f),new Vector3(160f,-1370f,29f),
             new Vector3(1690f,3591f,35f),new Vector3(1865f,3684f,34f),new Vector3(1180f,2690f,38f),
             new Vector3(-445f,6037f,31f),new Vector3(-153f,6346f,31f),new Vector3(-2535f,2341f,33f)
         };
@@ -44,17 +45,18 @@ namespace AdvancedK9.Callouts
             for(int i=0;i<RoadsideScenes.Length;i++)
             {
                 float distance=player.DistanceTo(RoadsideScenes[i]);
-                if(distance<bestDistance&&distance>180f){best=i;bestDistance=distance;}
+                if(i!=_lastRoadsideScene&&distance<bestDistance&&distance>180f){best=i;bestDistance=distance;}
             }
             if(best<0)
             {
                 for(int i=0;i<RoadsideScenes.Length;i++)
                 {
                     float distance=player.DistanceTo(RoadsideScenes[i]);
-                    if(distance<bestDistance){best=i;bestDistance=distance;}
+                    if(i!=_lastRoadsideScene&&distance<bestDistance){best=i;bestDistance=distance;}
                 }
             }
             if(best<0)return false;
+            _lastRoadsideScene=best;
             _sceneHeading=RoadsideHeadings[best];
             int interior=NativeFunction.Natives.GET_INTERIOR_AT_COORDS<int>(RoadsideScenes[best].X,RoadsideScenes[best].Y,RoadsideScenes[best].Z);
             if(interior!=0)return false;
