@@ -27,16 +27,18 @@ namespace AdvancedK9.Callouts
         private Vector3 _hidingPosition;
         private uint _nextHideTask;
         private static int _lastRoadsideScene=-1;
+        private uint _verbalGraceUntil;
+        private bool _outcomeTaskIssued;
 
         private static readonly Vector3[] RoadsideScenes={
             new Vector3(-565f,-675f,33f),new Vector3(-1310f,-1261f,4f),new Vector3(-1430f,-590f,30f),
             new Vector3(1208f,-1396f,35f),new Vector3(1110f,-1730f,35f),new Vector3(830f,-1830f,29f),
-            new Vector3(1000f,-2535f,28f),new Vector3(-296f,-2732f,6f),new Vector3(160f,-1370f,29f),
+            new Vector3(1000f,-2535f,28f),new Vector3(-296f,-2732f,6f),
             new Vector3(1690f,3591f,35f),new Vector3(1865f,3684f,34f),new Vector3(1180f,2690f,38f),
             new Vector3(-445f,6037f,31f),new Vector3(-153f,6346f,31f),new Vector3(-2535f,2341f,33f)
         };
 
-        private static readonly float[] RoadsideHeadings={270f,110f,90f,180f,180f,180f,85f,145f,180f,210f,30f,180f,135f,45f,95f};
+        private static readonly float[] RoadsideHeadings={270f,110f,90f,180f,180f,180f,85f,145f,210f,30f,180f,135f,45f,95f};
 
         private bool PrepareRoadsideScene()
         {
@@ -119,10 +121,12 @@ namespace AdvancedK9.Callouts
                 Game.LogTrivial("AdvancedK9 Callouts: rejected FugitiveTrail scene because no safe off-road hiding position was available.");
                 return false;
             }
-            CoverProp=SpawnProp("prop_dumpster_01a",coverPosition);
-            if(CoverProp==null||!CoverProp.Exists())return false;
-            CoverProp.Heading=(float)(System.Math.Atan2(-dx,dy)*180.0/System.Math.PI);
-            Vector3 hidingPosition=new Vector3(coverPosition.X+dx/length*1.8f,coverPosition.Y+dy/length*1.8f,coverPosition.Z);
+            Vector3 hidingPosition;
+            if(!TryFindExistingCover(coverPosition,out hidingPosition))
+            {
+                Game.LogTrivial("AdvancedK9 Callouts: rejected FugitiveTrail scene because no existing environmental cover was available near the pedestrian trail end.");
+                return false;
+            }
             _hidingPosition=hidingPosition;
             Game.LogTrivial("AdvancedK9 Callouts: guaranteed physical cover staged off the roadway; subject position is shielded from the scene side.");
             Vector3 escapeStart=new Vector3(Scene.X+dx/length*48f-dy/length*8f,Scene.Y+dy/length*48f+dx/length*8f,Scene.Z);
@@ -215,7 +219,7 @@ namespace AdvancedK9.Callouts
             }
 
             if(ApiRequested&&K9TrackingActive()&&_phase==FugitivePhase.AwaitingScent){_phase=FugitivePhase.Tracking;_phaseStarted=Game.GameTime;Game.LogTrivial("AdvancedK9 Callouts: FugitiveTrail phase -> Tracking.");}
-            if(_phase==FugitivePhase.Tracking&&!_suspectLocated&&!_supportCommitted&&(K9TrackingActive()||player.DistanceTo(Scene)>15f||K9DistanceTo(Scene)>12f))
+            if(_phase==FugitivePhase.Tracking&&!_suspectLocated&&!_supportCommitted&&K9TrackingActive())
             {
                 _supportCommitted=true;
                 Game.DisplayNotification("~b~On-scene officers:~s~ We are moving behind the K9 team.");
@@ -235,21 +239,33 @@ namespace AdvancedK9.Callouts
                 _rexReachedSubject=true;_rexReachedAt=Game.GameTime;
                 Game.LogTrivial("AdvancedK9 Callouts: Rex physically reached FugitiveTrail subject; preserving the suspect's cover/flee task until the alert transition.");
             }
-            if(_rexReachedSubject&&!_suspectLocated&&Game.GameTime-_rexReachedAt>=2800)
+            if(_rexReachedSubject&&!_suspectLocated&&Game.GameTime-_rexReachedAt>=500)
             {
                 _suspectLocated=true;_locatedAt=Game.GameTime;_phase=FugitivePhase.Located;_phaseStarted=Game.GameTime;
                 EndSupportTracking();
-                SubjectBlip=Subject.AttachBlip();SubjectBlip.IsRouteEnabled=true;Subject.IsInvincible=true;
-                if(_outcome==0)NativeFunction.Natives.TASK_HANDS_UP(Subject,120000,player,-1,true);
-                else NativeFunction.Natives.TASK_SMART_FLEE_PED(Subject,player,700f,-1,false,false);
+                SubjectBlip=Subject.AttachBlip();SubjectBlip.IsRouteEnabled=true;Subject.IsInvincible=false;
+                _verbalGraceUntil=Game.GameTime+12000;
                 ControlApprehensionTraffic(Subject.Position);
                 SupportOfficersContainSubject();
-                Game.DisplayNotification(_outcome==0?"~g~Rex alerted on the hidden fugitive. The suspect is surrendering; secure the arrest.":"~o~Rex alerted and flushed the fugitive from cover. Tracking is complete; command APPREHEND if deployment is justified.");
+                Game.DisplayNotification("~o~Rex alerted on the hidden fugitive.~s~ Tracking is complete. Give verbal commands through NPCI; the suspect may surrender, flee, or resist.");
                 Game.LogTrivial("AdvancedK9 Callouts: alert-first FugitiveTrail transition completed after Rex reached the stationary hidden subject.");
             }
 
             if(_suspectLocated)
             {
+                ObserveCooperativeControl("verbal challenge");
+                if(!_outcomeTaskIssued&&SubjectIsComplying())
+                {
+                    _outcomeTaskIssued=true;
+                    Game.DisplayNotification("~g~Suspect is complying with verbal commands.~s~ Move in and complete the LSPDFR arrest.");
+                }
+                else if(!_outcomeTaskIssued&&Game.GameTime>=_verbalGraceUntil)
+                {
+                    _outcomeTaskIssued=true;
+                    if(_outcome==0)NativeFunction.Natives.TASK_HANDS_UP(Subject,120000,player,-1,true);
+                    else NativeFunction.Natives.TASK_SMART_FLEE_PED(Subject,player,700f,-1,false,false);
+                    Game.LogTrivial("AdvancedK9 Callouts: verbal challenge window expired; callout outcome resumed because NPCI/LSPDFR reported no compliance.");
+                }
                 bool injured=!Subject.IsDead&&(Subject.Health<Subject.MaxHealth-5||Subject.IsRagdoll);
                 bool custody=SubjectInCustody();
                 bool confirmedDead=Subject.Health<=0&&NativeFunction.Natives.IS_PED_DEAD_OR_DYING<bool>(Subject,true)&&!custody;
@@ -278,15 +294,20 @@ namespace AdvancedK9.Callouts
                     {
                         _custodyConfirmed=true;_phase=FugitivePhase.Custody;_phaseStarted=Game.GameTime;
                         Subject.Health=System.Math.Max(Subject.Health,System.Math.Max(100,Subject.MaxHealth*3/4));
-                        Subject.IsInvincible=true;
-                        Game.DisplayNotification("~b~Custody confirmed:~s~ LSPDFR now owns the arrest and transport. AdvancedK9 will remain active until handoff.");
-                        Game.LogTrivial("AdvancedK9 Callouts: FugitiveTrail phase -> Custody; no AdvancedK9 ped arrest or transport tasks will be issued.");
+                        Subject.IsInvincible=false;
+                        Game.DisplayNotification("~b~Custody confirmed:~s~ LSPDFR owns the arrest state. The on-scene patrol unit is assigned as the single transport owner.");
+                        Game.LogTrivial("AdvancedK9 Callouts: FugitiveTrail phase -> Custody; on-scene patrol transport authorized after medical clearance.");
                     }
                     if(NativeFunction.Natives.IS_PED_IN_ANY_VEHICLE<bool>(Subject,false))
                     {
                         Subject.IsInvincible=false;
                         if(_phase!=FugitivePhase.Transport){_phase=FugitivePhase.Transport;_phaseStarted=Game.GameTime;Game.LogTrivial("AdvancedK9 Callouts: FugitiveTrail phase -> Transport (LSPDFR vehicle handoff confirmed).");}
                         else if(Game.GameTime-_phaseStarted>3000){_phase=FugitivePhase.Complete;Resolve("~g~Fugitive Trail complete: LSPDFR custody and prisoner transport confirmed.");}
+                    }
+                    else if((!MedicalResponseStarted||MedicalResponseComplete)&&!_transportStarted)
+                    {
+                        _transportStarted=true;_phase=FugitivePhase.Transport;_phaseStarted=Game.GameTime;
+                        BeginAutomaticTransport("~g~Fugitive Trail complete: EMS clearance and on-scene patrol transport confirmed.");
                     }
                 }
                 else if(Game.GameTime-_locatedAt>600000)Resolve("~o~Fugitive Trail concluded after suspect location.");

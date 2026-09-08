@@ -1730,6 +1730,7 @@ namespace AdvancedK9
             _voiceAimedTarget=null;
             if(target==null){Game.DisplayNotification("~y~No valid target identified.~s~~n~Aim your taser or firearm directly at a non-officer, then issue APPREHEND. No ped stop is required.");return;}
             if(_warnedTarget==target&&_warningSurrendered){Game.DisplayNotification("~r~K9 safety interlock: the warned suspect surrendered.~s~~n~Move in for arrest; apprehension was not deployed.");return;}
+            if(IsTargetComplyingOrRestrained(target)){Game.DisplayNotification("~r~K9 safety interlock: the suspect is complying or in custody.~s~~n~NPCI compliance is preserved; complete the LSPDFR arrest.");return;}
             if(_config.CompatibilityProtectManagedPeds&&IsProtectedOperationalPed(target)){Game.DisplayNotification("~r~K9 safety interlock: restrained or surrendered suspect rejected.~s~~n~PR/STP stop status is not required for deployment, but protected peds cannot be bitten.");return;}
             if(_state==K9State.InVehicle)DoorPop(false);
             _state = K9State.Apprehending;
@@ -1740,6 +1741,12 @@ namespace AdvancedK9
             var end = Game.GameTime + 25000;
             while (DogExists() && target.Exists() && !target.IsDead && Game.GameTime < end && _state == K9State.Apprehending)
             {
+                if(!target.IsRagdoll&&IsTargetComplyingOrRestrained(target))
+                {
+                    _dog.Tasks.ClearImmediately();Follow();
+                    Game.DisplayNotification("~g~K9 deployment cancelled:~s~ the suspect complied with verbal commands before contact.");
+                    return;
+                }
                 bool controlledContact=_dog.DistanceTo(target)<2.15f&&Game.GameTime-_biteStarted>=900;
                 if (controlledContact || target.Health <= _config.NonLethalHealthFloor || target.IsRagdoll)
                 {
@@ -1759,6 +1766,12 @@ namespace AdvancedK9
                 GameFiber.Yield();
             }
             int finalBiteSeconds=(int)((Game.GameTime-_biteStarted)/1000);bool targetExists=target!=null&&target.Exists();K9DeploymentReport.Write("Player",_profile.Name,"Apprehension",reaction,_activeScentSource,_warningGiven,_activeTrackDistance,_activeTrackStarted==0?0:(int)((Game.GameTime-_activeTrackStarted)/1000),finalBiteSeconds,targetExists?(target.IsDead?"Deceased":"Not controlled"):"Entity unavailable",_profile.Injury,"Deployment ended",targetExists?target.Position:_dog.Position);Follow();
+        }
+        private static bool IsTargetComplyingOrRestrained(Ped target)
+        {
+            if(target==null||!target.Exists())return false;
+            try{return NativeFunction.Natives.IS_PED_HANDS_UP<bool>(target)||NativeFunction.Natives.IS_PED_CUFFED<bool>(target)||NativeFunction.Natives.IS_PED_HANDCUFFED<bool>(target)||NativeFunction.Natives.IS_PED_BEING_ARRESTED<bool>(target);}
+            catch{return false;}
         }
         private void DoorPop(){DoorPop(true);}
         private void DoorPop(bool followAfter){if(!DogExists()||_state!=K9State.InVehicle){if(followAfter)Game.DisplayNotification("~y~K9 is not secured in the vehicle.");return;}var vehicle=_dogVehicle;if(vehicle==null||!vehicle.Exists()||vehicle.Speed>2f){Game.DisplayNotification("~y~Vehicle must be stopped for door-pop deployment.");return;}NativeFunction.Natives.SET_VEHICLE_DOOR_OPEN(vehicle,_dogVehicleDoor,false,false);GameFiber.Wait(450);Vector3 exit=StageDogOutsideVehicle(vehicle);_dog.Health=Math.Max(_dog.Health,100);GameFiber.Wait(250);NativeFunction.Natives.SET_VEHICLE_DOOR_SHUT(vehicle,_dogVehicleDoor,false);K9IncidentLog.Write(_profile.Name,"Door pop","Visible rear-door deployment",exit);if(followAfter)Follow();else _state=K9State.Following;}

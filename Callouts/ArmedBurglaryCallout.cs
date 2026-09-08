@@ -16,6 +16,8 @@ namespace AdvancedK9.Callouts
         private uint _nextContainmentUpdate;
         private Vector3 _hidePosition;
         private int _sceneIndex;
+        private uint _verbalGraceUntil;
+        private bool _outcomeTaskIssued;
 
         private static readonly Vector3[] BusinessScenes={
             new Vector3(28f,-1345f,29f),new Vector3(-48f,-1758f,29f),new Vector3(-1220f,-915f,11f),
@@ -81,8 +83,11 @@ namespace AdvancedK9.Callouts
                 angle=(angle+41f)%360f;
             }
             if(!found){Game.LogTrivial("AdvancedK9 Callouts: Armed Burglary rejected because no safe off-road suspect cover was available.");return false;}
-            CoverProp=SpawnProp("prop_bush_med_03",coverPosition);if(CoverProp==null||!CoverProp.Exists())return false;
-            _hidePosition=new Vector3(coverPosition.X+dx/length*1.5f,coverPosition.Y+dy/length*1.5f,coverPosition.Z);
+            if(!TryFindExistingCover(coverPosition,out _hidePosition))
+            {
+                Game.LogTrivial("AdvancedK9 Callouts: Armed Burglary rejected because the trail end had no existing environmental concealment.");
+                return false;
+            }
             Subject=SpawnPed("g_m_y_mexgoon_02",_hidePosition,Random.Next(360));if(Subject==null)return false;
             Subject.MaxHealth=250;Subject.Health=250;
             NativeFunction.Natives.GIVE_WEAPON_TO_PED(Subject,NativeFunction.Natives.GET_HASH_KEY<uint>("WEAPON_PISTOL"),36,false,false);
@@ -114,17 +119,29 @@ namespace AdvancedK9.Callouts
                 _suspectLocated=true;_locatedAt=Game.GameTime;
                 EndSupportTracking();
                 SubjectBlip=Subject.AttachBlip();SubjectBlip.IsRouteEnabled=true;
-                if(_outcome<=1)NativeFunction.Natives.TASK_HANDS_UP(Subject,120000,player,-1,true);
-                else if(_outcome<=3)NativeFunction.Natives.TASK_SMART_FLEE_PED(Subject,player,700f,-1,false,false);
-                else NativeFunction.Natives.TASK_COMBAT_PED(Subject,player,0,16);
+                _verbalGraceUntil=Game.GameTime+12000;
                 ControlApprehensionTraffic(Subject.Position);
                 SupportOfficersContainSubject();
                 Game.DisplayNotification("~b~Dispatch:~s~ K9 has located the armed burglary suspect. Patrol units are establishing lethal and less-lethal containment.");
-                Game.DisplayNotification(_outcome<=1?"~g~Rex located the armed burglary suspect behind cover. The suspect is surrendering.":"~o~Rex flushed the armed suspect from cover. Suspect marked; officers are moving with the K9 team.");
+                Game.DisplayNotification("~o~Rex located the armed suspect behind cover.~s~ Give verbal commands through NPCI. Officers will contain while the suspect decides whether to comply.");
             }
 
             if(_suspectLocated)
             {
+                ObserveCooperativeControl("armed verbal challenge");
+                if(!_outcomeTaskIssued&&SubjectIsComplying())
+                {
+                    _outcomeTaskIssued=true;
+                    Game.DisplayNotification("~g~Suspect is complying with verbal commands.~s~ Complete the LSPDFR arrest; Rex remains available.");
+                }
+                else if(!_outcomeTaskIssued&&Game.GameTime>=_verbalGraceUntil)
+                {
+                    _outcomeTaskIssued=true;
+                    if(_outcome<=1)NativeFunction.Natives.TASK_HANDS_UP(Subject,120000,player,-1,true);
+                    else if(_outcome<=3)NativeFunction.Natives.TASK_SMART_FLEE_PED(Subject,player,700f,-1,false,false);
+                    else NativeFunction.Natives.TASK_COMBAT_PED(Subject,player,0,16);
+                    Game.LogTrivial("AdvancedK9 Callouts: armed verbal challenge expired; scripted outcome resumed because no NPCI/LSPDFR compliance was detected.");
+                }
                 if(Game.GameTime>=_nextContainmentUpdate&&!NativeFunction.Natives.IS_PED_CUFFED<bool>(Subject)){_nextContainmentUpdate=Game.GameTime+1800;SupportOfficersContainSubject();}
                 bool injured=Subject.Health<Subject.MaxHealth-5||Subject.IsRagdoll;
                 if((injured||MedicalResponseStarted)&&!MedicalResponseComplete){ProcessPostApprehensionMedical("");}
