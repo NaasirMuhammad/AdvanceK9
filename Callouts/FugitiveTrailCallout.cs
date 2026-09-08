@@ -48,24 +48,25 @@ namespace AdvancedK9.Callouts
         {
             var player=Game.LocalPlayer.Character;
             int best=-1;float bestDistance=float.MaxValue;
-            for(int i=0;i<RoadsideScenes.Length;i++)
-            {
-                float distance=player.DistanceTo(RoadsideScenes[i]);
-                if(i!=_lastRoadsideScene&&distance<bestDistance&&distance>180f){best=i;bestDistance=distance;}
-            }
-            if(best<0)
+            for(int pass=0;pass<2&&best<0;pass++)
             {
                 for(int i=0;i<RoadsideScenes.Length;i++)
                 {
+                    if(i==_lastRoadsideScene)continue;
+                    // This downtown point resolves into an active intersection rather than a curb lane.
+                    if(i==3)continue;
                     float distance=player.DistanceTo(RoadsideScenes[i]);
-                    if(i!=_lastRoadsideScene&&distance<bestDistance){best=i;bestDistance=distance;}
+                    if(pass==0&&distance<=180f)continue;
+                    int interior=NativeFunction.Natives.GET_INTERIOR_AT_COORDS<int>(RoadsideScenes[i].X,RoadsideScenes[i].Y,RoadsideScenes[i].Z);
+                    if(interior!=0)continue;
+                    Vector3 street=World.GetNextPositionOnStreet(RoadsideScenes[i]);
+                    if(street.DistanceTo(RoadsideScenes[i])>18f||System.Math.Abs(street.Z-RoadsideScenes[i].Z)>3f)continue;
+                    if(distance<bestDistance){best=i;bestDistance=distance;}
                 }
             }
             if(best<0)return false;
             _lastRoadsideScene=best;
             _sceneHeading=RoadsideHeadings[best];
-            int interior=NativeFunction.Natives.GET_INTERIOR_AT_COORDS<int>(RoadsideScenes[best].X,RoadsideScenes[best].Y,RoadsideScenes[best].Z);
-            if(interior!=0)return false;
             return Prepare("Traffic stop — driver fled on foot",RoadsideScenes[best],75f,false);
         }
 
@@ -130,7 +131,13 @@ namespace AdvancedK9.Callouts
                 _coverConfirmed=true;
                 Game.LogTrivial("AdvancedK9 Callouts: existing environmental cover reserved near the pedestrian trail end.");
             }
-            _hidingPosition=hidingPosition;
+            Vector3 validatedHiding;
+            if(!TryResolveSafePedPosition(hidingPosition,out validatedHiding))
+            {
+                Game.LogTrivial("AdvancedK9 Callouts: rejected FugitiveTrail candidate because the hiding position failed ground/navmesh validation.");
+                return false;
+            }
+            _hidingPosition=validatedHiding;
 
             SceneVehicle=SpawnVehicle("primo",Scene,_sceneHeading);
             if(SceneVehicle==null||!SceneVehicle.Exists())return false;
@@ -140,7 +147,9 @@ namespace AdvancedK9.Callouts
             ControlSceneTraffic();
             Game.LogTrivial("AdvancedK9 Callouts: accepted roadside scene spawned after successful trail validation.");
 
-            Vector3 escapeStart=new Vector3(Scene.X+dx/length*48f-dy/length*8f,Scene.Y+dy/length*48f+dx/length*8f,Scene.Z);
+            Vector3 requestedEscapeStart=new Vector3(Scene.X+dx/length*48f-dy/length*8f,Scene.Y+dy/length*48f+dx/length*8f,Scene.Z);
+            Vector3 escapeStart;
+            if(!TryResolveSafePedPosition(requestedEscapeStart,out escapeStart))return false;
             Subject=SpawnPed("a_m_m_hillbilly_01",escapeStart,Random.Next(360));if(Subject==null)return false;
             Subject.MaxHealth=500;Subject.Health=500;Subject.BlockPermanentEvents=true;Subject.IsPersistent=true;
             NativeFunction.Natives.TASK_FOLLOW_NAV_MESH_TO_COORD(Subject,hidingPosition.X,hidingPosition.Y,hidingPosition.Z,5.2f,22000,2f,0,0f);
@@ -159,14 +168,16 @@ namespace AdvancedK9.Callouts
                         }
                         if(Game.GameTime-escapeStarted>14000&&Game.LocalPlayer.Character.DistanceTo(escapingSubject)>85f)
                         {
-                            escapingSubject.Position=finalCover;
+                            Vector3 safeFinal;
+                            if(TryResolveSafePedPosition(finalCover,out safeFinal))escapingSubject.Position=safeFinal;
                             break;
                         }
                         GameFiber.Wait(250);
                     }
                     if(!Finished&&escapingSubject!=null&&escapingSubject.Exists()&&escapingSubject.DistanceTo(finalCover)<=7f)
                     {
-                        escapingSubject.Position=finalCover;
+                        Vector3 safeFinal;
+                        if(TryResolveSafePedPosition(finalCover,out safeFinal))escapingSubject.Position=safeFinal;
                         NativeFunction.Natives.TASK_SEEK_COVER_FROM_POS(escapingSubject,Scene.X,Scene.Y,Scene.Z,-1,false);
                         GameFiber.Wait(1200);
                         if(escapingSubject.Exists())NativeFunction.Natives.TASK_STAY_IN_COVER(escapingSubject);
@@ -242,10 +253,11 @@ namespace AdvancedK9.Callouts
             {
                 _nextCoverSearch=Game.GameTime+4000;
                 Vector3 liveCover;
-                if(TryFindExistingCover(_hidingPosition,out liveCover))
+                Vector3 safeLiveCover;
+                if(TryFindExistingCover(_hidingPosition,out liveCover)&&TryResolveSafePedPosition(liveCover,out safeLiveCover))
                 {
-                    _hidingPosition=liveCover;_coverConfirmed=true;
-                    NativeFunction.Natives.TASK_FOLLOW_NAV_MESH_TO_COORD(Subject,liveCover.X,liveCover.Y,liveCover.Z,4.8f,18000,1.5f,0,0f);
+                    _hidingPosition=safeLiveCover;_coverConfirmed=true;
+                    NativeFunction.Natives.TASK_FOLLOW_NAV_MESH_TO_COORD(Subject,safeLiveCover.X,safeLiveCover.Y,safeLiveCover.Z,4.8f,18000,1.5f,0,0f);
                     Game.LogTrivial("AdvancedK9 Callouts: streamed environmental cover confirmed and fugitive hiding task refreshed.");
                 }
             }
@@ -337,9 +349,9 @@ namespace AdvancedK9.Callouts
                     }
                 }
 
-                bool injured=!Subject.IsDead&&(Subject.Health<Subject.MaxHealth-5||Subject.IsRagdoll);
-                bool custody=SubjectInCustody();
                 bool confirmedDead=Subject.Health<=0&&NativeFunction.Natives.IS_PED_DEAD_OR_DYING<bool>(Subject,true);
+                bool custodyLease=!confirmedDead&&UpdateCustodyLease();
+                bool injured=!confirmedDead&&(Subject.Health<Subject.MaxHealth-5||Subject.IsRagdoll);
                 if(confirmedDead)
                 {
                     if(!_deathReported)
@@ -354,32 +366,24 @@ namespace AdvancedK9.Callouts
                 {
                     if(ProcessPostApprehensionMedical("")){_phase=FugitivePhase.Medical;_phaseStarted=Game.GameTime;}
                 }
+                else if(custodyLease)
+                {
+                    _fleeActive=false;_outcomeTaskIssued=true;
+                    if(!_custodyConfirmed)
+                    {
+                        _custodyConfirmed=true;_phase=FugitivePhase.Custody;_phaseStarted=Game.GameTime;
+                        Game.DisplayNotification("~b~Custody confirmed:~s~ the active arrest provider owns the suspect. AdvancedK9 will not replace its arrest, medical, or transport tasks.");
+                        Game.LogTrivial("AdvancedK9 Callouts: FugitiveTrail phase -> Custody; external provider lease active and all AdvancedK9 suspect task/health writes are blocked.");
+                    }
+                    if(NativeFunction.Natives.IS_PED_IN_ANY_VEHICLE<bool>(Subject,false)&&Game.GameTime-_phaseStarted>3000)
+                    {
+                        _phase=FugitivePhase.Complete;Resolve("~g~Fugitive Trail complete: external-provider custody and prisoner transport confirmed.");
+                    }
+                }
                 else if(SeriousMedicalTransport&&MedicalResponseComplete)
                 {
                     _phase=FugitivePhase.Complete;
                     Resolve("~g~Fugitive Trail complete: EMS transported the seriously injured suspect under LSPDFR custody.");
-                }
-                else if(custody)
-                {
-                    if(!_custodyConfirmed)
-                    {
-                        _custodyConfirmed=true;_phase=FugitivePhase.Custody;_phaseStarted=Game.GameTime;
-                        Subject.Health=System.Math.Max(Subject.Health,System.Math.Max(100,Subject.MaxHealth*3/4));
-                        Subject.IsInvincible=false;
-                        Game.DisplayNotification("~b~Custody confirmed:~s~ LSPDFR owns the arrest state. The on-scene patrol unit is assigned as the single transport owner.");
-                        Game.LogTrivial("AdvancedK9 Callouts: FugitiveTrail phase -> Custody; on-scene patrol transport authorized after medical clearance.");
-                    }
-                    if(NativeFunction.Natives.IS_PED_IN_ANY_VEHICLE<bool>(Subject,false))
-                    {
-                        Subject.IsInvincible=false;
-                        if(_phase!=FugitivePhase.Transport){_phase=FugitivePhase.Transport;_phaseStarted=Game.GameTime;Game.LogTrivial("AdvancedK9 Callouts: FugitiveTrail phase -> Transport (LSPDFR vehicle handoff confirmed).");}
-                        else if(Game.GameTime-_phaseStarted>3000){_phase=FugitivePhase.Complete;Resolve("~g~Fugitive Trail complete: LSPDFR custody and prisoner transport confirmed.");}
-                    }
-                    else if((!MedicalResponseStarted||MedicalResponseComplete)&&!_transportStarted)
-                    {
-                        _transportStarted=true;_phase=FugitivePhase.Transport;_phaseStarted=Game.GameTime;
-                        BeginAutomaticTransport("~g~Fugitive Trail complete: EMS clearance and on-scene patrol transport confirmed.");
-                    }
                 }
                 else if(Game.GameTime-_locatedAt>600000)Resolve("~o~Fugitive Trail concluded after suspect location.");
             }
