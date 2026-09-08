@@ -76,21 +76,13 @@ namespace AdvancedK9.Callouts
                 Game.LogTrivial("AdvancedK9 Callouts: "+GetType().Name+" primary scene calculation failed; using safe fallback: "+ex);
                 return false;
             }
-            SceneVehicle=SpawnVehicle("primo",Scene,_sceneHeading);
-            if(SceneVehicle==null||!SceneVehicle.Exists())return false;
-            SceneVehicle.IsPersistent=true;
-            if(!StagePoliceScene())return false;
-            ConfigureTrafficStopScene();
-            ControlSceneTraffic();
-            Game.LogTrivial("AdvancedK9 Callouts: validated open-air roadside traffic-stop scene selected; garage and interior-style starts are not used.");
-            return PoliceVehicle!=null&&PoliceVehicle.Exists()&&OfficerOne!=null&&OfficerOne.Exists()&&OfficerTwo!=null&&OfficerTwo.Exists();
+            Game.LogTrivial("AdvancedK9 Callouts: roadside callout location reserved; scene entities will spawn only after acceptance and trail planning.");
+            return true;
         }
 
         public override bool OnCalloutAccepted()
         {
             StartedAt=Game.GameTime;_phaseStarted=StartedAt;_phase=FugitivePhase.EnRoute;_outcome=Random.Next(4);
-            if(!StagePoliceScene())return false;
-            ConfigureTrafficStopScene();
             float angle=Random.Next(360);float distance=Random.Next(65,96);Vector3 trailEnd=Scene;
             for(int attempt=0;attempt<10;attempt++)
             {
@@ -124,11 +116,22 @@ namespace AdvancedK9.Callouts
             Vector3 hidingPosition;
             if(!TryFindExistingCover(coverPosition,out hidingPosition))
             {
-                Game.LogTrivial("AdvancedK9 Callouts: rejected FugitiveTrail scene because no existing environmental cover was available near the pedestrian trail end.");
-                return false;
+                // Distant world props are not streamed before the player reaches the callout.
+                // Keep the validated off-road endpoint instead of aborting a valid callout.
+                hidingPosition=coverPosition;
+                Game.LogTrivial("AdvancedK9 Callouts: distant cover is not streamed yet; using the validated off-road hiding endpoint and resolving live cover on approach.");
             }
+            else Game.LogTrivial("AdvancedK9 Callouts: existing environmental cover reserved near the pedestrian trail end.");
             _hidingPosition=hidingPosition;
-            Game.LogTrivial("AdvancedK9 Callouts: guaranteed physical cover staged off the roadway; subject position is shielded from the scene side.");
+
+            SceneVehicle=SpawnVehicle("primo",Scene,_sceneHeading);
+            if(SceneVehicle==null||!SceneVehicle.Exists())return false;
+            SceneVehicle.IsPersistent=true;
+            if(!StagePoliceScene())return false;
+            ConfigureTrafficStopScene();
+            ControlSceneTraffic();
+            Game.LogTrivial("AdvancedK9 Callouts: accepted roadside scene spawned after successful trail validation.");
+
             Vector3 escapeStart=new Vector3(Scene.X+dx/length*48f-dy/length*8f,Scene.Y+dy/length*48f+dx/length*8f,Scene.Z);
             Subject=SpawnPed("a_m_m_hillbilly_01",escapeStart,Random.Next(360));if(Subject==null)return false;
             Subject.MaxHealth=500;Subject.Health=500;Subject.BlockPermanentEvents=true;Subject.IsPersistent=true;
