@@ -1765,7 +1765,7 @@ namespace AdvancedK9
                     _controlledBiteTarget=target;
                     _controlledBiteHoldUntil=Game.GameTime+120000;
                     _controlledBiteReleased=false;
-                    _state=K9State.Staying;
+                    _state=K9State.HoldingSuspect;
                     NativeFunction.Natives.TASK_TURN_PED_TO_FACE_ENTITY(_dog,target,-1);
                     Game.DisplayNotification("~g~Controlled K9 bite and takedown complete.~s~ The suspect is injured and held down. Command RELEASE before arrest and medical treatment.");
                     _pr.RecordApprehension(target);
@@ -1788,6 +1788,7 @@ namespace AdvancedK9
             }
             _controlledBiteTarget=null;_controlledBiteHoldUntil=0;
             Follow();
+            _state=K9State.MedicalStandby;
         }
         private static bool IsTargetComplyingOrRestrained(Ped target)
         {
@@ -2063,7 +2064,7 @@ namespace AdvancedK9
 
         private bool PatrolCommandSucceeded(K9Command command)
         {
-            if(command==K9Command.Follow||command==K9Command.Heel||command==K9Command.Recall||command==K9Command.WhistleRecall||command==K9Command.HandSignal||command==K9Command.Release||command==K9Command.ExitVehicle)return _state==K9State.Following||_state==K9State.Leashed;
+            if(command==K9Command.Follow||command==K9Command.Heel||command==K9Command.Recall||command==K9Command.WhistleRecall||command==K9Command.HandSignal||command==K9Command.Release||command==K9Command.ExitVehicle)return _state==K9State.Following||_state==K9State.Leashed||_state==K9State.MedicalStandby;
             if(command==K9Command.Sit)return _state==K9State.Sitting;
             if(command==K9Command.LieDown)return _state==K9State.Lying;
             if(command==K9Command.Stay)return _state==K9State.Staying;
@@ -2367,7 +2368,7 @@ namespace AdvancedK9
             _hud.Update(new GlassTacticalHud.Snapshot{Visible=_profile.HudMode!=0,Collapsed=collapsed,ShowPortrait=_profile.HudShowPortrait,CircularPortrait=_profile.HudPortraitShape==0,ShowState=_profile.HudShowState,ShowHealth=_profile.HudShowHealth,ShowStamina=_profile.HudShowStamina,ShowDistance=_profile.HudShowDistance&&DogEntityExists(),ShowCommand=_profile.HudShowCommand,ShowBehavior=_profile.HudShowBehavior,ShowSearchProgress=_profile.HudSearchProgress,ShowFood=_profile.HudShowFood,ShowWater=_profile.HudShowWater,ShowCertifications=_profile.HudShowCertifications,ShowTrust=_profile.HudShowTrust,ShowTraining=_profile.HudShowTraining,ShowInjury=_profile.HudShowInjury,ShowVoice=_profile.HudShowVoice,X=_profile.HudX,Y=_profile.HudY,Scale=_profile.HudScale,Opacity=_profile.HudOpacity,Distance=distance,Health=_profile.Health,Stamina=_profile.Stamina,Food=_profile.Food,Water=_profile.Water,Trust=_trust.Level,TrainingLevel=_profile.TrainingLevel,TrainingXp=_profile.TrainingLevelProgress,TrainingRequirement=_profile.CurrentTrainingRequirement,SearchProgress=searchProgress,Coat=_profile.CoatVariation,Vest=_profile.VestIndex,VestTexture=_profile.VestTexture,Name=_profile.Name,State=displayState,Command=_hudCommand,Behavior=hudSearching?"SEARCHING":HudBehavior(),SearchLabel=search,Alert=alert,PortraitFile=_profile.PortraitFile,Breed=_profile.Breed,Model=_profile.ModelName,AppearanceKey=_profile.CoatVariation+":"+_profile.VestIndex+":"+_profile.VestTexture,Certifications=Certifications(),Injury=_profile.Injury,Voice=_voiceStatus,Metric=_profile.HudMetricDistance});
             if(_camera.Active&&DogExists()){float d=_dog.DistanceTo(Game.LocalPlayer.Character);NativeFunction.Natives.DRAW_RECT(.5f,.91f,.52f,.09f,0,0,0,180);DrawText("K9 CAM  GPS "+_dog.Position.X.ToString("0")+","+_dog.Position.Y.ToString("0")+"  HDG "+HeadingCardinal(_dog.Heading)+"  HANDLER "+d.ToString("0.0")+"m",.25f,.875f,.31f);DrawText("STATE "+_state+"  HP "+_profile.Health+"  STA "+_profile.Stamina+"  H2O "+_profile.Water,.25f,.91f,.27f);}
         }
-        private string HudBehavior(){if(_carryingDog)return _downed?"EVACUATION — FIRST AID":"EVACUATION";if(_downed)return "NEEDS FIRST AID";if(!_deployed)return "INACTIVE";switch(_state){case K9State.Following:return "FOLLOWING";case K9State.Heeling:return "AT HEEL";case K9State.Searching:return "SEARCHING";case K9State.Tracking:return "TRACKING";case K9State.Apprehending:return "DEPLOYED";case K9State.InVehicle:return "SECURED";case K9State.Leashed:return "LEASHED";default:return _state.ToString().ToUpperInvariant();}}
+        private string HudBehavior(){if(_carryingDog)return _downed?"EVACUATION — FIRST AID":"EVACUATION";if(_downed)return "NEEDS FIRST AID";if(!_deployed)return "INACTIVE";switch(_state){case K9State.Following:return "FOLLOWING";case K9State.Heeling:return "AT HEEL";case K9State.Searching:return "SEARCHING";case K9State.Tracking:return "TRACKING";case K9State.Apprehending:return "APPREHENDING";case K9State.HoldingSuspect:return "HOLDING SUSPECT";case K9State.MedicalStandby:return "MEDICAL STANDBY";case K9State.InVehicle:return "SECURED";case K9State.Leashed:return "LEASHED";default:return _state.ToString().ToUpperInvariant();}}
         private void SetHudAlert(string result){_hudAlert=result??"";_hudAlertUntil=Game.GameTime+(uint)_profile.HudAlertDuration;}
         private static void DrawStatusBar(string label,int value,float x,float y,float width,int r,int g,int b){DrawText(label+" "+value+"%",x,y-.015f,.22f);NativeFunction.Natives.DRAW_RECT(x+width/2,y+.012f,width,.009f,32,40,48,235);float fill=width*Math.Max(0,Math.Min(100,value))/100f;if(fill>0)NativeFunction.Natives.DRAW_RECT(x+fill/2,y+.012f,fill,.009f,r,g,b,255);}
         private static string HeadingCardinal(float h){h=(h%360+360)%360;return h<22.5f||h>=337.5f?"N":h<67.5f?"NE":h<112.5f?"E":h<157.5f?"SE":h<202.5f?"S":h<247.5f?"SW":h<292.5f?"W":"NW";}
