@@ -199,12 +199,31 @@ namespace AdvancedK9.Callouts
         protected void DispatchUpdate(string message,string scannerAudio,Vector3 position)
         {
             Game.DisplayNotification("~b~Dispatch:~s~ "+message);
+            PublishCalloutInterfaceMessage(message);
             if(!string.IsNullOrWhiteSpace(scannerAudio))
             {
                 try{Functions.PlayScannerAudioUsingPosition(scannerAudio,position);}
                 catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: scanner update contained: "+ex.Message);}
             }
             Game.LogTrivial("AdvancedK9 Callouts: dispatch incident update ["+ContextId+"]: "+message);
+        }
+
+        private void PublishCalloutInterfaceMessage(string message)
+        {
+            try
+            {
+                var assembly=System.AppDomain.CurrentDomain.GetAssemblies().FirstOrDefault(a=>
+                    string.Equals(a.GetName().Name,"CalloutInterfaceAPI",StringComparison.OrdinalIgnoreCase));
+                if(assembly==null)return;
+                var type=assembly.GetType("CalloutInterfaceAPI.Functions",false);
+                if(type==null)return;
+                var method=type.GetMethods(System.Reflection.BindingFlags.Public|System.Reflection.BindingFlags.Static)
+                    .FirstOrDefault(m=>m.Name=="SendMessage"&&m.GetParameters().Length==2);
+                if(method==null)return;
+                method.Invoke(null,new object[]{this,message});
+                Game.LogTrivial("AdvancedK9 Callouts: incident narrative published through CalloutInterface for NexusDispatch/MDT consumption.");
+            }
+            catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: CalloutInterface incident update contained: "+ex.Message);}
         }
 
         protected bool TryResolveSafePedPosition(Vector3 requested,out Vector3 safe)
@@ -306,6 +325,16 @@ namespace AdvancedK9.Callouts
             AdvancedK9Api.SendCommand("AssignScent",ContextId,HandleOf(target),"Ped",Scene.X,Scene.Y,Scene.Z,details,target.Position.X,target.Position.Y,target.Position.Z);
             BeginSupportTrackingFiber();
             Game.DisplayNotification("~b~AdvancedK9 callout:~s~ preserved vehicle scent is ready. Command Rex to COLLECT SCENT or TRACK beside the abandoned vehicle.");
+        }
+
+        protected void AssignCalloutScent(Ped target,Vector3 stableTargetPosition,string details)
+        {
+            if(ApiRequested||target==null||!target.Exists())return;
+            ApiRequested=true;
+            AdvancedK9Api.SendCommand("AssignScent",ContextId,HandleOf(target),"Ped",Scene.X,Scene.Y,Scene.Z,details,stableTargetPosition.X,stableTargetPosition.Y,stableTargetPosition.Z);
+            BeginSupportTrackingFiber();
+            Game.DisplayNotification("~b~AdvancedK9 callout:~s~ the preserved driver-seat scent is viable for this response. Deploy Rex beside the abandoned vehicle and command TRACK.");
+            Game.LogTrivial("AdvancedK9 Callouts: preserved scent published on handler arrival with stable endpoint "+stableTargetPosition+"; travel time does not age the callout article.");
         }
 
         protected void AssignCalloutScent(Ped target,Vector3 collectionPosition,string details,string instruction)

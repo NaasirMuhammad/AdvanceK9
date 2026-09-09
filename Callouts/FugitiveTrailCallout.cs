@@ -3,10 +3,11 @@ using LSPD_First_Response.Mod.API;
 using LSPD_First_Response.Mod.Callouts;
 using Rage;
 using Rage.Native;
+using CalloutInterfaceAPI;
 
 namespace AdvancedK9.Callouts
 {
-    [CalloutInfo("AdvancedK9: Fugitive Trail",CalloutProbability.Medium)]
+    [CalloutInterface("AdvancedK9: Fugitive Trail",CalloutProbability.Medium,"Failed traffic stop. Driver abandoned the vehicle and fled on foot. Responding K9 unit will collect preserved driver-seat scent and track the fugitive.","Code 2","LSPD")]
     public sealed class FugitiveTrailCallout : AdvancedK9Callout
     {
         private enum FugitivePhase{EnRoute,AwaitingScent,Tracking,Located,Medical,Custody,Transport,Complete}
@@ -43,6 +44,8 @@ namespace AdvancedK9.Callouts
         private bool _trackingDispatchSent;
         private bool _locatedDispatchSent;
         private uint _deathCandidateSince;
+        private uint _coverSearchStarted;
+        private bool _activeEscapeFallback;
 
         private static readonly Vector3[] RoadsideScenes={
             new Vector3(-565f,-675f,33f),new Vector3(-1310f,-1261f,4f),new Vector3(-1430f,-590f,30f),
@@ -62,7 +65,7 @@ namespace AdvancedK9.Callouts
             for(int i=0;i<RoadsideScenes.Length;i++)
             {
                 if(i==_lastRoadsideScene||FailedRoadsideScenes.Contains(i))continue;
-                if(i==3||i==9||i==12)continue;
+                if(i==3||i==7||i==9||i==12)continue;
                 float distance=player.DistanceTo(RoadsideScenes[i]);
                 if(distance<180f||distance>2200f)continue;
                 int interior=NativeFunction.Natives.GET_INTERIOR_AT_COORDS<int>(RoadsideScenes[i].X,RoadsideScenes[i].Y,RoadsideScenes[i].Z);
@@ -74,7 +77,7 @@ namespace AdvancedK9.Callouts
             if(eligible.Count==0)
             {
                 FailedRoadsideScenes.Clear();
-                for(int i=0;i<RoadsideScenes.Length;i++)if(i!=3&&i!=9&&i!=12&&i!=_lastRoadsideScene)eligible.Add(i);
+                for(int i=0;i<RoadsideScenes.Length;i++)if(i!=3&&i!=7&&i!=9&&i!=12&&i!=_lastRoadsideScene)eligible.Add(i);
             }
             if(eligible.Count==0)return false;
             int best=eligible[Random.Next(eligible.Count)];
@@ -88,6 +91,13 @@ namespace AdvancedK9.Callouts
                 if(NativeFunction.Natives.GET_ROAD_BOUNDARY_USING_HEADING<bool>(stagedScene.X,stagedScene.Y,stagedScene.Z,_sceneHeading,out curb)&&curb.DistanceTo(stagedScene)<24f)
                 {
                     stagedScene=curb;
+                    Vector3 verifiedRoad=World.GetNextPositionOnStreet(stagedScene);
+                    if(verifiedRoad.DistanceTo(stagedScene)>8f||!NativeFunction.Natives.IS_POINT_ON_ROAD<bool>(verifiedRoad.X,verifiedRoad.Y,verifiedRoad.Z,0))
+                    {
+                        FailedRoadsideScenes.Add(best);
+                        Game.LogTrivial("AdvancedK9 Callouts: scene "+best+" curb resolved into a driveway, parking apron, or private lot and was rejected.");
+                        return PrepareRoadsideScene();
+                    }
                     Game.LogTrivial("AdvancedK9 Callouts: curb boundary resolved for scene "+best+" at "+stagedScene+" heading "+_sceneHeading+".");
                 }
                 else
@@ -276,10 +286,12 @@ namespace AdvancedK9.Callouts
             {
                 _sceneBriefed=true;_phase=FugitivePhase.AwaitingScent;_phaseStarted=Game.GameTime;
                 Game.DisplayNotification("~b~On-scene officer:~s~ The suspect fled on foot. I preserved their scent from the driver seat.~n~~y~Deploy Rex beside the abandoned vehicle and command TRACK.");
+                if(OfficerOne!=null&&OfficerOne.Exists())NativeFunction.Natives.TASK_TURN_PED_TO_FACE_ENTITY(OfficerOne,player,5000);
+                DispatchUpdate("Contact officer briefing: adult male in work clothes, last seen fleeing away from the stopped vehicle. The driver-seat scent article remains preserved.","OFFICERS_REPORT SUSPECT_LAST_SEEN",Scene);
             }
-            if(!ApiRequested&&_sceneBriefed&&_coverConfirmed)
+            if(!ApiRequested&&_sceneBriefed)
             {
-                AssignCalloutScent(Subject,"preserved scent article from abandoned vehicle driver seat");
+                AssignCalloutScent(Subject,_hidingPosition,"preserved scent article from abandoned vehicle driver seat; retained for full accepted-callout lifecycle");
                 if(ApiRequested){ClearSceneRoute();Game.LogTrivial("AdvancedK9 Callouts: fugitive vehicle scent source registered; awaiting handler command.");}
             }
 
@@ -299,6 +311,7 @@ namespace AdvancedK9.Callouts
 
             if(!_suspectLocated&&!_coverConfirmed&&player.DistanceTo(_hidingPosition)<180f&&Game.GameTime>=_nextCoverSearch)
             {
+                if(_coverSearchStarted==0)_coverSearchStarted=Game.GameTime;
                 _nextCoverSearch=Game.GameTime+4000;
                 Vector3 liveCover;
                 Vector3 safeLiveCover;
@@ -323,6 +336,19 @@ namespace AdvancedK9.Callouts
                         NativeFunction.Natives.TASK_SEEK_COVER_FROM_POS(Subject,Scene.X,Scene.Y,Scene.Z,12000,false);
                         Game.LogTrivial("AdvancedK9 Callouts: fugitive has no valid concealment yet and will keep moving instead of standing in the roadway.");
                     }
+                }
+                if(!_coverConfirmed&&_coverSearchStarted!=0&&Game.GameTime-_coverSearchStarted>=25000)
+                {
+                    _activeEscapeFallback=true;_coverConfirmed=true;
+                    Vector3 safeEndpoint;
+                    if(TryResolveSafePedPosition(_hidingPosition,out safeEndpoint))
+                    {
+                        _hidingPosition=safeEndpoint;
+                        if(player.DistanceTo(Subject)>55f)Subject.Position=safeEndpoint;
+                        else NativeFunction.Natives.TASK_FOLLOW_NAV_MESH_TO_COORD(Subject,safeEndpoint.X,safeEndpoint.Y,safeEndpoint.Z,5.8f,12000,2f,0,0f);
+                    }
+                    Game.LogTrivial("AdvancedK9 Callouts: bounded cover search exhausted; scenario converted to an active-escape endpoint so tracking can continue without false concealment.");
+                    DispatchUpdate("Updated last known: the fugitive did not remain hidden and may still be moving. Continue the K9 track from the preserved vehicle scent.","SUSPECT_LAST_SEEN",Subject.Position);
                 }
             }
 
@@ -354,7 +380,7 @@ namespace AdvancedK9.Callouts
                 _suspectLocated=true;_locatedAt=Game.GameTime;_phase=FugitivePhase.Located;_phaseStarted=Game.GameTime;
                 EndSupportTracking();
                 SubjectBlip=Subject.AttachBlip();SubjectBlip.IsRouteEnabled=true;Subject.IsInvincible=false;
-                _verbalGraceUntil=Game.GameTime+45000;
+                _verbalGraceUntil=Game.GameTime+(_activeEscapeFallback?8000u:45000u);
                 ControlApprehensionTraffic(Subject.Position);
                 SupportOfficersContainSubject();
                 Game.DisplayNotification("~o~Rex alerted on the hidden fugitive.~s~ Tracking is complete. Give verbal commands through NPCI; the suspect may surrender, flee, or resist.");
@@ -465,6 +491,12 @@ namespace AdvancedK9.Callouts
                     if(NativeFunction.Natives.IS_PED_IN_ANY_VEHICLE<bool>(Subject,false)&&Game.GameTime-_phaseStarted>3000)
                     {
                         _phase=FugitivePhase.Complete;Resolve("~g~Fugitive Trail complete: external-provider custody and prisoner transport confirmed.");
+                    }
+                    else if(!_transportStarted&&Game.GameTime-_phaseStarted>25000)
+                    {
+                        _transportStarted=true;_phase=FugitivePhase.Transport;_phaseStarted=Game.GameTime;
+                        Game.LogTrivial("AdvancedK9 Callouts: external custody remained stable but no provider transport materialized; on-scene patrol fallback transport started.");
+                        BeginAutomaticTransport("~g~Fugitive Trail complete: prisoner transferred to the on-scene patrol transport unit.");
                     }
                 }
                 else if(SeriousMedicalTransport&&MedicalResponseComplete)
