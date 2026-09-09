@@ -44,6 +44,7 @@ namespace AdvancedK9.Callouts
         private uint _custodyLeaseStarted;
         private bool _custodyLeaseActive;
         private bool _healthyCustodyProtection;
+        private uint _nextEmergencyLightRefresh;
         protected bool MedicalResponseStarted{get{return _medicalResponseStarted;}}
         protected bool MedicalResponseComplete;
         protected bool SeriousMedicalTransport;
@@ -179,6 +180,31 @@ namespace AdvancedK9.Callouts
                 NativeFunction.Natives.TASK_ACHIEVE_HEADING(OfficerTwo,heading,1500);
             }
             Game.LogTrivial("AdvancedK9 Callouts: contact and cover officers assigned scene-security roles; passive phone scenarios disabled.");
+        }
+
+        protected void MaintainPoliceEmergencyLights()
+        {
+            if(PoliceVehicle==null||!PoliceVehicle.Exists()||Game.GameTime<_nextEmergencyLightRefresh)return;
+            _nextEmergencyLightRefresh=Game.GameTime+500;
+            try
+            {
+                PoliceVehicle.IsPersistent=true;
+                NativeFunction.Natives.SET_VEHICLE_HAS_MUTED_SIRENS(PoliceVehicle,true);
+                NativeFunction.Natives.SET_VEHICLE_SIREN(PoliceVehicle,true);
+                NativeFunction.Natives.SET_VEHICLE_LIGHTS(PoliceVehicle,2);
+            }
+            catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: emergency-light maintenance contained: "+ex.Message);}
+        }
+
+        protected void DispatchUpdate(string message,string scannerAudio,Vector3 position)
+        {
+            Game.DisplayNotification("~b~Dispatch:~s~ "+message);
+            if(!string.IsNullOrWhiteSpace(scannerAudio))
+            {
+                try{Functions.PlayScannerAudioUsingPosition(scannerAudio,position);}
+                catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: scanner update contained: "+ex.Message);}
+            }
+            Game.LogTrivial("AdvancedK9 Callouts: dispatch incident update ["+ContextId+"]: "+message);
         }
 
         protected bool TryResolveSafePedPosition(Vector3 requested,out Vector3 safe)
@@ -470,7 +496,7 @@ namespace AdvancedK9.Callouts
             {
                 var cover=World.GetAllObjects().Where(o=>o.Exists()&&o.DistanceTo(center)<28f&&o.DistanceTo(Scene)>45f).OrderBy(o=>o.DistanceTo(center)).FirstOrDefault(o=>{
                     string name=(o.Model.Name??"").ToLowerInvariant();
-                    return name.Contains("bush")||name.Contains("hedge")||name.Contains("tree")||name.Contains("planter")||name.Contains("pillar")||name.Contains("column")||name.Contains("bench")||name.Contains("dumpster")||name.Contains("wall")||name.Contains("fence")||name.Contains("crate")||name.Contains("container");
+                    return name.Contains("bush")||name.Contains("hedge")||name.Contains("tree")||name.Contains("planter")||name.Contains("pillar")||name.Contains("column")||name.Contains("dumpster")||name.Contains("wall")||name.Contains("fence")||name.Contains("crate")||name.Contains("container");
                 });
                 if(cover==null||!cover.Exists())return false;
                 Vector3 objectPosition=cover.Position;float dx=objectPosition.X-Scene.X,dy=objectPosition.Y-Scene.Y;float length=(float)Math.Sqrt(dx*dx+dy*dy);
