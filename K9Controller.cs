@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 52126)
-Total output lines: 2511
-
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -1181,7 +1178,116 @@ namespace AdvancedK9
             {
                 var pursuit=CurrentPursuitSuspect();if(pursuit!=null&&pursuit.Exists()&&!pursuit.IsDead){target=pursuit;sample=NewScentSample(ScentArticleType.LastKnownLocationPad,"last-known location",handler.Position.DistanceTo(pursuit.Position)<12f?"current last-known point":"handler-placed location pad");}
             }
-            if(target==nu…2126 tokens truncated…            Sit();
+            if(target==null)
+            {
+                Game.DisplayNotification("~y~No unique track subject identified.~s~~n~Aim at the suspect, their recently occupied vehicle, or an owner-associated article, then collect scent.");
+                return;
+            }
+            if(!_profile.UseScentBag()){Game.DisplayNotification("~r~No clean scent bags. Restock equipment.");return;}
+            _scentTarget=target;_scentCollectedAt=Game.GameTime;_scentRainAtCollection=NativeFunction.Natives.GET_RAIN_LEVEL<float>();
+            if(sample==null)sample=NewScentSample(ScentArticleType.DirectPerson,"person","direct person scent");_activeScentSample=sample;_activeScentSource=sample.Source+" — "+sample.CollectionZone;_trailLost=false;
+            K9IncidentLog.Write(_profile.Name,"Scent article","Collected "+ScentSample.Label(sample.Type)+" from "+sample.CollectionZone+"; base quality "+sample.BaseQuality+"%",target.Position);
+            Game.DisplayNotification("~g~"+ScentSample.Label(sample.Type)+" bagged.~s~~n~Source: "+sample.CollectionZone+" • base quality "+sample.BaseQuality+"%~n~Track subject locked for "+_profile.Name+".");
+        }
+
+        private ScentSample NewScentSample(ScentArticleType type,string source,string zone){return new ScentSample{Type=type,Source=source,CollectionZone=zone,BaseQuality=ScentSample.QualityFor(type),CollectedAt=Game.GameTime,RainAtCollection=NativeFunction.Natives.GET_RAIN_LEVEL<float>()};}
+
+        private ScentSample BuildVehicleScentSample(Vehicle vehicle,Ped handler)
+        {
+            string[] bones={"door_dside_f","door_pside_f","door_dside_r","door_pside_r"};string[] labels={"driver-front","passenger-front","driver-rear","passenger-rear"};int[] doors={0,1,2,3};
+            int best=-1;float distance=float.MaxValue;for(int i=0;i<bones.Length;i++){int bone=NativeFunction.Natives.GET_ENTITY_BONE_INDEX_BY_NAME<int>(vehicle,bones[i]);if(bone<0)continue;Vector3 p=NativeFunction.Natives.GET_WORLD_POSITION_OF_ENTITY_BONE<Vector3>(vehicle,bone);float d=p.DistanceTo(handler.Position);if(d<distance){distance=d;best=i;}}
+            if(best<0)best=0;float doorAngle=0f;try{doorAngle=NativeFunction.Natives.GET_VEHICLE_DOOR_ANGLE_RATIO<float>(vehicle,doors[best]);}catch{}
+            bool seat=doorAngle>.12f;var type=seat?ScentArticleType.VehicleSeat:ScentArticleType.VehicleDoor;string zone=labels[best]+(seat?" seat":" exterior door/handle");return NewScentSample(type,"vehicle "+vehicle.Model.Name,zone);
+        }
+
+        private Ped FindArticleScentSubject(Rage.Object article)
+        {
+            if(article==null||!article.Exists())return null;
+            var handler=Game.LocalPlayer.Character;
+            var pursuit=CurrentPursuitSuspect();
+            if(pursuit!=null&&pursuit.Exists()&&!pursuit.IsDead)return pursuit;
+            var candidates=World.GetAllPeds().Where(p=>p.Exists()&&p!=handler&&p!=_dog&&!p.IsDead&&!LspdfrBridge.IsPedCop(p)&&p.DistanceTo(article)<=8f).OrderBy(p=>p.DistanceTo(article)).Take(2).ToList();
+            if(candidates.Count==1)return candidates[0];
+            if(candidates.Count>1)Game.DisplayNotification("~y~The article carries mixed nearby scent.~s~~n~Aim at the correct person, or collect it after the area clears.");
+            else Game.DisplayNotification("~y~No subject can be associated with that article.~s~~n~Use an article near its owner or during an active pursuit.");
+            return null;
+        }
+
+        private Ped FindVehicleScentSubject(Vehicle vehicle)
+        {
+            if(vehicle==null||!vehicle.Exists())return null;
+            var handler=Game.LocalPlayer.Character;
+            var candidates=new List<Ped>();
+            foreach(var ped in World.GetAllPeds())
+            {
+                if(ped==null||!ped.Exists()||ped==handler||ped==_dog||ped.IsDead||LspdfrBridge.IsPedCop(ped))continue;
+                try
+                {
+                    var lastVehicle=NativeFunction.Natives.GET_VEHICLE_PED_IS_IN<Vehicle>(ped,true);
+                    if(lastVehicle!=null&&lastVehicle.Exists()&&lastVehicle.Handle==vehicle.Handle)candidates.Add(ped);
+                }
+                catch{}
+            }
+            if(candidates.Count==1)return candidates[0];
+            if(candidates.Count>1)
+            {
+                Game.DisplayNotification("~y~Multiple recent occupants detected.~s~~n~Aim directly at the person to identify the correct track subject.");
+                return null;
+            }
+            Game.DisplayNotification("~y~No recent non-officer occupant is available for that vehicle.~s~~n~Collect vehicle scent before the fleeing ped despawns.");
+            return null;
+        }
+
+        private void Search(bool vehicleOnly=false,DetectionSpecialty specialty=DetectionSpecialty.General)
+        {
+            if(specialty!=DetectionSpecialty.General&&!_profile.HasSpecialty(specialty)){Game.DisplayNotification("~y~K9 is not certified for "+SpecialtyLabel(specialty)+" detection.~s~~n~Complete that specialty course at the academy.");return;}
+            var officer = Game.LocalPlayer.Character;
+            Entity target = FindCompatibilitySearchTarget(officer,vehicleOnly);
+            if (target == null)
+            {
+                Game.DisplayNotification("~y~No nearby pedestrian or vehicle to search.");
+                return;
+            }
+            if(_config.ExplosiveSearchLockout&&_explosiveSearchLockouts.Contains(target.Handle)){Game.DisplayNotification("~r~Explosive safety lockout active.~s~~n~Do not redeploy the K9 near the marked device. Maintain the perimeter and request bomb squad.");return;}
+            _lastSearchAlertPosition=target.Position;_lastSearchAlertZone=target is Vehicle?"vehicle exterior":"subject / search center";
+            _state = K9State.Searching;
+            _hudSearchLabel=target is Vehicle?"VEHICLE SEARCH":"AREA SEARCH";
+            _hudSearchProgress=0;
+            _dog.Tasks.Clear();
+            if(target is Vehicle)
+            {
+                if(!SearchVehiclePerimeter((Vehicle)target)){Follow();return;}
+            }
+            else
+            {
+                _dog.Tasks.FollowNavigationMeshToPosition(target.GetOffsetPosition(new Vector3(0f,-1f,0f)),target.Heading,2f).WaitForCompletion(9000);
+                if(!DogExists()||!target.Exists()){Follow();return;}
+                for(var i=0;i<3;i++)
+                {
+                    _hudSearchProgress=(i*100)/3;
+                    var sniffPoint=target.GetOffsetPosition(new Vector3(i==0?-.8f:i==1?.8f:0f,-.45f,0f));
+                    _dog.Tasks.FollowNavigationMeshToPosition(sniffPoint,target.Heading,1.2f).WaitForCompletion(2500);
+                    _lastSearchAlertPosition=sniffPoint;_lastSearchAlertZone=i==0?"left side":i==1?"right side":"rear / center";
+                    PlayDogAnimation("creatures@rottweiler@indication@","indicate_low",650,0);
+                    GameFiber.Wait(700);
+                }
+            }
+            var compatibility=_pr.GetSearchResult(target,specialty,_profile.NarcoticsCertified,_profile.ExplosivesCertified,_profile.WeaponsCertified);
+            if(compatibility!=null&&compatibility.Inconclusive){SetHudAlert("INCONCLUSIVE — INVENTORY UNAVAILABLE");Sit();_hudSearchProgress=100;_hudSearchLabel="";Game.LogTrivial("AdvancedK9 search result: inconclusive on "+TargetLabel(target)+"; no positive or negative K9 indication was recorded.");return;}
+            var positive=compatibility!=null?compatibility.Positive:(_pr.IsAvailable?false:_random.NextDouble()<_config.PositiveChance);
+            var resultSpecialty=compatibility!=null&&compatibility.Specialty!=DetectionSpecialty.General?compatibility.Specialty:positive&&specialty==DetectionSpecialty.General?CertifiedGeneralSearchSpecialty():specialty;
+            var presentedOdors=compatibility!=null&&compatibility.Odors.Count>0?compatibility.Odors.Distinct().ToList():positive&&resultSpecialty!=DetectionSpecialty.General?new List<DetectionSpecialty>{resultSpecialty}:new List<DetectionSpecialty>();
+            if (positive && _random.NextDouble() > _trust.DetectionReliability)
+            {
+                Game.DisplayNotification("~o~Uncertain K9 response.~s~ Build trust and repeat the search.");
+                Follow();
+                return;
+            }
+            if (positive)
+            {
+                string odorPresentation=string.Join(" + ",presentedOdors.Select(s=>SpecialtyLabel(s).ToUpperInvariant()));
+                SetHudAlert(odorPresentation);
+                Sit();
                 bool explosivePresent=presentedOdors.Contains(DetectionSpecialty.Explosives);
                 if(explosivePresent)
                 {
