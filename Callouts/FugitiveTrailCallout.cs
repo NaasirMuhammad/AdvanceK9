@@ -45,6 +45,7 @@ namespace AdvancedK9.Callouts
         private uint _deathCandidateSince;
         private uint _coverSearchStarted;
         private bool _activeEscapeFallback;
+        private bool _controlDispatchSent;
 
         private static readonly Vector3[] RoadsideScenes={
             new Vector3(-565f,-675f,33f),new Vector3(-1310f,-1261f,4f),new Vector3(-1430f,-590f,30f),
@@ -64,7 +65,7 @@ namespace AdvancedK9.Callouts
             for(int i=0;i<RoadsideScenes.Length;i++)
             {
                 if(i==_lastRoadsideScene||FailedRoadsideScenes.Contains(i))continue;
-                if(i==3||i==7||i==9||i==12)continue;
+                if(i==3||i==7||i==8||i==9||i==12)continue;
                 float distance=player.DistanceTo(RoadsideScenes[i]);
                 if(distance<180f||distance>2200f)continue;
                 int interior=NativeFunction.Natives.GET_INTERIOR_AT_COORDS<int>(RoadsideScenes[i].X,RoadsideScenes[i].Y,RoadsideScenes[i].Z);
@@ -76,7 +77,7 @@ namespace AdvancedK9.Callouts
             if(eligible.Count==0)
             {
                 FailedRoadsideScenes.Clear();
-                for(int i=0;i<RoadsideScenes.Length;i++)if(i!=3&&i!=7&&i!=9&&i!=12&&i!=_lastRoadsideScene)eligible.Add(i);
+                for(int i=0;i<RoadsideScenes.Length;i++)if(i!=3&&i!=7&&i!=8&&i!=9&&i!=12&&i!=_lastRoadsideScene)eligible.Add(i);
             }
             if(eligible.Count==0)return false;
             int best=eligible[Random.Next(eligible.Count)];
@@ -226,7 +227,7 @@ namespace AdvancedK9.Callouts
             _lastSafeSubjectPosition=escapeStart;
             _nextCoverSearch=Game.GameTime+3000;
             Game.LogTrivial("AdvancedK9 Callouts: fugitive trail constrained to a local outdoor 65-95 metre pedestrian search; live concealment will be confirmed after streaming.");
-            DispatchUpdate("Respond to a failed traffic stop. The driver abandoned the vehicle and fled on foot. Two patrol officers are holding the scene.","WE_HAVE CRIME_RESIST_ARREST IN_OR_ON_POSITION",Scene);
+            DispatchUpdate("CalloutAccepted","Failed traffic stop","Local patrol jurisdiction","Gray Primo stopped at curb with marked cruiser behind","Adult male in work clothes","Away from the driver side of the stopped vehicle","Unknown weapon status","Respond to a failed traffic stop. The driver abandoned the vehicle and fled on foot. Two patrol officers are holding the scene.","WE_HAVE CRIME_RESIST_ARREST IN_OR_ON_POSITION",Scene);
             RouteToScene("Respond to the failed traffic stop. The driver abandoned the stopped vehicle and fled on foot; officers preserved the driver-seat scent.");
             return base.OnCalloutAccepted();
         }
@@ -271,14 +272,14 @@ namespace AdvancedK9.Callouts
         {
             if(Finished||Subject==null||!Subject.Exists()){if(!Finished)Resolve("~r~Fugitive Trail ended: suspect unavailable.");return;}
             var player=Game.LocalPlayer.Character;
-            ControlLiveTraffic(Scene,42f);
-            if(_suspectLocated)ControlLiveTraffic(Subject.Position,48f);
+            if(player.DistanceTo(Scene)<80f)ControlLiveTraffic(Scene,24f);
+            if(_suspectLocated&&player.DistanceTo(Subject)<65f)ControlLiveTraffic(Subject.Position,22f);
             MaintainPoliceEmergencyLights();
 
             if(!_approachDispatchSent&&player.DistanceTo(Scene)<120f)
             {
                 _approachDispatchSent=true;
-                DispatchUpdate("On-scene units report an adult male in work clothes fled from the driver seat. Use the preserved vehicle scent and search away from the traffic stop.","UNITS_RESPOND_CODE_2",Scene);
+                DispatchUpdate("ApproachingScene","Failed traffic stop","Local patrol jurisdiction","Gray Primo stopped at curb with marked cruiser behind","Adult male in work clothes","Away from the driver side","Unknown weapon status","On-scene units report an adult male in work clothes fled from the driver seat. Use the preserved vehicle scent and search away from the traffic stop.","UNITS_RESPOND_CODE_2",Scene);
             }
 
             if(!_sceneBriefed&&player.DistanceTo(Scene)<28f)
@@ -286,7 +287,7 @@ namespace AdvancedK9.Callouts
                 _sceneBriefed=true;_phase=FugitivePhase.AwaitingScent;_phaseStarted=Game.GameTime;
                 Game.DisplayNotification("~b~On-scene officer:~s~ The suspect fled on foot. I preserved their scent from the driver seat.~n~~y~Deploy Rex beside the abandoned vehicle and command TRACK.");
                 if(OfficerOne!=null&&OfficerOne.Exists())NativeFunction.Natives.TASK_TURN_PED_TO_FACE_ENTITY(OfficerOne,player,5000);
-                DispatchUpdate("Contact officer briefing: adult male in work clothes, last seen fleeing away from the stopped vehicle. The driver-seat scent article remains preserved.","OFFICERS_REPORT SUSPECT_LAST_SEEN",Scene);
+                DispatchUpdate("OfficerBriefing","Failed traffic stop","Local patrol jurisdiction","Gray Primo; driver-seat scent preserved","Adult male in work clothes","Away from the stopped vehicle","Unknown weapon status","Contact officer briefing: adult male in work clothes, last seen fleeing away from the stopped vehicle. The driver-seat scent article remains preserved.","OFFICERS_REPORT SUSPECT_LAST_SEEN",Scene);
             }
             if(!ApiRequested&&_sceneBriefed)
             {
@@ -298,7 +299,7 @@ namespace AdvancedK9.Callouts
             if(_phase==FugitivePhase.Tracking&&!_trackingDispatchSent)
             {
                 _trackingDispatchSent=true;
-                DispatchUpdate("K9 has the scent. Patrol officers are joining the handler in a search formation.","OFFICERS_REPORT SUSPECT_LAST_SEEN",player.Position);
+                DispatchUpdate("ScentAcquired","Fugitive foot trail","Local patrol jurisdiction","Abandoned gray Primo","Adult male in work clothes","Following the K9-selected route","Unknown weapon status","K9 has the preserved driver-seat scent. Patrol officers are joining the handler in search formation.","OFFICERS_REPORT SUSPECT_LAST_SEEN",player.Position);
             }
             if(_phase==FugitivePhase.Tracking&&!_suspectLocated&&!_supportCommitted&&K9TrackingActive())
             {
@@ -383,19 +384,31 @@ namespace AdvancedK9.Callouts
                 ControlApprehensionTraffic(Subject.Position);
                 SupportOfficersContainSubject();
                 Game.DisplayNotification("~o~Rex alerted on the hidden fugitive.~s~ Tracking is complete. Give verbal commands through NPCI; the suspect may surrender, flee, or resist.");
-                if(!_locatedDispatchSent){_locatedDispatchSent=true;DispatchUpdate("K9 has located the fugitive. Units are establishing armed containment at the live location.","SUSPECT_LOCATED UNITS_RESPOND_CODE_3",Subject.Position);}
+                if(!_locatedDispatchSent){_locatedDispatchSent=true;DispatchUpdate("SuspectLocated","Fugitive foot trail","Local patrol jurisdiction","Abandoned gray Primo","Adult male in work clothes","Live K9 alert location","Unknown weapon status","K9 has located the fugitive. Units are establishing armed containment at the live location.","SUSPECT_LOCATED UNITS_RESPOND_CODE_3",Subject.Position);}
                 Game.LogTrivial("AdvancedK9 Callouts: alert-first FugitiveTrail transition completed after Rex reached the stationary hidden subject.");
             }
 
             if(_suspectLocated)
             {
                 ObserveCooperativeControl("verbal challenge");
+                bool controlLocked=SuspectControlLocked;
+                if(controlLocked)
+                {
+                    _fleeActive=false;_outcomeTaskIssued=true;
+                    if(!_controlDispatchSent)
+                    {
+                        _controlDispatchSent=true;
+                        string action=Subject.IsRagdoll||Subject.Health<Subject.MaxHealth-5?"K9Apprehension":"SuspectSurrender";
+                        string narrative=action=="K9Apprehension"?"The K9 has taken the fugitive to the ground. The suspect is injured; dispatching EMS to the live location.":"The fugitive is complying. Units are moving in to complete the arrest.";
+                        DispatchUpdate(action,"Fugitive foot trail","Local patrol jurisdiction","Abandoned gray Primo","Adult male in work clothes","Live apprehension location","Controlled suspect",narrative,"",Subject.Position);
+                    }
+                }
                 if(!_outcomeTaskIssued&&SubjectIsComplying())
                 {
                     _outcomeTaskIssued=true;_fleeActive=false;
                     Game.DisplayNotification("~g~Suspect is complying with verbal commands.~s~ Move in and complete the LSPDFR arrest.");
                 }
-                else if(!_outcomeTaskIssued&&Game.GameTime>=_verbalGraceUntil)
+                else if(!_outcomeTaskIssued&&!controlLocked&&Game.GameTime>=_verbalGraceUntil)
                 {
                     _outcomeTaskIssued=true;
                     if(_outcome==0)NativeFunction.Natives.TASK_HANDS_UP(Subject,120000,player,-1,true);
@@ -406,7 +419,7 @@ namespace AdvancedK9.Callouts
                     }
                     Game.LogTrivial("AdvancedK9 Callouts: extended verbal challenge window expired; bounded local outcome resumed because NPCI/LSPDFR reported no compliance.");
                 }
-                if(_fleeActive&&!SubjectIsComplying()&&!Subject.IsDead)
+                if(_fleeActive&&!controlLocked&&!SubjectIsComplying()&&!Subject.IsDead)
                 {
                     bool inWater=NativeFunction.Natives.IS_ENTITY_IN_WATER<bool>(Subject);
                     float escapeDistance=Subject.Position.DistanceTo(_hidingPosition);
@@ -433,14 +446,14 @@ namespace AdvancedK9.Callouts
                         _nextPursuitTask=Game.GameTime+2200;
                         uint taser=NativeFunction.Natives.GET_HASH_KEY<uint>("WEAPON_STUNGUN");
                         uint pistol=NativeFunction.Natives.GET_HASH_KEY<uint>("WEAPON_COMBATPISTOL");
-                        if(OfficerOne!=null&&OfficerOne.Exists())
+                        if(OfficerOne!=null&&OfficerOne.Exists()&&OfficerOne.DistanceTo(Subject)>7f)
                         {
                             NativeFunction.Natives.GIVE_WEAPON_TO_PED(OfficerOne,taser,2,false,true);
                             NativeFunction.Natives.SET_CURRENT_PED_WEAPON(OfficerOne,taser,true);
                             NativeFunction.Natives.TASK_GO_TO_ENTITY(OfficerOne,Subject,-1,9f,6.2f,0f,0);
                             NativeFunction.Natives.SET_PED_KEEP_TASK(OfficerOne,true);
                         }
-                        if(OfficerTwo!=null&&OfficerTwo.Exists())
+                        if(OfficerTwo!=null&&OfficerTwo.Exists()&&OfficerTwo.DistanceTo(Subject)>10f)
                         {
                             NativeFunction.Natives.GIVE_WEAPON_TO_PED(OfficerTwo,pistol,60,false,true);
                             NativeFunction.Natives.SET_CURRENT_PED_WEAPON(OfficerTwo,pistol,true);
@@ -461,7 +474,7 @@ namespace AdvancedK9.Callouts
                     Game.LogTrivial("AdvancedK9 Callouts: transient death candidate cleared during custody handoff; suspect remains in the arrest workflow.");
                     _deathCandidateSince=0;
                 }
-                bool confirmedDead=rawDead&&_deathCandidateSince!=0&&Game.GameTime-_deathCandidateSince>=4000;
+                bool confirmedDead=ConfirmedSubjectDeath();
                 bool custodyLease=!confirmedDead&&UpdateCustodyLease();
                 bool injured=!confirmedDead&&(Subject.Health<Subject.MaxHealth-5||Subject.IsRagdoll);
                 if(confirmedDead)
@@ -484,14 +497,15 @@ namespace AdvancedK9.Callouts
                     if(!_custodyConfirmed)
                     {
                         _custodyConfirmed=true;_phase=FugitivePhase.Custody;_phaseStarted=Game.GameTime;
-                        Game.DisplayNotification("~b~Custody confirmed:~s~ the active arrest provider owns the suspect. AdvancedK9 will not replace its arrest, medical, or transport tasks.");
-                        Game.LogTrivial("AdvancedK9 Callouts: FugitiveTrail phase -> Custody; external provider lease active and all AdvancedK9 suspect task/health writes are blocked.");
+                        Game.DisplayNotification("~b~Custody confirmed:~s~ "+CustodyOwner+" owns the suspect. AdvancedK9 has suspended escape and suspect tasking.");
+                        DispatchUpdate("CustodyConfirmed","Fugitive foot trail","Local patrol jurisdiction","Prisoner transport required","Adult male in custody","Live arrest location","Medically stable or treatment pending",CustodyOwner+" has custody. Maintain the scene until medical clearance and prisoner transport are confirmed.","",Subject.Position);
+                        Game.LogTrivial("AdvancedK9 Callouts: FugitiveTrail phase -> Custody; owner="+CustodyOwner+" and all AdvancedK9 suspect task/health writes are blocked.");
                     }
                     if(NativeFunction.Natives.IS_PED_IN_ANY_VEHICLE<bool>(Subject,false)&&Game.GameTime-_phaseStarted>3000)
                     {
                         _phase=FugitivePhase.Complete;Resolve("~g~Fugitive Trail complete: external-provider custody and prisoner transport confirmed.");
                     }
-                    else if(!_transportStarted&&Game.GameTime-_phaseStarted>25000)
+                    else if(!_transportStarted&&Game.GameTime-_phaseStarted>(CustodyOwner=="Policing Redefined"?45000u:25000u))
                     {
                         _transportStarted=true;_phase=FugitivePhase.Transport;_phaseStarted=Game.GameTime;
                         Game.LogTrivial("AdvancedK9 Callouts: external custody remained stable but no provider transport materialized; on-scene patrol fallback transport started.");

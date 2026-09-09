@@ -2,6 +2,17 @@
 
 ## 0.24.0-beta
 
+### Coordinated callout custody, medical response, and dynamic dispatch
+
+- Adds a single AdvancedK9 callout coordinator that suspends escape and suspect tasking during K9 contact, surrender, LSPDFR/PR custody, EMS treatment, and transport handoff.
+- Restores a visible controlled K9 bite/takedown, applies bounded non-lethal injury, holds the suspect down until Release, and routes the result to medical assessment instead of treating it as death.
+- Confirms death across a stable multi-frame window and ignores transient LSPDFR-to-PR handoff flags without resurrecting, healing, or retasking a provider-owned suspect.
+- Monitors EMS arrival and treatment at the live suspect position, supplies a contained medical fallback when the dispatched unit cannot arrive, and delays transport completion until medical clearance.
+- Records the effective custody owner and waits for its transport before starting the on-scene patrol fallback.
+- Publishes structured CalloutInterface/Nexus events for Gemini-generated radio narration, including scenario, jurisdiction, vehicle, suspect, direction, risk, scent, K9, injury, EMS, custody, and transport state.
+- Removes the per-frame global vehicle-density suppression. Traffic control is limited to the immediate scene and apprehension areas and is restored on every callout exit path.
+- Rejects the known Sandy Shores station-apron location, tightens roadside selection, and preserves persistent contact/cover officer roles without repeatedly clearing their movement tasks.
+
 ### Shared API and dynamic callouts
 
 - Adds the versioned `AdvancedK9.API.dll` contract and separate `AdvancedK9.Callouts.dll` so callouts can use K9 state and commands without coupling their lifecycle to the core plugin.

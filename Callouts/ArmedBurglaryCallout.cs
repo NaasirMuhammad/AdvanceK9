@@ -102,8 +102,8 @@ namespace AdvancedK9.Callouts
         {
             if(Finished||Subject==null||!Subject.Exists()){if(!Finished)Resolve("~r~Armed Burglary ended: suspect unavailable.");return;}
             var player=Game.LocalPlayer.Character;
-            ControlLiveTraffic(Scene,40f);
-            if(_suspectLocated)ControlLiveTraffic(Subject.Position,48f);
+            if(player.DistanceTo(Scene)<80f)ControlLiveTraffic(Scene,24f);
+            if(_suspectLocated&&player.DistanceTo(Subject)<65f)ControlLiveTraffic(Subject.Position,22f);
             if(!_sceneBriefed&&player.DistanceTo(Scene)<35f)
             {
                 _sceneBriefed=true;
@@ -129,12 +129,14 @@ namespace AdvancedK9.Callouts
             if(_suspectLocated)
             {
                 ObserveCooperativeControl("armed verbal challenge");
+                bool controlLocked=SuspectControlLocked;
+                if(controlLocked)_outcomeTaskIssued=true;
                 if(!_outcomeTaskIssued&&SubjectIsComplying())
                 {
                     _outcomeTaskIssued=true;
                     Game.DisplayNotification("~g~Suspect is complying with verbal commands.~s~ Complete the LSPDFR arrest; Rex remains available.");
                 }
-                else if(!_outcomeTaskIssued&&Game.GameTime>=_verbalGraceUntil)
+                else if(!_outcomeTaskIssued&&!controlLocked&&Game.GameTime>=_verbalGraceUntil)
                 {
                     _outcomeTaskIssued=true;
                     if(_outcome<=1)NativeFunction.Natives.TASK_HANDS_UP(Subject,120000,player,-1,true);
@@ -145,7 +147,7 @@ namespace AdvancedK9.Callouts
                 if(Game.GameTime>=_nextContainmentUpdate&&!NativeFunction.Natives.IS_PED_CUFFED<bool>(Subject)){_nextContainmentUpdate=Game.GameTime+1800;SupportOfficersContainSubject();}
                 bool injured=Subject.Health<Subject.MaxHealth-5||Subject.IsRagdoll;
                 if((injured||MedicalResponseStarted)&&!MedicalResponseComplete){ProcessPostApprehensionMedical("");}
-                else if(Subject.IsDead)Resolve("~o~Armed Burglary concluded: suspect is deceased.");
+                else if(ConfirmedSubjectDeath())Resolve("~o~Armed Burglary concluded: suspect is deceased.");
                 else if(SeriousMedicalTransport&&MedicalResponseComplete)Resolve("~g~Armed Burglary complete: EMS assumed hospital transport under police custody.");
                 else if(NativeFunction.Natives.IS_PED_CUFFED<bool>(Subject)&&(!MedicalResponseStarted||MedicalResponseComplete)&&!_transportStarted)
                 {

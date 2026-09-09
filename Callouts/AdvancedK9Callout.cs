@@ -45,9 +45,23 @@ namespace AdvancedK9.Callouts
         private bool _custodyLeaseActive;
         private bool _healthyCustodyProtection;
         private uint _nextEmergencyLightRefresh;
+        private uint _custodyObservedAt;
+        private string _custodyOwner="None";
+        private uint _deathObservedAt;
         protected bool MedicalResponseStarted{get{return _medicalResponseStarted;}}
         protected bool MedicalResponseComplete;
         protected bool SeriousMedicalTransport;
+        protected string CustodyOwner{get{return _custodyOwner;}}
+        protected bool SuspectControlLocked
+        {
+            get
+            {
+                if(Subject==null||!Subject.Exists())return true;
+                K9ApiSnapshot snapshot;
+                bool k9Contact=AdvancedK9Api.TryGetSnapshot(out snapshot)&&string.Equals(snapshot.State,"Apprehending",StringComparison.OrdinalIgnoreCase);
+                return k9Contact||MedicalResponseStarted||Subject.IsRagdoll||SubjectIsComplying()||UpdateCustodyLease();
+            }
+        }
 
         protected bool Prepare(string message,Vector3 scene,float radius,bool snapToStreet=true)
         {
@@ -198,14 +212,45 @@ namespace AdvancedK9.Callouts
 
         protected void DispatchUpdate(string message,string scannerAudio,Vector3 position)
         {
+            DispatchUpdate("StatusUpdate","General","Unknown","Unknown","Unknown","Unknown","Unknown",message,scannerAudio,position);
+        }
+
+        protected void DispatchUpdate(string eventName,string scenarioVariant,string jurisdiction,string vehicleDescription,string suspectDescription,string lastKnownDirection,string risk,string message,string scannerAudio,Vector3 position)
+        {
             Game.DisplayNotification("~b~Dispatch:~s~ "+message);
-            PublishCalloutInterfaceMessage(message);
-            if(!string.IsNullOrWhiteSpace(scannerAudio))
+            string structured="AK9_EVENT|event="+CleanDispatchValue(eventName)+"|callout="+CleanDispatchValue(GetType().Name)+"|variant="+CleanDispatchValue(scenarioVariant)+"|jurisdiction="+CleanDispatchValue(jurisdiction)+"|vehicle="+CleanDispatchValue(vehicleDescription)+"|suspect="+CleanDispatchValue(suspectDescription)+"|direction="+CleanDispatchValue(lastKnownDirection)+"|risk="+CleanDispatchValue(risk)+"|scent="+CleanDispatchValue(ApiRequested?"assigned":"pending")+"|k9="+CleanDispatchValue(K9TrackingActive()?"tracking":"not-tracking")+"|custody="+CleanDispatchValue(_custodyOwner)+"|medical="+CleanDispatchValue(MedicalResponseStarted?(MedicalResponseComplete?"complete":"requested"):"not-requested")+"|narrative="+CleanDispatchValue(message);
+            PublishCalloutInterfaceMessage(structured);
+            bool nexusOwnsAudio=AppDomain.CurrentDomain.GetAssemblies().Any(a=>a.GetName().Name.IndexOf("Nexus",StringComparison.OrdinalIgnoreCase)>=0);
+            bool dynamicQueued=nexusOwnsAudio&&TryRequestNexusDynamicAudio(structured,message);
+            if(!nexusOwnsAudio&&!string.IsNullOrWhiteSpace(scannerAudio))
             {
                 try{Functions.PlayScannerAudioUsingPosition(scannerAudio,position);}
                 catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: scanner update contained: "+ex.Message);}
             }
+            else if(nexusOwnsAudio&&!dynamicQueued)Game.LogTrivial("AdvancedK9 Callouts: Nexus owns dispatch audio; structured Gemini narrative published through CalloutInterface and text retained as fallback.");
             Game.LogTrivial("AdvancedK9 Callouts: dispatch incident update ["+ContextId+"]: "+message);
+        }
+
+        private static string CleanDispatchValue(string value){return (value??"").Replace("|","/").Replace("\r"," ").Replace("\n"," ").Trim();}
+
+        private bool TryRequestNexusDynamicAudio(string structured,string narrative)
+        {
+            try
+            {
+                var nexus=AppDomain.CurrentDomain.GetAssemblies().FirstOrDefault(a=>a.GetName().Name.IndexOf("NexusDispatch",StringComparison.OrdinalIgnoreCase)>=0);
+                if(nexus==null)return false;
+                string[] approvedNames={"RequestDispatchNarration","QueueDispatchNarrative","PublishDispatchEvent","SpeakIncidentUpdate"};
+                foreach(var type in nexus.GetTypes())
+                foreach(var method in type.GetMethods(System.Reflection.BindingFlags.Public|System.Reflection.BindingFlags.Static))
+                {
+                    if(!approvedNames.Contains(method.Name)||method.ReturnType!=typeof(void))continue;
+                    var parameters=method.GetParameters();
+                    if(parameters.Length==1&&parameters[0].ParameterType==typeof(string)){method.Invoke(null,new object[]{structured});return true;}
+                    if(parameters.Length==2&&parameters.All(p=>p.ParameterType==typeof(string))){method.Invoke(null,new object[]{narrative,structured});return true;}
+                }
+            }
+            catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: Nexus dynamic dispatch request contained: "+ex.Message);}
+            return false;
         }
 
         private void PublishCalloutInterfaceMessage(string message)
@@ -263,9 +308,6 @@ namespace AdvancedK9.Callouts
 
         protected void ControlLiveTraffic(Vector3 center,float radius)
         {
-            NativeFunction.Natives.SET_VEHICLE_DENSITY_MULTIPLIER_THIS_FRAME(0f);
-            NativeFunction.Natives.SET_RANDOM_VEHICLE_DENSITY_MULTIPLIER_THIS_FRAME(0f);
-            NativeFunction.Natives.SET_PARKED_VEHICLE_DENSITY_MULTIPLIER_THIS_FRAME(0f);
             try
             {
                 Vehicle playerVehicle=Game.LocalPlayer.Character.CurrentVehicle;
@@ -377,28 +419,32 @@ namespace AdvancedK9.Callouts
 
         protected bool UpdateCustodyLease()
         {
-            if(Subject==null||!Subject.Exists()||Subject.IsDead)return false;
+            if(Subject==null||!Subject.Exists())return false;
+            if(Subject.IsDead)return _custodyLeaseActive&&Game.GameTime-_custodyLeaseStarted<5000;
             bool active=SubjectIsInCustody();
             if(active&&!_custodyLeaseActive)
             {
-                _custodyLeaseActive=true;_custodyLeaseStarted=Game.GameTime;
+                _custodyLeaseActive=true;_custodyLeaseStarted=Game.GameTime;_custodyObservedAt=Game.GameTime;
                 bool healthy=Subject.Health>System.Math.Max(100,Subject.MaxHealth*3/4)&&!Subject.IsRagdoll;
                 Game.LogTrivial("AdvancedK9 Callouts: custody lease acquired; health="+Subject.Health+"/"+Subject.MaxHealth+", dead="+Subject.IsDead+", healthyProtection="+healthy+".");
-                if(healthy)
-                {
-                    _healthyCustodyProtection=true;Subject.IsInvincible=true;
-                    var protectedSubject=Subject;
-                    GameFiber.StartNew(delegate
-                    {
-                        GameFiber.Wait(8000);
-                        if(protectedSubject!=null&&protectedSubject.Exists()&&!protectedSubject.IsDead)protectedSubject.IsInvincible=false;
-                        _healthyCustodyProtection=false;
-                        Game.LogTrivial("AdvancedK9 Callouts: healthy custody handoff protection released after LSPDFR/PR transition window.");
-                    },"AdvancedK9 custody handoff protection");
-                }
+                _healthyCustodyProtection=healthy;
+                bool prLoaded=AppDomain.CurrentDomain.GetAssemblies().Any(a=>a.GetName().Name.IndexOf("PolicingRedefined",StringComparison.OrdinalIgnoreCase)>=0);
+                _custodyOwner=prLoaded?"Policing Redefined":"LSPDFR";
                 Game.LogTrivial("AdvancedK9 Callouts: AdvancedK9 suspect tasking suspended for the external arrest provider.");
             }
+            if(active&&_healthyCustodyProtection&&Subject.Health>0&&Subject.IsDead&&Game.GameTime-_custodyObservedAt<3000)
+                Game.LogTrivial("AdvancedK9 Callouts: transient provider handoff death flag ignored; no health, task, or resurrection write was issued.");
             return active||(_custodyLeaseActive&&Game.GameTime-_custodyLeaseStarted<15000);
+        }
+
+        protected bool ConfirmedSubjectDeath()
+        {
+            if(Subject==null||!Subject.Exists())return false;
+            bool raw=Subject.Health<=0&&NativeFunction.Natives.IS_PED_DEAD_OR_DYING<bool>(Subject,true);
+            if(!raw){_deathObservedAt=0;return false;}
+            if(_deathObservedAt==0)_deathObservedAt=Game.GameTime;
+            if(_custodyLeaseActive&&Game.GameTime-_custodyLeaseStarted<5000)return false;
+            return Game.GameTime-_deathObservedAt>=2500;
         }
 
         protected void ObserveCooperativeControl(string phase)
@@ -457,7 +503,6 @@ namespace AdvancedK9.Callouts
             if(OfficerOne!=null&&OfficerOne.Exists())
             {
                 OfficerOne.BlockPermanentEvents=true;
-                OfficerOne.Tasks.Clear();
                 NativeFunction.Natives.GIVE_WEAPON_TO_PED(OfficerOne,taser,2,false,true);
                 NativeFunction.Natives.SET_CURRENT_PED_WEAPON(OfficerOne,taser,true);
                 NativeFunction.Natives.SET_PED_COMBAT_ABILITY(OfficerOne,2);
@@ -470,7 +515,6 @@ namespace AdvancedK9.Callouts
             if(OfficerTwo!=null&&OfficerTwo.Exists())
             {
                 OfficerTwo.BlockPermanentEvents=true;
-                OfficerTwo.Tasks.Clear();
                 NativeFunction.Natives.GIVE_WEAPON_TO_PED(OfficerTwo,pistol,60,false,true);
                 NativeFunction.Natives.SET_CURRENT_PED_WEAPON(OfficerTwo,pistol,true);
                 NativeFunction.Natives.SET_PED_COMBAT_ABILITY(OfficerTwo,2);
@@ -487,7 +531,7 @@ namespace AdvancedK9.Callouts
         {
             if(_secondaryTrafficControlled)return;
             _secondaryTrafficCenter=center;
-            NativeFunction.Natives.SET_ROADS_IN_AREA(center.X-38f,center.Y-38f,center.Z-10f,center.X+38f,center.Y+38f,center.Z+10f,false,true);
+            NativeFunction.Natives.SET_ROADS_IN_AREA(center.X-22f,center.Y-22f,center.Z-7f,center.X+22f,center.Y+22f,center.Z+7f,false,true);
             _secondaryTrafficControlled=true;
             Game.LogTrivial("AdvancedK9 Callouts: moving traffic exclusion established around the apprehension area.");
         }
@@ -542,6 +586,7 @@ namespace AdvancedK9.Callouts
         {
             if(Subject==null||!Subject.Exists()||PoliceVehicle==null||!PoliceVehicle.Exists()){Resolve(completionMessage);return;}
             Game.DisplayNotification("~b~Dispatch:~s~ On-scene patrol is assuming prisoner transport. The cruiser is responding to the arrest location.");
+            DispatchUpdate("TransportRequested","On-scene patrol fallback","Current jurisdiction","Marked patrol transport","Restrained prisoner","Live arrest location","Medically cleared","The active custody provider did not produce transport. On-scene patrol is assuming prisoner transport.","",Subject.Position);
             var suspect=Subject;var officer=OfficerTwo!=null&&OfficerTwo.Exists()?OfficerTwo:OfficerOne;
             var coverOfficer=officer==OfficerTwo?OfficerOne:OfficerTwo;var transport=PoliceVehicle;
             GameFiber.StartNew(delegate
@@ -596,7 +641,7 @@ namespace AdvancedK9.Callouts
                 {
                     Vector3 downedPosition=suspect.Position;
                     RequestAmbulanceBackup(downedPosition);
-                    Functions.PlayScannerAudioUsingPosition("ATTENTION_ALL_UNITS AMBULANCE_RESPOND_CODE_3",downedPosition);
+                    DispatchUpdate("MedicalRequested","K9 apprehension injury","Current jurisdiction","EMS response","Injured restrained suspect","Live apprehension location","K9 bite injury", "K9 apprehension injury reported. EMS is responding Code 3 to the live suspect location.","ATTENTION_ALL_UNITS AMBULANCE_RESPOND_CODE_3",downedPosition);
                     Game.DisplayNotification("~b~Dispatch:~s~ K9 apprehension injury reported. EMS has been requested Code 3 to the suspect's live location.");
                     Game.LogTrivial("AdvancedK9 Callouts: requested LSPDFR ambulance response to live downed suspect position "+downedPosition+".");
                     Ped respondingMedic=null;uint responseDeadline=Game.GameTime+60000;
@@ -609,7 +654,10 @@ namespace AdvancedK9.Callouts
                     if(!suspect.Exists())return;
                     if(respondingMedic==null)
                     {
-                        Game.DisplayNotification("~o~Dispatch:~s~ EMS has not reached the suspect yet. Medical treatment remains pending.");
+                        Game.DisplayNotification("~o~Dispatch:~s~ EMS could not reach the live location. A monitored on-scene medical fallback is beginning.");
+                        if(!UpdateCustodyLease())suspect.Health=System.Math.Max(suspect.Health,System.Math.Max(75,suspect.MaxHealth*3/4));
+                        GameFiber.Wait(3500);MedicalResponseComplete=true;
+                        DispatchUpdate("MedicalComplete","K9 apprehension injury","Current jurisdiction","EMS fallback","Injured restrained suspect","Live apprehension location","Stable", "Medical assessment is complete. The suspect is stable and cleared for prisoner transport.","",suspect.Position);
                         return;
                     }
                     respondingMedic.BlockPermanentEvents=true;
@@ -634,6 +682,7 @@ namespace AdvancedK9.Callouts
                     {
                         Game.DisplayNotification("~g~Dispatch:~s~ EMS confirms treatment complete. On-scene patrol is cleared to transport the prisoner.");
                         MedicalResponseComplete=true;
+                        DispatchUpdate("MedicalComplete","K9 apprehension injury","Current jurisdiction","EMS on scene","Injured restrained suspect","Live apprehension location","Stable", "EMS confirms treatment complete. The prisoner is medically cleared for transport.","",suspect.Position);
                         return;
                     }
                 }
@@ -772,17 +821,13 @@ namespace AdvancedK9.Callouts
             if(MedicTwo!=null&&MedicTwo.Exists())MedicTwo.Dismiss();
             if(MedicalVehicle!=null&&MedicalVehicle.Exists())MedicalVehicle.Dismiss();
             BeginPoliceSceneDeparture();
-            if(_trafficControlled)
+            try
             {
-                NativeFunction.Natives.SET_ROADS_IN_AREA(Scene.X-32f,Scene.Y-32f,Scene.Z-8f,Scene.X+32f,Scene.Y+32f,Scene.Z+8f,true,true);
-                _trafficControlled=false;
+                if(_trafficControlled)NativeFunction.Natives.SET_ROADS_IN_AREA(Scene.X-32f,Scene.Y-32f,Scene.Z-8f,Scene.X+32f,Scene.Y+32f,Scene.Z+8f,true,true);
+                if(_secondaryTrafficControlled){var center=_secondaryTrafficCenter;NativeFunction.Natives.SET_ROADS_IN_AREA(center.X-22f,center.Y-22f,center.Z-7f,center.X+22f,center.Y+22f,center.Z+7f,true,true);}
             }
-            if(_secondaryTrafficControlled)
-            {
-                var center=_secondaryTrafficCenter;
-                NativeFunction.Natives.SET_ROADS_IN_AREA(center.X-38f,center.Y-38f,center.Z-10f,center.X+38f,center.Y+38f,center.Z+10f,true,true);
-                _secondaryTrafficControlled=false;
-            }
+            catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: traffic restoration contained: "+ex.Message);}
+            finally{_trafficControlled=false;_secondaryTrafficControlled=false;}
             if(!string.IsNullOrWhiteSpace(ContextId))AdvancedK9Api.SendCommand("ClearEvidenceMarkers",ContextId,0,"Scene",Scene.X,Scene.Y,Scene.Z,"callout scene cleared");
             Game.LogTrivial("AdvancedK9 Callouts: cleared scene and evidence markers for "+GetType().Name+".");
             base.End();
