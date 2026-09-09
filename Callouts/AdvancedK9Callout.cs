@@ -593,7 +593,8 @@ namespace AdvancedK9.Callouts
                 if(length<.1f){dx=1f;dy=0f;length=1f;}
                 hidingPosition=new Vector3(objectPosition.X+dx/length*1.4f,objectPosition.Y+dy/length*1.4f,objectPosition.Z);
                 if(NativeFunction.Natives.IS_POINT_ON_ROAD<bool>(hidingPosition.X,hidingPosition.Y,hidingPosition.Z,0))return false;
-                bool occupied=World.GetAllPeds().Any(p=>p!=null&&p.Exists()&&p!=Subject&&p!=OfficerOne&&p!=OfficerTwo&&p!=Game.LocalPlayer.Character&&p.DistanceTo(hidingPosition)<8f);
+                Vector3 candidatePosition=hidingPosition;
+                bool occupied=World.GetAllPeds().Any(p=>p!=null&&p.Exists()&&p!=Subject&&p!=OfficerOne&&p!=OfficerTwo&&p!=Game.LocalPlayer.Character&&p.DistanceTo(candidatePosition)<8f);
                 if(occupied){Game.LogTrivial("AdvancedK9 Callouts: cover candidate rejected because civilians occupy the apprehension radius.");return false;}
                 Game.LogTrivial("AdvancedK9 Callouts: existing environmental cover selected: "+cover.Model.Name+" at "+hidingPosition+".");
                 return true;
