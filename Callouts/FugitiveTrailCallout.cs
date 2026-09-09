@@ -37,6 +37,7 @@ namespace AdvancedK9.Callouts
         private uint _nextPursuitTask;
         private Vector3 _lastSafeSubjectPosition;
         private bool _waterRecoveryUsed;
+        private uint _nextCoverSeekTask;
 
         private static readonly Vector3[] RoadsideScenes={
             new Vector3(-565f,-675f,33f),new Vector3(-1310f,-1261f,4f),new Vector3(-1430f,-590f,30f),
@@ -289,16 +290,39 @@ namespace AdvancedK9.Callouts
                     NativeFunction.Natives.TASK_FOLLOW_NAV_MESH_TO_COORD(Subject,safeLiveCover.X,safeLiveCover.Y,safeLiveCover.Z,4.8f,18000,1.5f,0,0f);
                     Game.LogTrivial("AdvancedK9 Callouts: streamed environmental cover confirmed and fugitive hiding task refreshed.");
                 }
+                else
+                {
+                    Vector3 safeFallback;
+                    if(TryResolveSafePedPosition(_hidingPosition,out safeFallback)&&!NativeFunction.Natives.IS_POINT_ON_ROAD<bool>(safeFallback.X,safeFallback.Y,safeFallback.Z,0))
+                    {
+                        _hidingPosition=safeFallback;
+                        NativeFunction.Natives.TASK_FOLLOW_NAV_MESH_TO_COORD(Subject,safeFallback.X,safeFallback.Y,safeFallback.Z,5.4f,14000,1.5f,0,0f);
+                        Game.LogTrivial("AdvancedK9 Callouts: natural prop cover unavailable; fugitive committed to a validated off-road concealment point.");
+                    }
+                    else if(Game.GameTime>=_nextCoverSeekTask)
+                    {
+                        _nextCoverSeekTask=Game.GameTime+5000;
+                        NativeFunction.Natives.TASK_SEEK_COVER_FROM_POS(Subject,Scene.X,Scene.Y,Scene.Z,12000,false);
+                        Game.LogTrivial("AdvancedK9 Callouts: fugitive has no valid concealment yet and will keep moving instead of standing in the roadway.");
+                    }
+                }
             }
 
             if(!_suspectLocated&&Subject.DistanceTo(_hidingPosition)<7f&&Game.GameTime>=_nextHideTask)
             {
                 _nextHideTask=Game.GameTime+3500;
-                NativeFunction.Natives.TASK_COWER(Subject,5000);
+                bool offRoad=!NativeFunction.Natives.IS_POINT_ON_ROAD<bool>(Subject.Position.X,Subject.Position.Y,Subject.Position.Z,0);
+                if(offRoad)
+                {
+                    _coverConfirmed=true;
+                    NativeFunction.Natives.TASK_COWER(Subject,5000);
+                    Game.LogTrivial("AdvancedK9 Callouts: fugitive reached off-road concealment; Rex may now complete the scent alert.");
+                }
+                else NativeFunction.Natives.TASK_SEEK_COVER_FROM_POS(Subject,Scene.X,Scene.Y,Scene.Z,12000,false);
             }
 
             float rexDistance=K9DistanceTo(Subject.Position);
-            if(ApiRequested&&!_suspectLocated&&!_rexReachedSubject&&rexDistance<3f)
+            if(ApiRequested&&!_suspectLocated&&!_rexReachedSubject&&_coverConfirmed&&rexDistance<3f)
             {
                 _rexReachedSubject=true;_rexReachedAt=Game.GameTime;
                 Game.LogTrivial("AdvancedK9 Callouts: Rex physically reached FugitiveTrail subject; preserving the suspect's cover/flee task until the alert transition.");
