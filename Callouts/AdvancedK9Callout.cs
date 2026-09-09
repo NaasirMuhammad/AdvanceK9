@@ -43,6 +43,7 @@ namespace AdvancedK9.Callouts
         private string _lastCooperativeState="";
         private uint _custodyLeaseStarted;
         private bool _custodyLeaseActive;
+        private bool _healthyCustodyProtection;
         protected bool MedicalResponseStarted{get{return _medicalResponseStarted;}}
         protected bool MedicalResponseComplete;
         protected bool SeriousMedicalTransport;
@@ -302,8 +303,12 @@ namespace AdvancedK9.Callouts
             try
             {
                 if(NativeFunction.Natives.IS_PED_CUFFED<bool>(Subject)||NativeFunction.Natives.IS_PED_BEING_ARRESTED<bool>(Subject)||NativeFunction.Natives.IS_PED_HANDCUFFED<bool>(Subject))return true;
-                var method=typeof(Functions).GetMethod("IsPedArrested",System.Reflection.BindingFlags.Public|System.Reflection.BindingFlags.Static);
-                return method!=null&&(bool)method.Invoke(null,new object[]{Subject});
+                foreach(string name in new[]{"IsPedGettingArrested","IsPedArrested"})
+                {
+                    var method=typeof(Functions).GetMethod(name,System.Reflection.BindingFlags.Public|System.Reflection.BindingFlags.Static);
+                    if(method!=null&&(bool)method.Invoke(null,new object[]{Subject}))return true;
+                }
+                return false;
             }
             catch{return false;}
         }
@@ -322,7 +327,21 @@ namespace AdvancedK9.Callouts
             if(active&&!_custodyLeaseActive)
             {
                 _custodyLeaseActive=true;_custodyLeaseStarted=Game.GameTime;
-                Game.LogTrivial("AdvancedK9 Callouts: custody lease acquired by the first active external arrest provider; AdvancedK9 suspect tasking suspended.");
+                bool healthy=Subject.Health>System.Math.Max(100,Subject.MaxHealth*3/4)&&!Subject.IsRagdoll;
+                Game.LogTrivial("AdvancedK9 Callouts: custody lease acquired; health="+Subject.Health+"/"+Subject.MaxHealth+", dead="+Subject.IsDead+", healthyProtection="+healthy+".");
+                if(healthy)
+                {
+                    _healthyCustodyProtection=true;Subject.IsInvincible=true;
+                    var protectedSubject=Subject;
+                    GameFiber.StartNew(delegate
+                    {
+                        GameFiber.Wait(8000);
+                        if(protectedSubject!=null&&protectedSubject.Exists()&&!protectedSubject.IsDead)protectedSubject.IsInvincible=false;
+                        _healthyCustodyProtection=false;
+                        Game.LogTrivial("AdvancedK9 Callouts: healthy custody handoff protection released after LSPDFR/PR transition window.");
+                    },"AdvancedK9 custody handoff protection");
+                }
+                Game.LogTrivial("AdvancedK9 Callouts: AdvancedK9 suspect tasking suspended for the external arrest provider.");
             }
             return active||(_custodyLeaseActive&&Game.GameTime-_custodyLeaseStarted<15000);
         }

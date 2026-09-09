@@ -30,6 +30,7 @@ namespace AdvancedK9.Callouts
         private static int _lastRoadsideScene=-1;
         private static readonly HashSet<int> FailedRoadsideScenes=new HashSet<int>();
         private int _sceneIndex=-1;
+        private int _selectionAttempts;
         private uint _verbalGraceUntil;
         private bool _outcomeTaskIssued;
         private bool _fleeActive;
@@ -49,6 +50,7 @@ namespace AdvancedK9.Callouts
 
         private bool PrepareRoadsideScene()
         {
+            if(++_selectionAttempts>RoadsideScenes.Length)return false;
             var player=Game.LocalPlayer.Character;
             var eligible=new List<int>();
             for(int i=0;i<RoadsideScenes.Length;i++)
@@ -73,7 +75,29 @@ namespace AdvancedK9.Callouts
             _lastRoadsideScene=best;
             _sceneIndex=best;
             _sceneHeading=RoadsideHeadings[best];
-            return Prepare("Traffic stop — driver fled on foot",RoadsideScenes[best],75f,false);
+            Vector3 stagedScene=RoadsideScenes[best];
+            try
+            {
+                Vector3 curb;
+                if(NativeFunction.Natives.GET_ROAD_BOUNDARY_USING_HEADING<bool>(stagedScene.X,stagedScene.Y,stagedScene.Z,_sceneHeading,out curb)&&curb.DistanceTo(stagedScene)<24f)
+                {
+                    stagedScene=curb;
+                    Game.LogTrivial("AdvancedK9 Callouts: curb boundary resolved for scene "+best+" at "+stagedScene+" heading "+_sceneHeading+".");
+                }
+                else
+                {
+                    FailedRoadsideScenes.Add(best);
+                    Game.LogTrivial("AdvancedK9 Callouts: scene "+best+" rejected because GTA could not resolve a curb boundary; selecting another scene internally.");
+                    return PrepareRoadsideScene();
+                }
+            }
+            catch(System.Exception ex)
+            {
+                FailedRoadsideScenes.Add(best);
+                Game.LogTrivial("AdvancedK9 Callouts: scene "+best+" curb calculation failed and was blacklisted: "+ex.Message);
+                return PrepareRoadsideScene();
+            }
+            return Prepare("Traffic stop — driver fled on foot",stagedScene,75f,false);
         }
 
         public override bool OnBeforeCalloutDisplayed()
