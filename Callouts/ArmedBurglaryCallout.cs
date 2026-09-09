@@ -12,6 +12,7 @@ namespace AdvancedK9.Callouts
         private bool _sceneBriefed;
         private bool _suspectLocated;
         private bool _transportStarted;
+        private uint _custodyReadyAt;
         private uint _locatedAt;
         private uint _nextContainmentUpdate;
         private Vector3 _hidePosition;
@@ -130,6 +131,8 @@ namespace AdvancedK9.Callouts
             {
                 ObserveCooperativeControl("armed verbal challenge");
                 bool controlLocked=SuspectControlLocked;
+                bool custodyLease=UpdateCustodyLease();
+                MaintainSupportContainment(custodyLease||SubjectIsInCustody());
                 if(controlLocked)_outcomeTaskIssued=true;
                 if(!_outcomeTaskIssued&&SubjectIsComplying())
                 {
@@ -145,15 +148,19 @@ namespace AdvancedK9.Callouts
                     Game.LogTrivial("AdvancedK9 Callouts: armed verbal challenge expired; scripted outcome resumed because no NPCI/LSPDFR compliance was detected.");
                 }
                 if(Game.GameTime>=_nextContainmentUpdate&&!NativeFunction.Natives.IS_PED_CUFFED<bool>(Subject)){_nextContainmentUpdate=Game.GameTime+1800;SupportOfficersContainSubject();}
-                bool injured=Subject.Health<Subject.MaxHealth-5||Subject.IsRagdoll;
+                bool injured=Subject.Health<Subject.MaxHealth-5;
                 if((injured||MedicalResponseStarted)&&!MedicalResponseComplete){ProcessPostApprehensionMedical("");}
                 else if(ConfirmedSubjectDeath())Resolve("~o~Armed Burglary concluded: suspect is deceased.");
                 else if(SeriousMedicalTransport&&MedicalResponseComplete)Resolve("~g~Armed Burglary complete: EMS assumed hospital transport under police custody.");
-                else if(NativeFunction.Natives.IS_PED_CUFFED<bool>(Subject)&&(!MedicalResponseStarted||MedicalResponseComplete)&&!_transportStarted)
+                else if(custodyLease&&CustodyOwnerStable&&(!MedicalResponseStarted||MedicalResponseComplete)&&!_transportStarted)
                 {
-                    _transportStarted=true;
-                    Game.DisplayNotification("~b~Dispatch:~s~ Suspect is cuffed and medically cleared. On-scene patrol is beginning prisoner transport.");
-                    BeginAutomaticTransport("~g~Armed Burglary complete: EMS treatment and prisoner transport completed.");
+                    if(_custodyReadyAt==0)_custodyReadyAt=Game.GameTime;
+                    if(Game.GameTime-_custodyReadyAt>=10000)
+                    {
+                        _transportStarted=true;
+                        Game.DisplayNotification("~b~Dispatch:~s~ "+CustodyOwner+" custody is stable and medically cleared. On-scene patrol is beginning prisoner transport.");
+                        BeginAutomaticTransport("~g~Armed Burglary complete: EMS treatment and prisoner transport completed.");
+                    }
                 }
                 else if(Game.GameTime-_locatedAt>300000)Resolve("~o~Armed Burglary concluded after suspect location.");
             }

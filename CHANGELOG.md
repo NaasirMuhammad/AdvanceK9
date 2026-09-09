@@ -4,6 +4,11 @@
 
 ### Coordinated callout custody, medical response, and dynamic dispatch
 
+- Makes custody irreversible after arrest begins, settles the actual PR/STP/LSPDFR owner from the compatibility bridge, and prevents a handcuffed suspect from returning to verbal-challenge or escape logic.
+- Protects cooperative non-bite handoffs from ragdoll and transient death frames before provider transport initializes, then releases protection after a stable custody window.
+- Monitors fallback transport arrival and prisoner loading, publishes requested/arrived/loaded/completed states, and refuses to complete a callout when loading was not verified.
+- Retains complete incident context in every dynamic dispatch payload, reports human-readable streets, and keeps preserved scent fields consistent during the officer briefing.
+- Requires a final two-vehicle roadside formation audit, gives exposed fallback suspects a real flee task, and maintains armed officer containment through arrest.
 - Adds a single AdvancedK9 callout coordinator that suspends escape and suspect tasking during K9 contact, surrender, LSPDFR/PR custody, EMS treatment, and transport handoff.
 - Restores a visible controlled K9 bite/takedown, applies bounded non-lethal injury, holds the suspect down until Release, and routes the result to medical assessment instead of treating it as death.
 - Confirms death across a stable multi-frame window and ignores transient LSPDFR-to-PR handoff flags without resurrecting, healing, or retasking a provider-owned suspect.
