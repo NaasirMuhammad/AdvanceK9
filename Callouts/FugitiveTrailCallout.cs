@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using LSPD_First_Response.Mod.API;
 using LSPD_First_Response.Mod.Callouts;
 using Rage;
@@ -27,6 +28,8 @@ namespace AdvancedK9.Callouts
         private Vector3 _hidingPosition;
         private uint _nextHideTask;
         private static int _lastRoadsideScene=-1;
+        private static readonly HashSet<int> FailedRoadsideScenes=new HashSet<int>();
+        private int _sceneIndex=-1;
         private uint _verbalGraceUntil;
         private bool _outcomeTaskIssued;
         private bool _fleeActive;
@@ -47,25 +50,28 @@ namespace AdvancedK9.Callouts
         private bool PrepareRoadsideScene()
         {
             var player=Game.LocalPlayer.Character;
-            int best=-1;float bestDistance=float.MaxValue;
-            for(int pass=0;pass<2&&best<0;pass++)
+            var eligible=new List<int>();
+            for(int i=0;i<RoadsideScenes.Length;i++)
             {
-                for(int i=0;i<RoadsideScenes.Length;i++)
-                {
-                    if(i==_lastRoadsideScene)continue;
-                    // This downtown point resolves into an active intersection rather than a curb lane.
-                    if(i==3)continue;
-                    float distance=player.DistanceTo(RoadsideScenes[i]);
-                    if(pass==0&&distance<=180f)continue;
-                    int interior=NativeFunction.Natives.GET_INTERIOR_AT_COORDS<int>(RoadsideScenes[i].X,RoadsideScenes[i].Y,RoadsideScenes[i].Z);
-                    if(interior!=0)continue;
-                    Vector3 street=World.GetNextPositionOnStreet(RoadsideScenes[i]);
-                    if(street.DistanceTo(RoadsideScenes[i])>18f||System.Math.Abs(street.Z-RoadsideScenes[i].Z)>3f)continue;
-                    if(distance<bestDistance){best=i;bestDistance=distance;}
-                }
+                if(i==_lastRoadsideScene||FailedRoadsideScenes.Contains(i))continue;
+                if(i==3||i==9||i==12)continue;
+                float distance=player.DistanceTo(RoadsideScenes[i]);
+                if(distance<180f||distance>2200f)continue;
+                int interior=NativeFunction.Natives.GET_INTERIOR_AT_COORDS<int>(RoadsideScenes[i].X,RoadsideScenes[i].Y,RoadsideScenes[i].Z);
+                if(interior!=0)continue;
+                Vector3 street=World.GetNextPositionOnStreet(RoadsideScenes[i]);
+                if(street.DistanceTo(RoadsideScenes[i])>18f||System.Math.Abs(street.Z-RoadsideScenes[i].Z)>3f)continue;
+                eligible.Add(i);
             }
-            if(best<0)return false;
+            if(eligible.Count==0)
+            {
+                FailedRoadsideScenes.Clear();
+                for(int i=0;i<RoadsideScenes.Length;i++)if(i!=3&&i!=9&&i!=12&&i!=_lastRoadsideScene)eligible.Add(i);
+            }
+            if(eligible.Count==0)return false;
+            int best=eligible[Random.Next(eligible.Count)];
             _lastRoadsideScene=best;
+            _sceneIndex=best;
             _sceneHeading=RoadsideHeadings[best];
             return Prepare("Traffic stop — driver fled on foot",RoadsideScenes[best],75f,false);
         }
@@ -115,8 +121,8 @@ namespace AdvancedK9.Callouts
             }
             if(!offRoadCover)
             {
-                Game.LogTrivial("AdvancedK9 Callouts: rejected FugitiveTrail scene because no safe off-road hiding position was available.");
-                return false;
+                coverPosition=trailEnd;
+                Game.LogTrivial("AdvancedK9 Callouts: distant off-road cover could not be verified; retaining the valid street endpoint until live cover streams.");
             }
             Vector3 hidingPosition;
             if(!TryFindExistingCover(coverPosition,out hidingPosition))
@@ -131,26 +137,18 @@ namespace AdvancedK9.Callouts
                 _coverConfirmed=true;
                 Game.LogTrivial("AdvancedK9 Callouts: existing environmental cover reserved near the pedestrian trail end.");
             }
-            Vector3 validatedHiding;
-            if(!TryResolveSafePedPosition(hidingPosition,out validatedHiding))
-            {
-                Game.LogTrivial("AdvancedK9 Callouts: rejected FugitiveTrail candidate because the hiding position failed ground/navmesh validation.");
-                return false;
-            }
-            _hidingPosition=validatedHiding;
+            _hidingPosition=hidingPosition;
 
             SceneVehicle=SpawnVehicle("primo",Scene,_sceneHeading);
-            if(SceneVehicle==null||!SceneVehicle.Exists())return false;
+            if(SceneVehicle==null||!SceneVehicle.Exists())return RejectCurrentScene("suspect vehicle spawn failed");
             SceneVehicle.IsPersistent=true;
-            if(!StagePoliceScene())return false;
+            if(!StagePoliceScene())return RejectCurrentScene("police scene staging failed");
             ConfigureTrafficStopScene();
             ControlSceneTraffic();
             Game.LogTrivial("AdvancedK9 Callouts: accepted roadside scene spawned after successful trail validation.");
 
-            Vector3 requestedEscapeStart=new Vector3(Scene.X+dx/length*48f-dy/length*8f,Scene.Y+dy/length*48f+dx/length*8f,Scene.Z);
-            Vector3 escapeStart;
-            if(!TryResolveSafePedPosition(requestedEscapeStart,out escapeStart))return false;
-            Subject=SpawnPed("a_m_m_hillbilly_01",escapeStart,Random.Next(360));if(Subject==null)return false;
+            Vector3 escapeStart=trailEnd;
+            Subject=SpawnPed("a_m_m_hillbilly_01",escapeStart,Random.Next(360));if(Subject==null)return RejectCurrentScene("subject spawn failed");
             Subject.MaxHealth=500;Subject.Health=500;Subject.BlockPermanentEvents=true;Subject.IsPersistent=true;
             NativeFunction.Natives.TASK_FOLLOW_NAV_MESH_TO_COORD(Subject,hidingPosition.X,hidingPosition.Y,hidingPosition.Z,5.2f,22000,2f,0,0f);
             var escapingSubject=Subject;var finalCover=hidingPosition;
@@ -191,6 +189,13 @@ namespace AdvancedK9.Callouts
             Functions.PlayScannerAudioUsingPosition("WE_HAVE CRIME_RESIST_ARREST IN_OR_ON_POSITION",Scene);
             RouteToScene("Respond to the failed traffic stop. The driver abandoned the stopped vehicle and fled on foot; officers preserved the driver-seat scent.");
             return base.OnCalloutAccepted();
+        }
+
+        private bool RejectCurrentScene(string reason)
+        {
+            if(_sceneIndex>=0)FailedRoadsideScenes.Add(_sceneIndex);
+            Game.LogTrivial("AdvancedK9 Callouts: blacklisted FugitiveTrail scene "+_sceneIndex+" for this session: "+reason+".");
+            return false;
         }
 
         private void ConfigureTrafficStopScene()
