@@ -47,6 +47,7 @@ namespace AdvancedK9.Callouts
         private bool _activeEscapeFallback;
         private bool _controlDispatchSent;
         private bool _manualTransportNoticeSent;
+        private Vector3 _curbAlignedVehiclePosition;
 
         private static readonly Vector3[] RoadsideScenes={
             new Vector3(-565f,-675f,33f),new Vector3(-1310f,-1261f,4f),new Vector3(-1430f,-590f,30f),
@@ -91,15 +92,27 @@ namespace AdvancedK9.Callouts
                 Vector3 curb;
                 if(NativeFunction.Natives.GET_ROAD_BOUNDARY_USING_HEADING<bool>(stagedScene.X,stagedScene.Y,stagedScene.Z,_sceneHeading,out curb)&&curb.DistanceTo(stagedScene)<24f)
                 {
-                    stagedScene=curb;
-                    Vector3 verifiedRoad=World.GetNextPositionOnStreet(stagedScene);
-                    if(verifiedRoad.DistanceTo(stagedScene)>8f||!NativeFunction.Natives.IS_POINT_ON_ROAD<bool>(verifiedRoad.X,verifiedRoad.Y,verifiedRoad.Z,0))
+                    Vector3 verifiedRoad;float ignoredNodeHeading;
+                    bool roadNodeFound=NativeFunction.Natives.GET_CLOSEST_VEHICLE_NODE_WITH_HEADING<bool>(curb.X,curb.Y,curb.Z,out verifiedRoad,out ignoredNodeHeading,1,3f,0);
+                    if(!roadNodeFound)verifiedRoad=World.GetNextPositionOnStreet(curb);
+                    if(verifiedRoad.DistanceTo(curb)>8f||!NativeFunction.Natives.IS_POINT_ON_ROAD<bool>(verifiedRoad.X,verifiedRoad.Y,verifiedRoad.Z,0))
                     {
                         FailedRoadsideScenes.Add(best);
                         Game.LogTrivial("AdvancedK9 Callouts: scene "+best+" curb resolved into a driveway, parking apron, or private lot and was rejected.");
                         return PrepareRoadsideScene();
                     }
-                    Game.LogTrivial("AdvancedK9 Callouts: curb boundary resolved for scene "+best+" at "+stagedScene+" heading "+_sceneHeading+".");
+                    float inwardX=verifiedRoad.X-curb.X,inwardY=verifiedRoad.Y-curb.Y;
+                    float inwardLength=(float)System.Math.Sqrt(inwardX*inwardX+inwardY*inwardY);
+                    if(inwardLength<0.25f)
+                    {
+                        FailedRoadsideScenes.Add(best);
+                        Game.LogTrivial("AdvancedK9 Callouts: scene "+best+" rejected because a stable curb-to-road inward vector could not be calculated.");
+                        return PrepareRoadsideScene();
+                    }
+                    inwardX/=inwardLength;inwardY/=inwardLength;
+                    _curbAlignedVehiclePosition=new Vector3(curb.X+inwardX*1.35f,curb.Y+inwardY*1.35f,curb.Z);
+                    stagedScene=_curbAlignedVehiclePosition;
+                    Game.LogTrivial("AdvancedK9 Callouts: curb formation resolved for scene "+best+": boundary="+curb+", roadReference="+verifiedRoad+", vehicleCenter="+stagedScene+", fixedHeading="+_sceneHeading+".");
                 }
                 else
                 {
@@ -182,22 +195,24 @@ namespace AdvancedK9.Callouts
             }
             _hidingPosition=hidingPosition;
 
-            SceneVehicle=SpawnVehicle("primo",Scene,_sceneHeading);
+            SceneVehicle=SpawnVehicle("primo",_curbAlignedVehiclePosition,_sceneHeading,true);
             if(SceneVehicle==null||!SceneVehicle.Exists())return RejectCurrentScene("suspect vehicle spawn failed");
             SceneVehicle.IsPersistent=true;
-            _sceneHeading=SceneVehicle.Heading;
-            // Preserve the lane-node position calculated by SpawnVehicle.
+            SceneVehicle.Position=_curbAlignedVehiclePosition;
+            SceneVehicle.Heading=_sceneHeading;
             NativeFunction.Natives.SET_VEHICLE_ON_GROUND_PROPERLY(SceneVehicle);
             GameFiber.Yield();
-            if(!StagePoliceScene())return RejectCurrentScene("police scene staging failed");
-            if(PoliceVehicle==null||!PoliceVehicle.Exists())return RejectCurrentScene("police cruiser unavailable after staging");
             float vehicleRadians=(float)(_sceneHeading*System.Math.PI/180.0);
-            PoliceVehicle.Position=SceneVehicle.Position-new Vector3((float)System.Math.Sin(vehicleRadians)*7.5f,(float)System.Math.Cos(vehicleRadians)*7.5f,0f);
+            Vector3 roadForward=new Vector3(-(float)System.Math.Sin(vehicleRadians),(float)System.Math.Cos(vehicleRadians),0f);
+            Vector3 cruiserPosition=SceneVehicle.Position-roadForward*9f;
+            if(!StagePoliceScene(cruiserPosition,_sceneHeading,true))return RejectCurrentScene("police scene staging failed");
+            if(PoliceVehicle==null||!PoliceVehicle.Exists())return RejectCurrentScene("police cruiser unavailable after staging");
+            PoliceVehicle.Position=cruiserPosition;
             PoliceVehicle.Heading=_sceneHeading;
             PoliceVehicle.IsPersistent=true;
             NativeFunction.Natives.SET_VEHICLE_ON_GROUND_PROPERLY(PoliceVehicle);
             GameFiber.Yield();
-            Game.LogTrivial("AdvancedK9 Callouts: traffic-stop cruiser snapped 7.5 metres behind the lane-aligned suspect vehicle using the native road heading.");
+            Game.LogTrivial("AdvancedK9 Callouts: final curb formation locked: suspect="+SceneVehicle.Position+", cruiser="+PoliceVehicle.Position+", heading="+_sceneHeading+", gap="+SceneVehicle.DistanceTo(PoliceVehicle)+".");
             ConfigureTrafficStopScene();
             ControlSceneTraffic();
             StartBackupOfficerInvestigationLoops();
