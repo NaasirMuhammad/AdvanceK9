@@ -183,9 +183,7 @@ namespace AdvancedK9.Callouts
 
             SceneVehicle=SpawnVehicle("primo",Scene,_sceneHeading);
             if(SceneVehicle==null||!SceneVehicle.Exists())return RejectCurrentScene("suspect vehicle spawn failed");
-            SceneVehicle.IsPersistent=true;
-            _sceneHeading=SceneVehicle.Heading;
-            NativeFunction.Natives.SET_VEHICLE_ON_GROUND_PROPERLY(SceneVehicle);
+            SceneVehicle.IsPersistent=true;SceneVehicle.Heading=_sceneHeading;NativeFunction.Natives.SET_VEHICLE_ON_GROUND_PROPERLY(SceneVehicle);
             if(!StagePoliceScene())return RejectCurrentScene("police scene staging failed");
             if(PoliceVehicle!=null&&PoliceVehicle.Exists()){PoliceVehicle.Heading=_sceneHeading;NativeFunction.Natives.SET_VEHICLE_ON_GROUND_PROPERLY(PoliceVehicle);}
             if(!ValidateTrafficStopFormation(SceneVehicle,PoliceVehicle,_sceneHeading))
@@ -200,30 +198,25 @@ namespace AdvancedK9.Callouts
             }
             ConfigureTrafficStopScene();
             ControlSceneTraffic();
-            StartBackupOfficerInvestigationLoops();
             Game.LogTrivial("AdvancedK9 Callouts: accepted roadside scene spawned after successful trail validation.");
 
             Vector3 escapeStart=trailEnd;
-            Subject=SpawnPed("a_m_m_hillbilly_01",escapeStart,Random.Next(360));if(Subject==null||!Subject.Exists())return RejectCurrentScene("subject spawn failed");
-            Subject.Tasks.Clear();Subject.MaxHealth=500;Subject.Health=500;Subject.BlockPermanentEvents=true;Subject.IsPersistent=true;
+            Subject=SpawnPed("a_m_m_hillbilly_01",escapeStart,Random.Next(360));if(Subject==null)return RejectCurrentScene("subject spawn failed");
+            Subject.MaxHealth=500;Subject.Health=500;Subject.BlockPermanentEvents=true;Subject.IsPersistent=true;
+            NativeFunction.Natives.TASK_FOLLOW_NAV_MESH_TO_COORD(Subject,hidingPosition.X,hidingPosition.Y,hidingPosition.Z,5.2f,22000,2f,0,0f);
             var escapingSubject=Subject;var finalCover=hidingPosition;
             GameFiber.StartNew(delegate
             {
                 try
                 {
-                    if(escapingSubject==null||!escapingSubject.Exists())return;
-                    Game.LogTrivial("AdvancedK9 Callouts: assigning strict fugitive escape sequence.");
-                    using(var sequence=new TaskSequence())
-                    {
-                        sequence.Tasks.FollowNavigationMeshToPosition(finalCover,escapingSubject.Heading,5.2f);
-                        sequence.Tasks.StandStill(500);
-                        sequence.Close(false);
-                        escapingSubject.Tasks.PerformSequence(sequence);
-                    }
-                    NativeFunction.Natives.SET_PED_KEEP_TASK(escapingSubject,true);
-                    uint escapeStarted=Game.GameTime;
+                    uint escapeStarted=Game.GameTime,nextRetry=0;
                     while(!Finished&&escapingSubject!=null&&escapingSubject.Exists()&&escapingSubject.DistanceTo(finalCover)>5f&&Game.GameTime-escapeStarted<90000)
                     {
+                        if(Game.GameTime>=nextRetry)
+                        {
+                            nextRetry=Game.GameTime+4500;
+                            NativeFunction.Natives.TASK_FOLLOW_NAV_MESH_TO_COORD(escapingSubject,finalCover.X,finalCover.Y,finalCover.Z,5.4f,12000,2f,0,0f);
+                        }
                         if(Game.GameTime-escapeStarted>14000&&Game.LocalPlayer.Character.DistanceTo(escapingSubject)>85f)
                         {
                             Vector3 safeFinal;
@@ -236,8 +229,6 @@ namespace AdvancedK9.Callouts
                     {
                         Vector3 safeFinal;
                         if(TryResolveSafePedPosition(finalCover,out safeFinal))escapingSubject.Position=safeFinal;
-                        escapingSubject.Tasks.Clear();
-                        Game.LogTrivial("AdvancedK9 Callouts: escape sequence completed; assigning cover behavior.");
                         NativeFunction.Natives.TASK_SEEK_COVER_FROM_POS(escapingSubject,Scene.X,Scene.Y,Scene.Z,-1,false);
                         GameFiber.Wait(1200);
                         if(escapingSubject.Exists())NativeFunction.Natives.TASK_STAY_IN_COVER(escapingSubject);
