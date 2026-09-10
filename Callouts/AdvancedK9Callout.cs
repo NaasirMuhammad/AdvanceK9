@@ -114,17 +114,17 @@ namespace AdvancedK9.Callouts
             if(ped!=null&&ped.Exists()){ped.IsPersistent=true;ped.BlockPermanentEvents=true;}return ped;
         }
 
-        protected Vehicle SpawnVehicle(string modelName,Vector3 position,float heading)
+        protected Vehicle SpawnVehicle(string modelName,Vector3 position,float heading,bool exactPlacement=false)
         {
             Vector3 nodePosition;
             float nodeHeading;
             bool nodeFound=NativeFunction.Natives.GET_CLOSEST_VEHICLE_NODE_WITH_HEADING<bool>(
                 position.X,position.Y,position.Z,out nodePosition,out nodeHeading,1,3f,0);
-            Vector3 spawnPosition=nodeFound?nodePosition:position;
-            float spawnHeading=nodeFound?nodeHeading:heading;
+            Vector3 spawnPosition=exactPlacement?position:(nodeFound?nodePosition:position);
+            float spawnHeading=exactPlacement?heading:(nodeFound?nodeHeading:heading);
 
             Game.LogTrivial("AdvancedK9 Callouts: vehicle spawn request model="+modelName+
-                ", requested="+position+", nodeFound="+nodeFound+
+                ", requested="+position+", exactPlacement="+exactPlacement+", nodeFound="+nodeFound+
                 ", resolved="+spawnPosition+", heading="+spawnHeading+".");
 
             var model=new Model(modelName);
@@ -216,12 +216,12 @@ namespace AdvancedK9.Callouts
             if(prop!=null&&prop.Exists()){prop.IsPersistent=true;NativeFunction.Natives.PLACE_OBJECT_ON_GROUND_PROPERLY(prop);}return prop;
         }
 
-        private Vehicle SpawnPoliceVehicle(Vector3 position,float heading)
+        private Vehicle SpawnPoliceVehicle(Vector3 position,float heading,bool exactPlacement=false)
         {
             string[] models={"police3","police","sheriff"};
             foreach(string model in models)
             {
-                var vehicle=SpawnVehicle(model,position,heading);
+                var vehicle=SpawnVehicle(model,position,heading,exactPlacement);
                 if(vehicle!=null&&vehicle.Exists())return vehicle;
             }
             return null;
@@ -267,11 +267,11 @@ namespace AdvancedK9.Callouts
             return vehicleReady&&officersReady;
         }
 
-        protected bool StagePoliceScene(Vector3 cruiserPosition,float heading)
+        protected bool StagePoliceScene(Vector3 cruiserPosition,float heading,bool exactVehiclePlacement=false)
         {
             Vector3 officerOnePosition=new Vector3(Scene.X-2.5f,Scene.Y-2f,Scene.Z);
             Vector3 officerTwoPosition=new Vector3(Scene.X+2.5f,Scene.Y-2f,Scene.Z);
-            if(PoliceVehicle==null||!PoliceVehicle.Exists())PoliceVehicle=SpawnPoliceVehicle(cruiserPosition,heading);
+            if(PoliceVehicle==null||!PoliceVehicle.Exists())PoliceVehicle=SpawnPoliceVehicle(cruiserPosition,heading,exactVehiclePlacement);
             if(OfficerOne==null||!OfficerOne.Exists())OfficerOne=SpawnPoliceOfficer(officerOnePosition,heading);
             if(OfficerTwo==null||!OfficerTwo.Exists())OfficerTwo=SpawnPoliceOfficer(officerTwoPosition,heading);
             if(PoliceVehicle!=null&&PoliceVehicle.Exists())
