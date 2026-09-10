@@ -120,10 +120,7 @@ namespace AdvancedK9.Callouts
             float nodeHeading;
             bool nodeFound=NativeFunction.Natives.GET_CLOSEST_VEHICLE_NODE_WITH_HEADING<bool>(
                 position.X,position.Y,position.Z,out nodePosition,out nodeHeading,1,3f,0);
-            // The supplied position is already the resolved curb/shoulder point. Use
-            // the road node only for alignment; replacing X/Y with the node position
-            // moves staged vehicles back into the live travel lane.
-            Vector3 spawnPosition=position;
+            Vector3 spawnPosition=nodeFound?nodePosition:position;
             float spawnHeading=nodeFound?nodeHeading:heading;
 
             Game.LogTrivial("AdvancedK9 Callouts: vehicle spawn request model="+modelName+
@@ -150,6 +147,7 @@ namespace AdvancedK9.Callouts
             }
 
             vehicle.IsPersistent=true;
+            vehicle.Position=spawnPosition;
             vehicle.Heading=spawnHeading;
             NativeFunction.Natives.SET_VEHICLE_ON_GROUND_PROPERLY(vehicle);
             Game.LogTrivial("AdvancedK9 Callouts: vehicle spawn complete model="+modelName+
@@ -193,10 +191,13 @@ namespace AdvancedK9.Callouts
                         using(var sequence=new TaskSequence(officer))
                         {
                             sequence.Tasks.FollowNavigationMeshToPosition(points[0],SceneVehicle.Heading,1.25f);
+                            sequence.Tasks.PlayAnimation("amb@code_human_police_investigate@idle_a","idle_a",1.0f,AnimationFlags.Loop);
                             sequence.Tasks.StandStill(1200);
                             sequence.Tasks.FollowNavigationMeshToPosition(points[1],SceneVehicle.Heading,1.1f);
+                            sequence.Tasks.PlayAnimation("amb@code_human_police_investigate@idle_a","idle_a",1.0f,AnimationFlags.Loop);
                             sequence.Tasks.StandStill(2200);
                             sequence.Tasks.FollowNavigationMeshToPosition(points[2],SceneVehicle.Heading,1.15f);
+                            sequence.Tasks.PlayAnimation("amb@code_human_police_investigate@idle_a","idle_a",1.0f,AnimationFlags.Loop);
                             sequence.Tasks.StandStill(1600);
                         }
                         NativeFunction.Natives.SET_PED_KEEP_TASK(officer,true);
