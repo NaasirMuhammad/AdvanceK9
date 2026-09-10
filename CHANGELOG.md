@@ -505,6 +505,11 @@ All published AdvancedK9 versions are beta builds.
 - Removed the nonfunctional cross-AppDomain reflection duty gate.
 - Starts the K9 controller directly from the RPH plugin entry point.
 - Corrected the kennel/profile shortcut documentation to Left Ctrl + U.
+# 0.24.0.42
+
+- Prevented an accepted Fugitive Trail callout from being cleared by inconsistent curb/shoulder road classification.
+- A failed post-spawn formation audit now realigns the cruiser behind the stopped vehicle and continues the incident instead of ending it.
+
 # 0.24.0.41
 
 - Fixed Fugitive Trail ending immediately after acceptance when GTA returned opposite road boundaries for two correctly aligned traffic-stop vehicles.

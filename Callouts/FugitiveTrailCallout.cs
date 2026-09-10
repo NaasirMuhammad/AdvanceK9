@@ -186,7 +186,16 @@ namespace AdvancedK9.Callouts
             SceneVehicle.IsPersistent=true;SceneVehicle.Heading=_sceneHeading;NativeFunction.Natives.SET_VEHICLE_ON_GROUND_PROPERLY(SceneVehicle);
             if(!StagePoliceScene())return RejectCurrentScene("police scene staging failed");
             if(PoliceVehicle!=null&&PoliceVehicle.Exists()){PoliceVehicle.Heading=_sceneHeading;NativeFunction.Natives.SET_VEHICLE_ON_GROUND_PROPERLY(PoliceVehicle);}
-            if(!ValidateTrafficStopFormation(SceneVehicle,PoliceVehicle,_sceneHeading))return RejectCurrentScene("two-vehicle curb alignment failed final validation");
+            if(!ValidateTrafficStopFormation(SceneVehicle,PoliceVehicle,_sceneHeading))
+            {
+                // Native road classification is inconsistent at curb/shoulder seams.
+                // The callout is already accepted, so repair the deterministic formation
+                // instead of tearing down a valid incident after the player accepts it.
+                PoliceVehicle.Position=SceneVehicle.GetOffsetPosition(new Vector3(0f,-9f,0f));
+                PoliceVehicle.Heading=SceneVehicle.Heading;
+                NativeFunction.Natives.SET_VEHICLE_ON_GROUND_PROPERLY(PoliceVehicle);
+                Game.LogTrivial("AdvancedK9 Callouts: post-acceptance traffic-stop audit requested a formation repair; cruiser was realigned behind the stopped vehicle and the callout continued.");
+            }
             ConfigureTrafficStopScene();
             ControlSceneTraffic();
             Game.LogTrivial("AdvancedK9 Callouts: accepted roadside scene spawned after successful trail validation.");
