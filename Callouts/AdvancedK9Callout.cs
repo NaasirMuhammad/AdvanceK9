@@ -56,11 +56,14 @@ namespace AdvancedK9.Callouts
         private uint _nextCalloutBridgeObservation;
         private bool _supportContainmentLogged;
         private bool _backupInvestigationActive;
+        private bool _custodyObservationEnabled=true;
+        protected bool _k9DisengageIssued;
         private string _incidentVariant="General",_incidentJurisdiction="Local patrol jurisdiction",_incidentVehicle="Not yet reported",_incidentSuspect="Not yet reported",_incidentDirection="Not yet reported",_incidentRisk="Not yet determined";
         private string _lastDispatchSignature="";
         private uint _lastDispatchAt;
         private string _medicalStage="not-requested";
         private string _transportStage="not-requested";
+        private bool _suspectLocationPublished;
         private static bool _nexusAudioSurfacesLogged;
         protected bool MedicalResponseStarted{get{return _medicalResponseStarted;}}
         protected bool MedicalResponseComplete;
@@ -69,6 +72,7 @@ namespace AdvancedK9.Callouts
         protected bool CustodyLocked{get{return _custodyLeaseActive;}}
         protected bool CustodyOwnerStable{get{return _custodyLeaseActive&&Game.GameTime>=_custodyOwnerSettleUntil&&!string.Equals(_custodyOwner,"Determining provider",StringComparison.OrdinalIgnoreCase);}}
         protected bool ArrestProviderOwnsSubject{get{return _suspectLifecycle>=SuspectLifecycle.ArrestInProgress;}}
+        protected void SetCustodyObservationEnabled(bool enabled){_custodyObservationEnabled=enabled;}
         protected bool SuspectControlLocked
         {
             get
@@ -116,7 +120,10 @@ namespace AdvancedK9.Callouts
             float nodeHeading;
             bool nodeFound=NativeFunction.Natives.GET_CLOSEST_VEHICLE_NODE_WITH_HEADING<bool>(
                 position.X,position.Y,position.Z,out nodePosition,out nodeHeading,1,3f,0);
-            Vector3 spawnPosition=nodeFound?nodePosition:position;
+            // The supplied position is already the resolved curb/shoulder point. Use
+            // the road node only for alignment; replacing X/Y with the node position
+            // moves staged vehicles back into the live travel lane.
+            Vector3 spawnPosition=position;
             float spawnHeading=nodeFound?nodeHeading:heading;
 
             Game.LogTrivial("AdvancedK9 Callouts: vehicle spawn request model="+modelName+
@@ -166,6 +173,12 @@ namespace AdvancedK9.Callouts
             StartOfficerInvestigationLoop(OfficerTwo,new[]{passengerRear,passengerDoor,trunkCheck},"passenger-side");
         }
 
+        protected void StopBackupOfficerInvestigation()
+        {
+            _backupInvestigationActive=false;
+            Game.LogTrivial("AdvancedK9 Callouts: backup investigation ownership released for the next callout phase.");
+        }
+
         private void StartOfficerInvestigationLoop(Ped officer,Vector3[] points,string role)
         {
             if(officer==null||!officer.Exists())return;
@@ -189,7 +202,7 @@ namespace AdvancedK9.Callouts
                         NativeFunction.Natives.SET_PED_KEEP_TASK(officer,true);
                         Game.LogTrivial("AdvancedK9 Callouts: "+role+" backup investigation sequence assigned.");
                         uint cycleStarted=Game.GameTime;
-                        while(!Finished&&_backupInvestigationActive&&officer.Exists()&&Game.GameTime-cycleStarted<14000)GameFiber.Wait(250);
+                        while(!Finished&&_backupInvestigationActive&&officer.Exists()&&Game.GameTime-cycleStarted<22000)GameFiber.Wait(250);
                     }
                 }
                 catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: "+role+" investigation loop contained: "+ex.Message);}
@@ -324,7 +337,8 @@ namespace AdvancedK9.Callouts
             if(eventName=="TransportRequested")_transportStage="requested";else if(eventName=="TransportArrived")_transportStage="arrived";else if(eventName=="TransportLoaded")_transportStage="loaded";else if(eventName=="TransportComplete")_transportStage="complete";else if(eventName=="TransportFailed")_transportStage="failed";
             string k9State="not-tracking";K9ApiSnapshot snapshot;
             if(AdvancedK9Api.TryGetSnapshot(out snapshot)&&!string.IsNullOrWhiteSpace(snapshot.State))k9State=snapshot.State;
-            string located=eventName=="SuspectLocated"||eventName=="K9Apprehension"||_custodyLeaseActive?"located":"not-located";
+            if(eventName=="SuspectLocated"||eventName=="K9Apprehension"||eventName=="SuspectSurrender"||_custodyLeaseActive)_suspectLocationPublished=true;
+            string located=_suspectLocationPublished?"located":"not-located";
             string apprehension=eventName=="K9Apprehension"?"k9-controlled":_custodyLeaseActive?"arrest-provider-control":"none";
             string surrender=_suspectLifecycle>=SuspectLifecycle.ArrestInProgress?"secured":eventName=="SuspectSurrender"||SubjectIsComplying()?"complying":"not-compliant";
             string bite=eventName=="K9Apprehension"||_medicalStage!="not-requested"?"injured":"none";
@@ -575,7 +589,7 @@ namespace AdvancedK9.Callouts
 
         protected void ObserveSuspectLifecycle()
         {
-            if(Subject==null||!Subject.Exists())return;
+            if(!_custodyObservationEnabled||Subject==null||!Subject.Exists())return;
             bool arresting=false;
             try{arresting=NativeFunction.Natives.IS_PED_BEING_ARRESTED<bool>(Subject);}catch{}
             try
@@ -694,7 +708,7 @@ namespace AdvancedK9.Callouts
                 NativeFunction.Natives.SET_PED_COMBAT_ABILITY(OfficerOne,2);
                 NativeFunction.Natives.SET_PED_COMBAT_MOVEMENT(OfficerOne,2);
                 float distance=OfficerOne.DistanceTo(handler);
-                if(distance>55f){Vector3 catchup=handler.GetOffsetPosition(new Vector3(-3.2f,-9f,0f));Vector3 safe;if(TryResolveSafePedPosition(catchup,out safe))OfficerOne.Position=safe;}
+                if(distance>28f){Vector3 catchup=handler.GetOffsetPosition(new Vector3(-3.2f,-9f,0f));Vector3 safe;if(TryResolveSafePedPosition(catchup,out safe))OfficerOne.Position=safe;}
                 NativeFunction.Natives.SET_PED_AS_GROUP_MEMBER(OfficerOne,NativeFunction.Natives.GET_PED_GROUP_INDEX<int>(handler));
                 NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(OfficerOne,handler,-3.2f,-7.5f,0f,distance>25f?7.5f:5.8f,-1,3.5f,true);
                 NativeFunction.Natives.SET_PED_KEEP_TASK(OfficerOne,true);
@@ -707,7 +721,7 @@ namespace AdvancedK9.Callouts
                 NativeFunction.Natives.SET_PED_COMBAT_ABILITY(OfficerTwo,2);
                 NativeFunction.Natives.SET_PED_COMBAT_MOVEMENT(OfficerTwo,2);
                 float distance=OfficerTwo.DistanceTo(handler);
-                if(distance>55f){Vector3 catchup=handler.GetOffsetPosition(new Vector3(3.2f,-11f,0f));Vector3 safe;if(TryResolveSafePedPosition(catchup,out safe))OfficerTwo.Position=safe;}
+                if(distance>28f){Vector3 catchup=handler.GetOffsetPosition(new Vector3(3.2f,-11f,0f));Vector3 safe;if(TryResolveSafePedPosition(catchup,out safe))OfficerTwo.Position=safe;}
                 NativeFunction.Natives.SET_PED_AS_GROUP_MEMBER(OfficerTwo,NativeFunction.Natives.GET_PED_GROUP_INDEX<int>(handler));
                 NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(OfficerTwo,handler,3.2f,-9f,0f,distance>25f?7.2f:5.6f,-1,3.8f,true);
                 NativeFunction.Natives.SET_PED_KEEP_TASK(OfficerTwo,true);
@@ -775,7 +789,7 @@ namespace AdvancedK9.Callouts
             // points in the same lane. Boundary availability is useful, but comparing
             // the returned distances is not a stable same-lane test. The explicit
             // behind-vehicle offset is the authoritative lateral/longitudinal check.
-            bool valid=roadA&&roadB&&curbResolvedA&&curbResolvedB&&delta<=12f&&expectedDelta<=12f&&gap>=6f&&gap<=15f&&laneOffset<=4.5f;
+            bool valid=roadA&&roadB&&curbResolvedA&&curbResolvedB&&delta<=8f&&expectedDelta<=8f&&gap>=7f&&gap<=12f&&laneOffset<=1.5f;
             Game.LogTrivial("AdvancedK9 Callouts: traffic-stop formation audit: road="+roadA+"/"+roadB+", boundary="+curbResolvedA+"/"+curbResolvedB+", headingDelta="+delta+", expectedDelta="+expectedDelta+", gap="+gap+", laneOffset="+laneOffset+", diagnosticCurbDifference="+curbDifference+", valid="+valid+".");
             return valid;
         }
@@ -900,7 +914,7 @@ namespace AdvancedK9.Callouts
                     DispatchUpdate("MedicalRequested","K9 apprehension injury","Current jurisdiction","EMS response","Injured restrained suspect","Live apprehension location","K9 bite injury", "K9 apprehension injury reported. EMS is responding Code 3 to the live suspect location.","ATTENTION_ALL_UNITS AMBULANCE_RESPOND_CODE_3",downedPosition);
                     Game.DisplayNotification("~b~Dispatch:~s~ K9 apprehension injury reported. EMS has been requested Code 3 to the suspect's live location.");
                     Game.LogTrivial("AdvancedK9 Callouts: requested LSPDFR ambulance response to live downed suspect position "+downedPosition+".");
-                    Ped respondingMedic=null;uint responseDeadline=Game.GameTime+60000;
+                    Ped respondingMedic=null;uint responseDeadline=Game.GameTime+25000;
                     while(suspect.Exists()&&Game.GameTime<responseDeadline)
                     {
                         respondingMedic=FindRespondingMedic(suspect,existingPedHandles);
@@ -925,7 +939,14 @@ namespace AdvancedK9.Callouts
                     NativeFunction.Natives.TASK_FOLLOW_NAV_MESH_TO_COORD(respondingMedic,suspect.Position.X,suspect.Position.Y,suspect.Position.Z,2.2f,12000,1.4f,0,0f);
                     uint approachDeadline=Game.GameTime+12000;
                     while(respondingMedic.Exists()&&suspect.Exists()&&respondingMedic.DistanceTo(suspect)>2.2f&&Game.GameTime<approachDeadline)GameFiber.Wait(250);
-                    if(!respondingMedic.Exists()||!suspect.Exists()||respondingMedic.DistanceTo(suspect)>2.2f)
+                    if(respondingMedic!=null&&respondingMedic.Exists()&&suspect.Exists()&&respondingMedic.DistanceTo(suspect)>2.2f)
+                    {
+                        Vector3 closeContact=suspect.GetOffsetPosition(new Vector3(1.5f,-1.2f,0f));Vector3 safeContact;
+                        if(TryResolveSafePedPosition(closeContact,out safeContact))respondingMedic.Position=safeContact;
+                        GameFiber.Yield();
+                        Game.LogTrivial("AdvancedK9 Callouts: EMS pathing timed out; medic was safely restaged at the live patient position.");
+                    }
+                    if(!respondingMedic.Exists()||!suspect.Exists()||respondingMedic.DistanceTo(suspect)>3.2f)
                     {
                         _medicalStage="failed";
                         DispatchUpdate("MedicalFailed","K9 apprehension injury","Current jurisdiction","EMS on scene","Injured restrained suspect","Live apprehension location","No patient contact","EMS arrived but did not reach the suspect. Medical clearance is withheld.","",suspect.Position);
@@ -953,10 +974,11 @@ namespace AdvancedK9.Callouts
                     if(!ArrestProviderOwnsSubject&&!UpdateCustodyLease())suspect.Health=System.Math.Max(suspect.Health,serious?System.Math.Max(50,suspect.MaxHealth/2):System.Math.Max(75,suspect.MaxHealth*3/4));
                     if(serious)
                     {
-                        Game.DisplayNotification("~o~Dispatch:~s~ EMS reports serious injuries and will assume hospital transport; patrol retains the arrest hold.");
+                        Game.DisplayNotification("~o~Dispatch:~s~ EMS reports serious injuries. Request medical transport manually if hospital care is required.");
                         SeriousMedicalTransport=true;
-                        _medicalStage="serious-transport";
+                        _medicalStage="serious-treated";
                         MedicalResponseComplete=true;
+                        DispatchUpdate("MedicalComplete","K9 apprehension injury","Current jurisdiction","EMS on scene","Seriously injured restrained suspect","Live apprehension location","Serious but treated","EMS completed on-scene stabilization. Any hospital or prisoner transport must be requested manually.","",suspect.Position);
                         return;
                     }
                     else
