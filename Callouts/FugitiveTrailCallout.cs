@@ -27,8 +27,7 @@ namespace AdvancedK9.Callouts
         private bool _deathReported;
         private Vector3 _hidingPosition;
         private uint _nextHideTask;
-        private static int _lastRoadsideScene=-1;
-        private static int _previousRoadsideScene=-1;
+        private static readonly Queue<int> RecentRoadsideScenes=new Queue<int>();
         private static readonly HashSet<int> FailedRoadsideScenes=new HashSet<int>();
         private int _sceneIndex=-1;
         private int _selectionAttempts;
@@ -67,7 +66,7 @@ namespace AdvancedK9.Callouts
             var eligible=new List<int>();
             for(int i=0;i<RoadsideScenes.Length;i++)
             {
-                if(i==_lastRoadsideScene||i==_previousRoadsideScene||FailedRoadsideScenes.Contains(i))continue;
+                if(RecentRoadsideScenes.Contains(i)||FailedRoadsideScenes.Contains(i))continue;
                 float distance=player.DistanceTo(RoadsideScenes[i]);
                 if(distance<180f||distance>2200f)continue;
                 int interior=NativeFunction.Natives.GET_INTERIOR_AT_COORDS<int>(RoadsideScenes[i].X,RoadsideScenes[i].Y,RoadsideScenes[i].Z);
@@ -79,12 +78,12 @@ namespace AdvancedK9.Callouts
             if(eligible.Count==0)
             {
                 FailedRoadsideScenes.Clear();
-                for(int i=0;i<RoadsideScenes.Length;i++)if(i!=_lastRoadsideScene&&i!=_previousRoadsideScene)eligible.Add(i);
+                for(int i=0;i<RoadsideScenes.Length;i++)if(!RecentRoadsideScenes.Contains(i))eligible.Add(i);
             }
             if(eligible.Count==0)return false;
             int best=eligible[Random.Next(eligible.Count)];
-            _previousRoadsideScene=_lastRoadsideScene;
-            _lastRoadsideScene=best;
+            RecentRoadsideScenes.Enqueue(best);
+            while(RecentRoadsideScenes.Count>3)RecentRoadsideScenes.Dequeue();
             _sceneIndex=best;
             _sceneHeading=RoadsideHeadings[best];
             Vector3 stagedScene=RoadsideScenes[best];
@@ -111,7 +110,8 @@ namespace AdvancedK9.Callouts
                         return PrepareRoadsideScene();
                     }
                     inwardX/=inwardLength;inwardY/=inwardLength;
-                    _curbAlignedVehiclePosition=new Vector3(curb.X+inwardX*1.35f,curb.Y+inwardY*1.35f,curb.Z);
+                    float curbInset=best==11?0.90f:1.35f;
+                    _curbAlignedVehiclePosition=new Vector3(curb.X+inwardX*curbInset,curb.Y+inwardY*curbInset,curb.Z);
                     stagedScene=_curbAlignedVehiclePosition;
                     Game.LogTrivial("AdvancedK9 Callouts: curb formation resolved for scene "+best+": boundary="+curb+", roadReference="+verifiedRoad+", vehicleCenter="+stagedScene+", fixedHeading="+_sceneHeading+".");
                 }
