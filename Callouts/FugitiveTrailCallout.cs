@@ -419,7 +419,7 @@ namespace AdvancedK9.Callouts
                     if(!_k9DisengageIssued&&AdvancedK9Api.TryGetSnapshot(out liveK9)&&(liveK9.State=="Apprehending"||liveK9.State=="HoldingSuspect"))
                     {
                         _k9DisengageIssued=true;
-                        AdvancedK9Api.SendCommand("Release",ContextId,Subject.Handle,"Ped",Subject.Position.X,Subject.Position.Y,Subject.Position.Z,"callout compliance/custody safety release");
+                        AdvancedK9Api.SendCommand("Release",ContextId,HandleOf(Subject),"Ped",Subject.Position.X,Subject.Position.Y,Subject.Position.Z,"callout compliance/custody safety release");
                         Game.LogTrivial("AdvancedK9 Callouts: compliance/custody detected; K9 release requested exactly once (release transitions the dog to medical standby).");
                     }
                     if(!_controlDispatchSent&&!ArrestProviderOwnsSubject)
