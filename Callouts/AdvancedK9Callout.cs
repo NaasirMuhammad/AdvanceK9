@@ -689,8 +689,12 @@ namespace AdvancedK9.Callouts
             bool roadA=NativeFunction.Natives.IS_POINT_ON_ROAD<bool>(stoppedVehicle.Position.X,stoppedVehicle.Position.Y,stoppedVehicle.Position.Z,0);
             bool roadB=NativeFunction.Natives.IS_POINT_ON_ROAD<bool>(cruiser.Position.X,cruiser.Position.Y,cruiser.Position.Z,0);
             Vector3 expectedCruiser=stoppedVehicle.GetOffsetPosition(new Vector3(0f,-9f,0f));float laneOffset=cruiser.DistanceTo(expectedCruiser);Vector3 curbA,curbB;bool curbResolvedA=NativeFunction.Natives.GET_ROAD_BOUNDARY_USING_HEADING<bool>(stoppedVehicle.Position.X,stoppedVehicle.Position.Y,stoppedVehicle.Position.Z,expectedHeading,out curbA),curbResolvedB=NativeFunction.Natives.GET_ROAD_BOUNDARY_USING_HEADING<bool>(cruiser.Position.X,cruiser.Position.Y,cruiser.Position.Z,expectedHeading,out curbB);float curbDifference=curbResolvedA&&curbResolvedB?Math.Abs(curbA.DistanceTo(stoppedVehicle.Position)-curbB.DistanceTo(cruiser.Position)):99f;
-            bool valid=roadA&&roadB&&delta<=12f&&expectedDelta<=12f&&gap>=6f&&gap<=15f&&laneOffset<=4.5f&&curbDifference<=3.5f;
-            Game.LogTrivial("AdvancedK9 Callouts: traffic-stop formation audit: road="+roadA+"/"+roadB+", headingDelta="+delta+", expectedDelta="+expectedDelta+", gap="+gap+", laneOffset="+laneOffset+", curbDifference="+curbDifference+", valid="+valid+".");
+            // GET_ROAD_BOUNDARY_USING_HEADING may select opposite boundaries for two
+            // points in the same lane. Boundary availability is useful, but comparing
+            // the returned distances is not a stable same-lane test. The explicit
+            // behind-vehicle offset is the authoritative lateral/longitudinal check.
+            bool valid=roadA&&roadB&&curbResolvedA&&curbResolvedB&&delta<=12f&&expectedDelta<=12f&&gap>=6f&&gap<=15f&&laneOffset<=4.5f;
+            Game.LogTrivial("AdvancedK9 Callouts: traffic-stop formation audit: road="+roadA+"/"+roadB+", boundary="+curbResolvedA+"/"+curbResolvedB+", headingDelta="+delta+", expectedDelta="+expectedDelta+", gap="+gap+", laneOffset="+laneOffset+", diagnosticCurbDifference="+curbDifference+", valid="+valid+".");
             return valid;
         }
 
