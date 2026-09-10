@@ -55,6 +55,7 @@ namespace AdvancedK9.Callouts
         private string _calloutBridgeRequestId="";
         private uint _nextCalloutBridgeObservation;
         private bool _supportContainmentLogged;
+        private bool _backupInvestigationActive;
         private string _incidentVariant="General",_incidentJurisdiction="Local patrol jurisdiction",_incidentVehicle="Not yet reported",_incidentSuspect="Not yet reported",_incidentDirection="Not yet reported",_incidentRisk="Not yet determined";
         private string _lastDispatchSignature="";
         private uint _lastDispatchAt;
@@ -160,43 +161,39 @@ namespace AdvancedK9.Callouts
             Vector3 passengerDoor=SceneVehicle.GetOffsetPosition(new Vector3(1.8f,.2f,0f));
             Vector3 trunkCheck=SceneVehicle.GetOffsetPosition(new Vector3(1.1f,-2.8f,0f));
 
-            if(OfficerOne!=null&&OfficerOne.Exists())
-            {
-                OfficerOne.BlockPermanentEvents=true;
-                OfficerOne.Tasks.Clear();
-                using(var sequence=new TaskSequence())
-                {
-                    sequence.Tasks.FollowNavigationMeshToPosition(driverRear,SceneVehicle.Heading,1.25f);
-                    sequence.Tasks.StandStill(1200);
-                    sequence.Tasks.FollowNavigationMeshToPosition(driverDoor,SceneVehicle.Heading,1.1f);
-                    sequence.Tasks.StandStill(2200);
-                    sequence.Tasks.FollowNavigationMeshToPosition(frontCheck,SceneVehicle.Heading,1.15f);
-                    sequence.Tasks.StandStill(1600);
-                    sequence.Close(true);
-                    OfficerOne.Tasks.PerformSequence(sequence);
-                }
-                NativeFunction.Natives.SET_PED_KEEP_TASK(OfficerOne,true);
-                Game.LogTrivial("AdvancedK9 Callouts: OfficerOne repeating driver-side investigation sequence assigned.");
-            }
+            _backupInvestigationActive=true;
+            StartOfficerInvestigationLoop(OfficerOne,new[]{driverRear,driverDoor,frontCheck},"driver-side");
+            StartOfficerInvestigationLoop(OfficerTwo,new[]{passengerRear,passengerDoor,trunkCheck},"passenger-side");
+        }
 
-            if(OfficerTwo!=null&&OfficerTwo.Exists())
+        private void StartOfficerInvestigationLoop(Ped officer,Vector3[] points,string role)
+        {
+            if(officer==null||!officer.Exists())return;
+            GameFiber.StartNew(delegate
             {
-                OfficerTwo.BlockPermanentEvents=true;
-                OfficerTwo.Tasks.Clear();
-                using(var sequence=new TaskSequence())
+                try
                 {
-                    sequence.Tasks.FollowNavigationMeshToPosition(passengerRear,SceneVehicle.Heading,1.25f);
-                    sequence.Tasks.StandStill(1200);
-                    sequence.Tasks.FollowNavigationMeshToPosition(passengerDoor,SceneVehicle.Heading,1.1f);
-                    sequence.Tasks.StandStill(2200);
-                    sequence.Tasks.FollowNavigationMeshToPosition(trunkCheck,SceneVehicle.Heading,1.15f);
-                    sequence.Tasks.StandStill(1600);
-                    sequence.Close(true);
-                    OfficerTwo.Tasks.PerformSequence(sequence);
+                    while(!Finished&&_backupInvestigationActive&&officer.Exists()&&SceneVehicle!=null&&SceneVehicle.Exists())
+                    {
+                        officer.BlockPermanentEvents=true;
+                        officer.Tasks.Clear();
+                        using(var sequence=new TaskSequence(officer))
+                        {
+                            sequence.Tasks.FollowNavigationMeshToPosition(points[0],SceneVehicle.Heading,1.25f);
+                            sequence.Tasks.StandStill(1200);
+                            sequence.Tasks.FollowNavigationMeshToPosition(points[1],SceneVehicle.Heading,1.1f);
+                            sequence.Tasks.StandStill(2200);
+                            sequence.Tasks.FollowNavigationMeshToPosition(points[2],SceneVehicle.Heading,1.15f);
+                            sequence.Tasks.StandStill(1600);
+                        }
+                        NativeFunction.Natives.SET_PED_KEEP_TASK(officer,true);
+                        Game.LogTrivial("AdvancedK9 Callouts: "+role+" backup investigation sequence assigned.");
+                        uint cycleStarted=Game.GameTime;
+                        while(!Finished&&_backupInvestigationActive&&officer.Exists()&&Game.GameTime-cycleStarted<14000)GameFiber.Wait(250);
+                    }
                 }
-                NativeFunction.Natives.SET_PED_KEEP_TASK(OfficerTwo,true);
-                Game.LogTrivial("AdvancedK9 Callouts: OfficerTwo repeating passenger-side investigation sequence assigned.");
-            }
+                catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: "+role+" investigation loop contained: "+ex.Message);}
+            },"AdvancedK9 "+role+" investigation");
         }
 
         protected Rage.Object SpawnProp(string modelName,Vector3 position)
@@ -677,6 +674,7 @@ namespace AdvancedK9.Callouts
 
         protected void SupportOfficersFollowK9()
         {
+            _backupInvestigationActive=false;
             if(_supportTrackingEnded)return;
             if(Game.GameTime<_nextSupportMove)return;
             K9ApiSnapshot snapshot;
