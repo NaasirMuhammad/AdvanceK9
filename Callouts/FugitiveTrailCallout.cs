@@ -28,6 +28,7 @@ namespace AdvancedK9.Callouts
         private Vector3 _hidingPosition;
         private uint _nextHideTask;
         private static int _lastRoadsideScene=-1;
+        private static int _previousRoadsideScene=-1;
         private static readonly HashSet<int> FailedRoadsideScenes=new HashSet<int>();
         private int _sceneIndex=-1;
         private int _selectionAttempts;
@@ -51,13 +52,13 @@ namespace AdvancedK9.Callouts
 
         private static readonly Vector3[] RoadsideScenes={
             new Vector3(-565f,-675f,33f),new Vector3(-1310f,-1261f,4f),new Vector3(-1430f,-590f,30f),
-            new Vector3(1110f,-1730f,35f),new Vector3(830f,-1830f,29f),
+            new Vector3(215f,-920f,30f),new Vector3(830f,-1830f,29f),
             new Vector3(1000f,-2535f,28f),new Vector3(-296f,-2732f,6f),
-            new Vector3(1690f,3591f,35f),new Vector3(1865f,3684f,34f),new Vector3(1180f,2690f,38f),
-            new Vector3(-445f,6037f,31f),new Vector3(-153f,6346f,31f),new Vector3(-2535f,2341f,33f)
+            new Vector3(1850f,3700f,34f),new Vector3(1080f,-690f,57f),new Vector3(-1500f,-790f,10f),
+            new Vector3(116f,-1942f,20f),new Vector3(-153f,6346f,31f),new Vector3(-3150f,1100f,20f)
         };
 
-        private static readonly float[] RoadsideHeadings={270f,110f,90f,180f,180f,85f,145f,210f,30f,180f,135f,45f,95f};
+        private static readonly float[] RoadsideHeadings={270f,110f,90f,160f,180f,85f,145f,30f,90f,140f,50f,45f,350f};
 
         private bool PrepareRoadsideScene()
         {
@@ -66,8 +67,7 @@ namespace AdvancedK9.Callouts
             var eligible=new List<int>();
             for(int i=0;i<RoadsideScenes.Length;i++)
             {
-                if(i==_lastRoadsideScene||FailedRoadsideScenes.Contains(i))continue;
-                if(i==3||i==7||i==8||i==9||i==12)continue;
+                if(i==_lastRoadsideScene||i==_previousRoadsideScene||FailedRoadsideScenes.Contains(i))continue;
                 float distance=player.DistanceTo(RoadsideScenes[i]);
                 if(distance<180f||distance>2200f)continue;
                 int interior=NativeFunction.Natives.GET_INTERIOR_AT_COORDS<int>(RoadsideScenes[i].X,RoadsideScenes[i].Y,RoadsideScenes[i].Z);
@@ -79,10 +79,11 @@ namespace AdvancedK9.Callouts
             if(eligible.Count==0)
             {
                 FailedRoadsideScenes.Clear();
-                for(int i=0;i<RoadsideScenes.Length;i++)if(i!=3&&i!=7&&i!=8&&i!=9&&i!=12&&i!=_lastRoadsideScene)eligible.Add(i);
+                for(int i=0;i<RoadsideScenes.Length;i++)if(i!=_lastRoadsideScene&&i!=_previousRoadsideScene)eligible.Add(i);
             }
             if(eligible.Count==0)return false;
             int best=eligible[Random.Next(eligible.Count)];
+            _previousRoadsideScene=_lastRoadsideScene;
             _lastRoadsideScene=best;
             _sceneIndex=best;
             _sceneHeading=RoadsideHeadings[best];
