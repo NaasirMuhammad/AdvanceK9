@@ -13,6 +13,7 @@
     <Compile Include="Bridge/Properties/AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
+    <Reference Include="Microsoft.CSharp" />
     <ProjectReference Include="Bridge/LspdfrApiShim/LspdfrApiShim.csproj" Private="false" />
   </ItemGroup>
   <ItemGroup>
