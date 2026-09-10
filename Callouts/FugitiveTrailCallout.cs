@@ -213,12 +213,10 @@ namespace AdvancedK9.Callouts
                 {
                     if(escapingSubject==null||!escapingSubject.Exists())return;
                     Game.LogTrivial("AdvancedK9 Callouts: assigning strict fugitive escape sequence.");
-                    using(var sequence=new TaskSequence())
+                    using(var sequence=new TaskSequence(escapingSubject))
                     {
                         sequence.Tasks.FollowNavigationMeshToPosition(finalCover,escapingSubject.Heading,5.2f);
                         sequence.Tasks.StandStill(500);
-                        sequence.Close(false);
-                        escapingSubject.Tasks.PerformSequence(sequence);
                     }
                     NativeFunction.Natives.SET_PED_KEEP_TASK(escapingSubject,true);
                     uint escapeStarted=Game.GameTime;
