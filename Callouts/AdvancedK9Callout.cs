@@ -11,6 +11,7 @@ namespace AdvancedK9.Callouts
 {
     public abstract class AdvancedK9Callout : Callout
     {
+        protected enum SuspectLifecycle{Located,Challenged,Surrendering,ArrestInProgress,CustodySettling,InCustody,AwaitingTransport,Transporting,Complete}
         protected readonly Random Random=new Random();
         protected string ContextId;
         protected Vector3 Scene;
@@ -44,27 +45,29 @@ namespace AdvancedK9.Callouts
         private string _lastCooperativeState="";
         private uint _custodyLeaseStarted;
         private bool _custodyLeaseActive;
-        private bool _healthyCustodyProtection;
         private uint _nextEmergencyLightRefresh;
         private uint _custodyObservedAt;
         private string _custodyOwner="None";
         private uint _deathObservedAt;
         private uint _custodyOwnerSettleUntil;
-        private uint _custodyProtectionUntil;
-        private bool _custodyProtectionApplied;
-        private bool _custodyProtectionCompleted;
+        private SuspectLifecycle _suspectLifecycle=SuspectLifecycle.Located;
+        private bool _arrestStartedPublished;
+        private string _calloutBridgeRequestId="";
+        private uint _nextCalloutBridgeObservation;
         private bool _supportContainmentLogged;
         private string _incidentVariant="General",_incidentJurisdiction="Local patrol jurisdiction",_incidentVehicle="Not yet reported",_incidentSuspect="Not yet reported",_incidentDirection="Not yet reported",_incidentRisk="Not yet determined";
         private string _lastDispatchSignature="";
         private uint _lastDispatchAt;
         private string _medicalStage="not-requested";
         private string _transportStage="not-requested";
+        private static bool _nexusAudioSurfacesLogged;
         protected bool MedicalResponseStarted{get{return _medicalResponseStarted;}}
         protected bool MedicalResponseComplete;
         protected bool SeriousMedicalTransport;
         protected string CustodyOwner{get{return _custodyOwner;}}
         protected bool CustodyLocked{get{return _custodyLeaseActive;}}
         protected bool CustodyOwnerStable{get{return _custodyLeaseActive&&Game.GameTime>=_custodyOwnerSettleUntil&&!string.Equals(_custodyOwner,"Determining provider",StringComparison.OrdinalIgnoreCase);}}
+        protected bool ArrestProviderOwnsSubject{get{return _suspectLifecycle>=SuspectLifecycle.ArrestInProgress;}}
         protected bool SuspectControlLocked
         {
             get
@@ -72,7 +75,8 @@ namespace AdvancedK9.Callouts
                 if(Subject==null||!Subject.Exists())return true;
                 K9ApiSnapshot snapshot;
                 bool k9Contact=AdvancedK9Api.TryGetSnapshot(out snapshot)&&(string.Equals(snapshot.State,"Apprehending",StringComparison.OrdinalIgnoreCase)||string.Equals(snapshot.State,"HoldingSuspect",StringComparison.OrdinalIgnoreCase));
-                return k9Contact||MedicalResponseStarted||SubjectIsComplying()||UpdateCustodyLease();
+                ObserveSuspectLifecycle();
+                return k9Contact||MedicalResponseStarted||SubjectIsComplying()||ArrestProviderOwnsSubject;
             }
         }
 
@@ -241,9 +245,9 @@ namespace AdvancedK9.Callouts
             if(AdvancedK9Api.TryGetSnapshot(out snapshot)&&!string.IsNullOrWhiteSpace(snapshot.State))k9State=snapshot.State;
             string located=eventName=="SuspectLocated"||eventName=="K9Apprehension"||_custodyLeaseActive?"located":"not-located";
             string apprehension=eventName=="K9Apprehension"?"k9-controlled":_custodyLeaseActive?"arrest-provider-control":"none";
-            string surrender=eventName=="SuspectSurrender"||SubjectIsComplying()?"complying":"not-compliant";
+            string surrender=_suspectLifecycle>=SuspectLifecycle.ArrestInProgress?"secured":eventName=="SuspectSurrender"||SubjectIsComplying()?"complying":"not-compliant";
             string bite=eventName=="K9Apprehension"||_medicalStage!="not-requested"?"injured":"none";
-            string structured="AK9_EVENT|eventId="+CleanDispatchValue(ContextId+":"+eventName)+"|event="+CleanDispatchValue(eventName)+"|callout="+CleanDispatchValue(GetType().Name)+"|variant="+CleanDispatchValue(_incidentVariant)+"|location="+CleanDispatchValue(ReadableLocation(position))+"|jurisdiction="+CleanDispatchValue(_incidentJurisdiction)+"|vehicle="+CleanDispatchValue(_incidentVehicle)+"|suspect="+CleanDispatchValue(_incidentSuspect)+"|direction="+CleanDispatchValue(_incidentDirection)+"|armedStatus="+CleanDispatchValue(_incidentRisk)+"|scentSource="+CleanDispatchValue(ApiRequested?"preserved driver-seat article":"pending")+"|scentStatus="+CleanDispatchValue(ApiRequested?(K9TrackingActive()?"tracking":"preserved"):"pending")+"|k9TrackingStatus="+CleanDispatchValue(k9State)+"|suspectLocatedStatus="+located+"|apprehensionStatus="+apprehension+"|surrenderStatus="+surrender+"|biteInjuryStatus="+bite+"|emsRequestStatus="+(_medicalStage=="not-requested"?"not-requested":"requested")+"|emsTreatmentStatus="+CleanDispatchValue(_medicalStage)+"|custodyOwner="+CleanDispatchValue(_custodyOwner)+"|arrestStatus="+(_custodyLeaseActive?"in-custody":"not-arrested")+"|transportRequestStatus="+CleanDispatchValue(_transportStage)+"|transportOwner="+CleanDispatchValue(_custodyOwner)+"|transportStatus="+CleanDispatchValue(_transportStage)+"|narrative="+CleanDispatchValue(message);
+            string structured="AK9_EVENT|eventId="+CleanDispatchValue(ContextId+":"+eventName)+"|event="+CleanDispatchValue(eventName)+"|callout="+CleanDispatchValue(GetType().Name)+"|variant="+CleanDispatchValue(_incidentVariant)+"|location="+CleanDispatchValue(ReadableLocation(position))+"|jurisdiction="+CleanDispatchValue(_incidentJurisdiction)+"|vehicle="+CleanDispatchValue(_incidentVehicle)+"|suspect="+CleanDispatchValue(_incidentSuspect)+"|direction="+CleanDispatchValue(_incidentDirection)+"|armedStatus="+CleanDispatchValue(_incidentRisk)+"|scentSource="+CleanDispatchValue(ApiRequested?"preserved driver-seat article":"pending")+"|scentStatus="+CleanDispatchValue(ApiRequested?(K9TrackingActive()?"tracking":"preserved"):"pending")+"|k9TrackingStatus="+CleanDispatchValue(k9State)+"|suspectLocatedStatus="+located+"|apprehensionStatus="+apprehension+"|surrenderStatus="+surrender+"|biteInjuryStatus="+bite+"|emsRequestStatus="+(_medicalStage=="not-requested"?"not-requested":"requested")+"|emsTreatmentStatus="+CleanDispatchValue(_medicalStage)+"|custodyOwner="+CleanDispatchValue(_custodyOwner)+"|arrestStatus="+(_suspectLifecycle>=SuspectLifecycle.InCustody?"in-custody":_suspectLifecycle>=SuspectLifecycle.ArrestInProgress?"arrest-in-progress":"not-arrested")+"|transportRequestStatus="+CleanDispatchValue(_transportStage)+"|transportOwner="+CleanDispatchValue(_custodyOwner)+"|transportStatus="+CleanDispatchValue(_transportStage)+"|narrative="+CleanDispatchValue(message);
             string signature=eventName+"|"+scenarioVariant+"|"+k9State+"|"+_medicalStage+"|"+_custodyOwner+"|"+message;
             if(signature==_lastDispatchSignature&&Game.GameTime-_lastDispatchAt<15000){Game.LogTrivial("AdvancedK9 Callouts: duplicate dispatch transition suppressed: "+eventName+".");return;}
             _lastDispatchSignature=signature;_lastDispatchAt=Game.GameTime;
@@ -279,17 +283,21 @@ namespace AdvancedK9.Callouts
         {
             try
             {
-                var nexus=AppDomain.CurrentDomain.GetAssemblies().FirstOrDefault(a=>a.GetName().Name.IndexOf("NexusDispatch",StringComparison.OrdinalIgnoreCase)>=0);
+                var nexus=AppDomain.CurrentDomain.GetAssemblies().FirstOrDefault(a=>a.GetName().Name.IndexOf("Nexus",StringComparison.OrdinalIgnoreCase)>=0);
                 if(nexus==null)return false;
                 string[] approvedNames={"RequestDispatchNarration","QueueDispatchNarrative","PublishDispatchEvent","SpeakIncidentUpdate"};
                 foreach(var type in nexus.GetTypes())
-                foreach(var method in type.GetMethods(System.Reflection.BindingFlags.Public|System.Reflection.BindingFlags.Static))
+                foreach(var method in type.GetMethods(System.Reflection.BindingFlags.Public|System.Reflection.BindingFlags.Static|System.Reflection.BindingFlags.Instance))
                 {
-                    if(!approvedNames.Contains(method.Name)||method.ReturnType!=typeof(void))continue;
+                    bool candidate=approvedNames.Contains(method.Name)||method.Name.IndexOf("Narrat",StringComparison.OrdinalIgnoreCase)>=0||method.Name.IndexOf("SpeakIncident",StringComparison.OrdinalIgnoreCase)>=0||method.Name.IndexOf("DispatchEvent",StringComparison.OrdinalIgnoreCase)>=0;
+                    if(!candidate)continue;
                     var parameters=method.GetParameters();
-                    if(parameters.Length==1&&parameters[0].ParameterType==typeof(string)){method.Invoke(null,new object[]{structured});return true;}
-                    if(parameters.Length==2&&parameters.All(p=>p.ParameterType==typeof(string))){method.Invoke(null,new object[]{narrative,structured});return true;}
+                    if(!_nexusAudioSurfacesLogged)Game.LogTrivial("AdvancedK9 Callouts: Nexus dynamic-audio surface: "+type.FullName+"."+method.Name+"("+string.Join(",",parameters.Select(p=>p.ParameterType.Name+" "+p.Name))+").");
+                    object instance=null;if(!method.IsStatic){var property=type.GetProperty("Instance",System.Reflection.BindingFlags.Public|System.Reflection.BindingFlags.Static)??type.GetProperty("Current",System.Reflection.BindingFlags.Public|System.Reflection.BindingFlags.Static);if(property==null)continue;instance=property.GetValue(null,null);if(instance==null)continue;}
+                    object result=null;if(parameters.Length==1&&parameters[0].ParameterType==typeof(string))result=method.Invoke(instance,new object[]{structured});else if(parameters.Length==2&&parameters.All(p=>p.ParameterType==typeof(string)))result=method.Invoke(instance,new object[]{narrative,structured});else continue;
+                    _nexusAudioSurfacesLogged=true;if(method.ReturnType==typeof(bool)&&!(bool)result)continue;Game.LogTrivial("AdvancedK9 Callouts: Gemini dispatch narrative accepted by "+type.FullName+"."+method.Name+".");return true;
                 }
+                _nexusAudioSurfacesLogged=true;
             }
             catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: Nexus dynamic dispatch request contained: "+ex.Message);}
             return false;
@@ -352,13 +360,14 @@ namespace AdvancedK9.Callouts
         {
             try
             {
+                if(_secondaryTrafficControlled&&center.DistanceTo(_secondaryTrafficCenter)<12f)radius=Math.Max(radius,35f);
                 Vehicle playerVehicle=Game.LocalPlayer.Character.CurrentVehicle;
                 foreach(Vehicle vehicle in World.GetAllVehicles())
                 {
                     if(vehicle==null||!vehicle.Exists()||vehicle.DistanceTo(center)>radius||vehicle==SceneVehicle||vehicle==PoliceVehicle||vehicle==playerVehicle)continue;
                     Ped driver=vehicle.Driver;
                     if(driver==null||!driver.Exists())continue;
-                    NativeFunction.Natives.TASK_VEHICLE_TEMP_ACTION(driver,vehicle,6,2500);
+                    NativeFunction.Natives.TASK_VEHICLE_TEMP_ACTION(driver,vehicle,6,5000);
                 }
             }
             catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: live traffic containment fallback: "+ex.Message);}
@@ -441,8 +450,8 @@ namespace AdvancedK9.Callouts
             if(Subject==null||!Subject.Exists())return false;
             try
             {
-                if(NativeFunction.Natives.IS_PED_CUFFED<bool>(Subject)||NativeFunction.Natives.IS_PED_BEING_ARRESTED<bool>(Subject)||NativeFunction.Natives.IS_PED_HANDCUFFED<bool>(Subject))return true;
-                foreach(string name in new[]{"IsPedGettingArrested","IsPedArrested"})
+                if(NativeFunction.Natives.IS_PED_CUFFED<bool>(Subject)||NativeFunction.Natives.IS_PED_HANDCUFFED<bool>(Subject))return true;
+                foreach(string name in new[]{"IsPedArrested"})
                 {
                     var method=typeof(Functions).GetMethod(name,System.Reflection.BindingFlags.Public|System.Reflection.BindingFlags.Static);
                     if(method!=null&&(bool)method.Invoke(null,new object[]{Subject}))return true;
@@ -462,7 +471,7 @@ namespace AdvancedK9.Callouts
         protected bool UpdateCustodyLease()
         {
             if(Subject==null||!Subject.Exists())return false;
-            MaintainArrestHandoffProtection();
+            ObserveSuspectLifecycle();
             if(_custodyLeaseActive)
             {
                 if(Game.GameTime>=_custodyOwnerSettleUntil&&string.Equals(_custodyOwner,"Determining provider",StringComparison.OrdinalIgnoreCase))_custodyOwner=DetectCustodyOwner();
@@ -472,37 +481,51 @@ namespace AdvancedK9.Callouts
             bool active=SubjectIsInCustody();
             if(active&&!_custodyLeaseActive)
             {
-                _custodyLeaseActive=true;_custodyLeaseStarted=Game.GameTime;_custodyObservedAt=Game.GameTime;_custodyOwnerSettleUntil=Game.GameTime+1800;_custodyProtectionUntil=Game.GameTime+6500;
-                bool healthy=Subject.Health>System.Math.Max(100,Subject.MaxHealth*3/4)&&!Subject.IsRagdoll;
-                Game.LogTrivial("AdvancedK9 Callouts: custody lease acquired; health="+Subject.Health+"/"+Subject.MaxHealth+", dead="+Subject.IsDead+", healthyProtection="+healthy+".");
-                _healthyCustodyProtection=healthy;
+                _custodyLeaseActive=true;_custodyLeaseStarted=Game.GameTime;_custodyObservedAt=Game.GameTime;_custodyOwnerSettleUntil=Game.GameTime+1800;
+                Game.LogTrivial("AdvancedK9 Callouts: custody lease acquired without changing suspect tasks, health, ragdoll, or invincibility; health="+Subject.Health+"/"+Subject.MaxHealth+".");
                 _custodyOwner="Determining provider";
+                _suspectLifecycle=SuspectLifecycle.CustodySettling;
                 Game.LogTrivial("AdvancedK9 Callouts: AdvancedK9 suspect tasking suspended for the external arrest provider.");
             }
-            if(active&&_healthyCustodyProtection&&Subject.Health>0&&Subject.IsDead&&Game.GameTime-_custodyObservedAt<3000)
+            if(active&&Subject.Health>0&&Subject.IsDead&&Game.GameTime-_custodyObservedAt<3000)
                 Game.LogTrivial("AdvancedK9 Callouts: transient provider handoff death flag ignored; no health, task, or resurrection write was issued.");
             return active;
         }
 
-        private void MaintainArrestHandoffProtection()
+        protected void ObserveSuspectLifecycle()
         {
             if(Subject==null||!Subject.Exists())return;
-            bool cooperative=_custodyLeaseActive||SubjectIsInCustody();
-            if(!cooperative){try{cooperative=NativeFunction.Natives.IS_PED_HANDS_UP<bool>(Subject);}catch{}}
-            if(cooperative&&Subject.Health>0&&!_custodyProtectionCompleted)
+            bool arresting=false;
+            try{arresting=NativeFunction.Natives.IS_PED_BEING_ARRESTED<bool>(Subject);}catch{}
+            try
             {
-                if(!_custodyProtectionApplied){_custodyProtectionApplied=true;_custodyProtectionUntil=Game.GameTime+6500;Game.LogTrivial("AdvancedK9 Callouts: non-bite arrest handoff protection engaged before provider transport initialization.");}
-                NativeFunction.Natives.SET_PED_CAN_RAGDOLL(Subject,false);Subject.IsInvincible=true;
+                var method=typeof(Functions).GetMethod("IsPedGettingArrested",System.Reflection.BindingFlags.Public|System.Reflection.BindingFlags.Static);
+                arresting=arresting||(method!=null&&(bool)method.Invoke(null,new object[]{Subject}));
             }
-            if(_custodyProtectionApplied&&_custodyLeaseActive&&Game.GameTime>=_custodyProtectionUntil&&!Subject.IsDead)
+            catch{}
+            if((arresting||SubjectIsInCustody())&&_suspectLifecycle<SuspectLifecycle.ArrestInProgress)
             {
-                NativeFunction.Natives.SET_PED_CAN_RAGDOLL(Subject,true);Subject.IsInvincible=false;_custodyProtectionApplied=false;_custodyProtectionCompleted=true;
-                Game.LogTrivial("AdvancedK9 Callouts: arrest handoff protection released after stable custody window.");
+                _suspectLifecycle=SuspectLifecycle.ArrestInProgress;
+                Game.LogTrivial("AdvancedK9 Callouts: arrest initiation observed; all queued surrender, flee, task, health, ragdoll, and invincibility writes are now blocked.");
+                if(!_arrestStartedPublished){_arrestStartedPublished=true;DispatchUpdate("ArrestStarted","Provider arrest handoff",_incidentJurisdiction,_incidentVehicle,_incidentSuspect,"Live arrest location",_incidentRisk,"The arrest provider has begun taking the suspect into custody.","",Subject.Position);}
             }
+            if(Game.GameTime>=_nextCalloutBridgeObservation){_nextCalloutBridgeObservation=Game.GameTime+750;WriteCalloutBridgeRequest("ObserveCustody");ReadCalloutBridgeState();}
+            if(SubjectIsInCustody()&&_suspectLifecycle<SuspectLifecycle.CustodySettling)_suspectLifecycle=SuspectLifecycle.CustodySettling;
+        }
+
+        private void WriteCalloutBridgeRequest(string action)
+        {
+            try{if(string.IsNullOrWhiteSpace(_calloutBridgeRequestId)||action=="RequestTransport")_calloutBridgeRequestId=ContextId+":"+action+":"+Guid.NewGuid().ToString("N");string path=Path.Combine("Plugins","LSPDFR","AdvancedK9","CalloutBridge.request");Directory.CreateDirectory(Path.GetDirectoryName(path));File.WriteAllLines(path,new[]{"Action="+action,"RequestId="+_calloutBridgeRequestId,"PedHandle="+HandleOf(Subject)});}catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: custody bridge request contained: "+ex.Message);}
+        }
+
+        private void ReadCalloutBridgeState()
+        {
+            try{string path=Path.Combine("Plugins","LSPDFR","AdvancedK9","CalloutBridge.state");if(!File.Exists(path))return;var map=File.ReadAllLines(path).Select(line=>new{line,split=line.IndexOf('=')}).Where(x=>x.split>0).ToDictionary(x=>x.line.Substring(0,x.split),x=>x.line.Substring(x.split+1),StringComparer.OrdinalIgnoreCase);string handle,owner,stage;map.TryGetValue("ObservedPedHandle",out handle);if(handle!=HandleOf(Subject).ToString())return;map.TryGetValue("CustodyOwner",out owner);map.TryGetValue("CustodyStage",out stage);if(!string.IsNullOrWhiteSpace(owner)&&owner!="None")_custodyOwner=owner;if(stage=="InCustody"){_custodyLeaseActive=true;_suspectLifecycle=SuspectLifecycle.InCustody;_custodyOwnerSettleUntil=Game.GameTime;}map.TryGetValue("TransportStage",out stage);if(!string.IsNullOrWhiteSpace(stage)&&stage!="NotRequested")_transportStage=stage.ToLowerInvariant();}catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: custody bridge state contained: "+ex.Message);}
         }
 
         private string DetectCustodyOwner()
         {
+            ReadCalloutBridgeState();if(!string.IsNullOrWhiteSpace(_custodyOwner)&&_custodyOwner!="None"&&_custodyOwner!="Determining provider")return _custodyOwner;
             try
             {
                 string path=Path.Combine("Plugins","LSPDFR","AdvancedK9","CompatibilityBridge.state");
@@ -524,7 +547,7 @@ namespace AdvancedK9.Callouts
             bool raw=Subject.Health<=0&&NativeFunction.Natives.IS_PED_DEAD_OR_DYING<bool>(Subject,true);
             if(!raw){_deathObservedAt=0;return false;}
             if(_deathObservedAt==0)_deathObservedAt=Game.GameTime;
-            if(_custodyLeaseActive)return false;
+            if(_custodyLeaseActive||ArrestProviderOwnsSubject)return false;
             return Game.GameTime-_deathObservedAt>=5000;
         }
 
@@ -577,7 +600,7 @@ namespace AdvancedK9.Callouts
             if(AdvancedK9Api.TryGetSnapshot(out snapshot)&&snapshot.DogHandle>0)_cachedDogHandle=snapshot.DogHandle;
             if(_cachedDogHandle>0&&NativeFunction.Natives.DOES_ENTITY_EXIST<bool>(_cachedDogHandle))
                 dogPosition=NativeFunction.Natives.GET_ENTITY_COORDS<Vector3>(_cachedDogHandle,true);
-            _nextSupportMove=Game.GameTime+4000;
+            _nextSupportMove=Game.GameTime+1500;
             var handler=Game.LocalPlayer.Character;
             uint taser=NativeFunction.Natives.GET_HASH_KEY<uint>("WEAPON_STUNGUN");
             uint pistol=NativeFunction.Natives.GET_HASH_KEY<uint>("WEAPON_COMBATPISTOL");
@@ -589,7 +612,7 @@ namespace AdvancedK9.Callouts
                 NativeFunction.Natives.SET_PED_COMBAT_ABILITY(OfficerOne,2);
                 NativeFunction.Natives.SET_PED_COMBAT_MOVEMENT(OfficerOne,2);
                 float distance=OfficerOne.DistanceTo(handler);
-                if(distance>70f){Vector3 catchup=handler.GetOffsetPosition(new Vector3(-3.2f,-9f,0f));Vector3 safe;if(TryResolveSafePedPosition(catchup,out safe))OfficerOne.Position=safe;}
+                if(distance>55f){Vector3 catchup=handler.GetOffsetPosition(new Vector3(-3.2f,-9f,0f));Vector3 safe;if(TryResolveSafePedPosition(catchup,out safe))OfficerOne.Position=safe;}
                 NativeFunction.Natives.SET_PED_AS_GROUP_MEMBER(OfficerOne,NativeFunction.Natives.GET_PED_GROUP_INDEX<int>(handler));
                 NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(OfficerOne,handler,-3.2f,-7.5f,0f,distance>25f?7.5f:5.8f,-1,3.5f,true);
                 NativeFunction.Natives.SET_PED_KEEP_TASK(OfficerOne,true);
@@ -602,7 +625,7 @@ namespace AdvancedK9.Callouts
                 NativeFunction.Natives.SET_PED_COMBAT_ABILITY(OfficerTwo,2);
                 NativeFunction.Natives.SET_PED_COMBAT_MOVEMENT(OfficerTwo,2);
                 float distance=OfficerTwo.DistanceTo(handler);
-                if(distance>70f){Vector3 catchup=handler.GetOffsetPosition(new Vector3(3.2f,-11f,0f));Vector3 safe;if(TryResolveSafePedPosition(catchup,out safe))OfficerTwo.Position=safe;}
+                if(distance>55f){Vector3 catchup=handler.GetOffsetPosition(new Vector3(3.2f,-11f,0f));Vector3 safe;if(TryResolveSafePedPosition(catchup,out safe))OfficerTwo.Position=safe;}
                 NativeFunction.Natives.SET_PED_AS_GROUP_MEMBER(OfficerTwo,NativeFunction.Natives.GET_PED_GROUP_INDEX<int>(handler));
                 NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(OfficerTwo,handler,3.2f,-9f,0f,distance>25f?7.2f:5.6f,-1,3.8f,true);
                 NativeFunction.Natives.SET_PED_KEEP_TASK(OfficerTwo,true);
@@ -614,7 +637,7 @@ namespace AdvancedK9.Callouts
         {
             if(_secondaryTrafficControlled)return;
             _secondaryTrafficCenter=center;
-            NativeFunction.Natives.SET_ROADS_IN_AREA(center.X-22f,center.Y-22f,center.Z-7f,center.X+22f,center.Y+22f,center.Z+7f,false,true);
+            NativeFunction.Natives.SET_ROADS_IN_AREA(center.X-35f,center.Y-35f,center.Z-7f,center.X+35f,center.Y+35f,center.Z+7f,false,true);
             _secondaryTrafficControlled=true;
             Game.LogTrivial("AdvancedK9 Callouts: moving traffic exclusion established around the apprehension area.");
         }
@@ -652,8 +675,9 @@ namespace AdvancedK9.Callouts
             if(!custody){SupportOfficersContainSubject();return;}
             uint taser=NativeFunction.Natives.GET_HASH_KEY<uint>("WEAPON_STUNGUN");
             uint pistol=NativeFunction.Natives.GET_HASH_KEY<uint>("WEAPON_COMBATPISTOL");
-            if(OfficerOne!=null&&OfficerOne.Exists()){NativeFunction.Natives.SET_CURRENT_PED_WEAPON(OfficerOne,taser,true);NativeFunction.Natives.TASK_AIM_GUN_AT_ENTITY(OfficerOne,Subject,1600,false);NativeFunction.Natives.SET_PED_KEEP_TASK(OfficerOne,true);}
-            if(OfficerTwo!=null&&OfficerTwo.Exists()){NativeFunction.Natives.SET_CURRENT_PED_WEAPON(OfficerTwo,pistol,true);NativeFunction.Natives.TASK_AIM_GUN_AT_ENTITY(OfficerTwo,Subject,1600,false);NativeFunction.Natives.SET_PED_KEEP_TASK(OfficerTwo,true);}
+            Vector3 contact=Subject.GetOffsetPosition(new Vector3(-3f,-6f,0f)),cover=Subject.GetOffsetPosition(new Vector3(4f,-9f,0f));
+            if(OfficerOne!=null&&OfficerOne.Exists()){NativeFunction.Natives.SET_CURRENT_PED_WEAPON(OfficerOne,taser,true);NativeFunction.Natives.TASK_FOLLOW_NAV_MESH_TO_COORD(OfficerOne,contact.X,contact.Y,contact.Z,2.2f,5000,1.8f,0,0f);NativeFunction.Natives.SET_PED_KEEP_TASK(OfficerOne,true);}
+            if(OfficerTwo!=null&&OfficerTwo.Exists()){NativeFunction.Natives.SET_CURRENT_PED_WEAPON(OfficerTwo,pistol,true);NativeFunction.Natives.TASK_FOLLOW_NAV_MESH_TO_COORD(OfficerTwo,cover.X,cover.Y,cover.Z,2.2f,5000,1.8f,0,0f);NativeFunction.Natives.SET_PED_KEEP_TASK(OfficerTwo,true);}
         }
 
         protected bool ValidateTrafficStopFormation(Vehicle stoppedVehicle,Vehicle cruiser,float expectedHeading)
@@ -664,8 +688,9 @@ namespace AdvancedK9.Callouts
             float gap=stoppedVehicle.DistanceTo(cruiser);
             bool roadA=NativeFunction.Natives.IS_POINT_ON_ROAD<bool>(stoppedVehicle.Position.X,stoppedVehicle.Position.Y,stoppedVehicle.Position.Z,0);
             bool roadB=NativeFunction.Natives.IS_POINT_ON_ROAD<bool>(cruiser.Position.X,cruiser.Position.Y,cruiser.Position.Z,0);
-            bool valid=roadA&&roadB&&delta<=12f&&expectedDelta<=12f&&gap>=6f&&gap<=15f;
-            Game.LogTrivial("AdvancedK9 Callouts: traffic-stop formation audit: road="+roadA+"/"+roadB+", headingDelta="+delta+", expectedDelta="+expectedDelta+", gap="+gap+", valid="+valid+".");
+            Vector3 expectedCruiser=stoppedVehicle.GetOffsetPosition(new Vector3(0f,-9f,0f));float laneOffset=cruiser.DistanceTo(expectedCruiser);Vector3 curbA,curbB;bool curbResolvedA=NativeFunction.Natives.GET_ROAD_BOUNDARY_USING_HEADING<bool>(stoppedVehicle.Position.X,stoppedVehicle.Position.Y,stoppedVehicle.Position.Z,expectedHeading,out curbA),curbResolvedB=NativeFunction.Natives.GET_ROAD_BOUNDARY_USING_HEADING<bool>(cruiser.Position.X,cruiser.Position.Y,cruiser.Position.Z,expectedHeading,out curbB);float curbDifference=curbResolvedA&&curbResolvedB?Math.Abs(curbA.DistanceTo(stoppedVehicle.Position)-curbB.DistanceTo(cruiser.Position)):99f;
+            bool valid=roadA&&roadB&&delta<=12f&&expectedDelta<=12f&&gap>=6f&&gap<=15f&&laneOffset<=4.5f&&curbDifference<=3.5f;
+            Game.LogTrivial("AdvancedK9 Callouts: traffic-stop formation audit: road="+roadA+"/"+roadB+", headingDelta="+delta+", expectedDelta="+expectedDelta+", gap="+gap+", laneOffset="+laneOffset+", curbDifference="+curbDifference+", valid="+valid+".");
             return valid;
         }
 
@@ -694,11 +719,14 @@ namespace AdvancedK9.Callouts
 
         protected void BeginAutomaticTransport(string completionMessage)
         {
-            if(Subject==null||!Subject.Exists()||PoliceVehicle==null||!PoliceVehicle.Exists()){Resolve(completionMessage);return;}
-            Game.DisplayNotification("~b~Dispatch:~s~ On-scene patrol is assuming prisoner transport. The cruiser is responding to the arrest location.");
+            if(Subject==null||!Subject.Exists())return;
+            Vector3 spawn=World.GetNextPositionOnStreet(Subject.GetOffsetPosition(new Vector3(0f,-48f,0f)));
+            if(spawn.DistanceTo(Subject)<25f||spawn.DistanceTo(Subject)>75f)spawn=World.GetNextPositionOnStreet(Subject.GetOffsetPosition(new Vector3(42f,-28f,0f)));
+            Vehicle dedicated=SpawnPoliceVehicle(spawn,Subject.Heading);Ped dedicatedOfficer=SpawnPoliceOfficer(spawn,Subject.Heading);Ped dedicatedCover=SpawnPoliceOfficer(spawn,Subject.Heading);
+            if(dedicated==null||!dedicated.Exists()||dedicatedOfficer==null||!dedicatedOfficer.Exists()){Game.LogTrivial("AdvancedK9 Callouts: dedicated fallback transport could not be staged; scene remains active.");return;}
+            Game.DisplayNotification("~b~Dispatch:~s~ A dedicated prisoner transport unit is responding to the live arrest location.");
             DispatchUpdate("TransportRequested","On-scene patrol fallback","Current jurisdiction","Marked patrol transport","Restrained prisoner","Live arrest location","Medically cleared","The active custody provider did not produce transport. On-scene patrol is assuming prisoner transport.","",Subject.Position);
-            var suspect=Subject;var officer=OfficerTwo!=null&&OfficerTwo.Exists()?OfficerTwo:OfficerOne;
-            var coverOfficer=officer==OfficerTwo?OfficerOne:OfficerTwo;var transport=PoliceVehicle;
+            var suspect=Subject;var officer=dedicatedOfficer;var coverOfficer=dedicatedCover;var transport=dedicated;
             GameFiber.StartNew(delegate
             {
                 bool arrived=false,loaded=false;
@@ -709,9 +737,15 @@ namespace AdvancedK9.Callouts
                         officer.Tasks.EnterVehicle(transport,-1).WaitForCompletion(12000);
                         if(!officer.IsInVehicle(transport,false))NativeFunction.Natives.SET_PED_INTO_VEHICLE(officer,transport,-1);
                         NativeFunction.Natives.TASK_VEHICLE_DRIVE_TO_COORD_LONGRANGE(officer,transport,suspect.Position.X,suspect.Position.Y,suspect.Position.Z,18f,786603,8f);
-                        uint arrivalDeadline=Game.GameTime+20000;
+                        uint arrivalDeadline=Game.GameTime+22000;
                         while(Game.GameTime<arrivalDeadline&&transport.Exists()&&suspect.Exists()&&transport.DistanceTo(suspect)>12f)GameFiber.Wait(250);
                         arrived=transport.Exists()&&suspect.Exists()&&transport.DistanceTo(suspect)<=15f;
+                        if(!arrived&&transport.Exists()&&officer.Exists())
+                        {
+                            Vector3 retry=World.GetNextPositionOnStreet(suspect.GetOffsetPosition(new Vector3(-28f,-38f,0f)));transport.Position=retry;NativeFunction.Natives.SET_VEHICLE_ON_GROUND_PROPERLY(transport);NativeFunction.Natives.SET_PED_INTO_VEHICLE(officer,transport,-1);NativeFunction.Natives.TASK_VEHICLE_DRIVE_TO_COORD_LONGRANGE(officer,transport,suspect.Position.X,suspect.Position.Y,suspect.Position.Z,16f,786603,7f);
+                            uint retryDeadline=Game.GameTime+18000;while(Game.GameTime<retryDeadline&&transport.Exists()&&suspect.Exists()&&transport.DistanceTo(suspect)>12f)GameFiber.Wait(250);arrived=transport.Exists()&&suspect.Exists()&&transport.DistanceTo(suspect)<=15f;
+                            Game.LogTrivial("AdvancedK9 Callouts: dedicated transport completed its single alternate-node retry; arrived="+arrived+".");
+                        }
                         if(arrived)DispatchUpdate("TransportArrived","On-scene patrol fallback","Current jurisdiction","Marked patrol transport","Restrained prisoner","Live arrest location","Medically cleared","The prisoner transport unit has arrived at the custody location.","",suspect.Position);
                     }
                     if(arrived&&suspect.Exists()&&transport.Exists())
@@ -737,7 +771,7 @@ namespace AdvancedK9.Callouts
                     return;
                 }
                 DispatchUpdate("TransportComplete","On-scene patrol fallback","Current jurisdiction","Marked patrol transport","Prisoner secured in transport","Departing jurisdiction","Medically cleared","Prisoner transport is complete and the unit is leaving the scene.","",transport.Position);
-                OfficerOne=null;OfficerTwo=null;PoliceVehicle=null;Subject=null;
+                Subject=null;
                 Resolve(completionMessage);
                 GameFiber.Wait(7000);
                 if(suspect!=null&&suspect.Exists())suspect.Dismiss();
@@ -745,6 +779,19 @@ namespace AdvancedK9.Callouts
                 if(coverOfficer!=null&&coverOfficer.Exists())coverOfficer.Dismiss();
                 if(transport!=null&&transport.Exists())transport.Dismiss();
             },"AdvancedK9 automatic prisoner transport");
+        }
+
+        protected bool RequestCustodyOwnerTransport()
+        {
+            if(Subject==null||!Subject.Exists()||!CustodyOwnerStable)return false;
+            WriteCalloutBridgeRequest("RequestTransport");_transportStage="requested";_suspectLifecycle=SuspectLifecycle.AwaitingTransport;
+            DispatchUpdate("TransportRequested","Provider custody transport",_incidentJurisdiction,"Provider transport unit",_incidentSuspect,"Live arrest location","Medically cleared",CustodyOwner+" has been asked to transport the prisoner from the live custody location.","",Subject.Position);
+            return true;
+        }
+
+        protected bool ProviderTransportLoaded()
+        {
+            ReadCalloutBridgeState();if(Subject==null||!Subject.Exists())return false;bool loaded=NativeFunction.Natives.IS_PED_IN_ANY_VEHICLE<bool>(Subject,false)||_transportStage=="loaded";if(loaded)_suspectLifecycle=SuspectLifecycle.Transporting;return loaded;
         }
 
         protected bool ProcessPostApprehensionMedical(string completionMessage)
@@ -817,7 +864,7 @@ namespace AdvancedK9.Callouts
                         return;
                     }
                     bool serious=suspect.Health<=System.Math.Max(25,suspect.MaxHealth*45/100);
-                    if(!UpdateCustodyLease())suspect.Health=System.Math.Max(suspect.Health,serious?System.Math.Max(50,suspect.MaxHealth/2):System.Math.Max(75,suspect.MaxHealth*3/4));
+                    if(!ArrestProviderOwnsSubject&&!UpdateCustodyLease())suspect.Health=System.Math.Max(suspect.Health,serious?System.Math.Max(50,suspect.MaxHealth/2):System.Math.Max(75,suspect.MaxHealth*3/4));
                     if(serious)
                     {
                         Game.DisplayNotification("~o~Dispatch:~s~ EMS reports serious injuries and will assume hospital transport; patrol retains the arrest hold.");

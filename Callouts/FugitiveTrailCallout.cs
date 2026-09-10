@@ -17,6 +17,7 @@ namespace AdvancedK9.Callouts
         private bool _sceneBriefed;
         private bool _suspectLocated;
         private bool _transportStarted;
+        private uint _providerTransportRequestedAt;
         private uint _locatedAt;
         private uint _nextCoverSearch;
         private bool _coverConfirmed;
@@ -273,6 +274,7 @@ namespace AdvancedK9.Callouts
         public override void Process()
         {
             if(Finished||Subject==null||!Subject.Exists()){if(!Finished)Resolve("~r~Fugitive Trail ended: suspect unavailable.");return;}
+            ObserveSuspectLifecycle();
             var player=Game.LocalPlayer.Character;
             if(player.DistanceTo(Scene)<80f)ControlLiveTraffic(Scene,24f);
             if(_suspectLocated&&player.DistanceTo(Subject)<65f)ControlLiveTraffic(Subject.Position,22f);
@@ -373,7 +375,9 @@ namespace AdvancedK9.Callouts
                 _rexReachedSubject=true;_rexReachedAt=Game.GameTime;
                 Game.LogTrivial("AdvancedK9 Callouts: Rex physically reached FugitiveTrail subject; preserving the suspect's cover/flee task until the alert transition.");
             }
-            if(_rexReachedSubject&&!_suspectLocated&&Game.GameTime-_rexReachedAt>=500)
+            bool subjectOffRoad=!NativeFunction.Natives.IS_POINT_ON_ROAD<bool>(Subject.Position.X,Subject.Position.Y,Subject.Position.Z,0);
+            if(_rexReachedSubject&&!_suspectLocated&&!subjectOffRoad&&Game.GameTime>=_nextCoverSeekTask){_nextCoverSeekTask=Game.GameTime+2500;Vector3 safeEdge;if(TryResolveSafePedPosition(Subject.GetOffsetPosition(new Vector3(8f,0f,0f)),out safeEdge))NativeFunction.Natives.TASK_FOLLOW_NAV_MESH_TO_COORD(Subject,safeEdge.X,safeEdge.Y,safeEdge.Z,3.5f,6000,1.5f,0,0f);}
+            if(_rexReachedSubject&&!_suspectLocated&&subjectOffRoad&&Game.GameTime-_rexReachedAt>=500)
             {
                 _suspectLocated=true;_locatedAt=Game.GameTime;_phase=FugitivePhase.Located;_phaseStarted=Game.GameTime;
                 EndSupportTracking();
@@ -394,7 +398,7 @@ namespace AdvancedK9.Callouts
                 if(controlLocked)
                 {
                     _fleeActive=false;_outcomeTaskIssued=true;
-                    if(!_controlDispatchSent)
+                    if(!_controlDispatchSent&&!ArrestProviderOwnsSubject)
                     {
                         _controlDispatchSent=true;
                         string action=Subject.Health<Subject.MaxHealth-5?"K9Apprehension":"SuspectSurrender";
@@ -410,7 +414,7 @@ namespace AdvancedK9.Callouts
                 else if(!_outcomeTaskIssued&&!controlLocked&&Game.GameTime>=_verbalGraceUntil)
                 {
                     _outcomeTaskIssued=true;
-                    if(_outcome==0)NativeFunction.Natives.TASK_HANDS_UP(Subject,120000,player,-1,true);
+                    if(_outcome==0&&!ArrestProviderOwnsSubject)NativeFunction.Natives.TASK_HANDS_UP(Subject,120000,player,-1,true);
                     else
                     {
                         _fleeActive=true;_lastSafeSubjectPosition=Subject.Position;
@@ -427,7 +431,7 @@ namespace AdvancedK9.Callouts
                     {
                         Subject.Position=_lastSafeSubjectPosition;
                         Subject.Tasks.ClearImmediately();
-                        NativeFunction.Natives.TASK_HANDS_UP(Subject,120000,player,-1,true);
+                        if(!ArrestProviderOwnsSubject)NativeFunction.Natives.TASK_HANDS_UP(Subject,120000,player,-1,true);
                         _fleeActive=false;_waterRecoveryUsed=true;
                         Game.DisplayNotification("~b~Containment:~s~ The fugitive was stopped at the water boundary and is surrendering.");
                         Game.LogTrivial("AdvancedK9 Callouts: unsafe water escape prevented; suspect restored to the last safe land position.");
@@ -435,7 +439,7 @@ namespace AdvancedK9.Callouts
                     else if(escapeDistance>=125f)
                     {
                         Subject.Tasks.Clear();
-                        NativeFunction.Natives.TASK_HANDS_UP(Subject,120000,player,-1,true);
+                        if(!ArrestProviderOwnsSubject)NativeFunction.Natives.TASK_HANDS_UP(Subject,120000,player,-1,true);
                         _fleeActive=false;
                         Game.DisplayNotification("~b~Containment:~s~ The fugitive reached the perimeter and is surrendering.");
                         Game.LogTrivial("AdvancedK9 Callouts: bounded fugitive perimeter reached; map-wide flight prevented.");
@@ -499,15 +503,16 @@ namespace AdvancedK9.Callouts
                         Game.DisplayNotification("~b~Custody confirmed:~s~ "+CustodyOwner+" owns the suspect. AdvancedK9 has suspended escape and suspect tasking.");
                         DispatchUpdate("CustodyConfirmed","Fugitive foot trail","Local patrol jurisdiction","Prisoner transport required","Adult male in custody","Live arrest location","Medically stable or treatment pending",CustodyOwner+" has custody. Maintain the scene until medical clearance and prisoner transport are confirmed.","",Subject.Position);
                         Game.LogTrivial("AdvancedK9 Callouts: FugitiveTrail phase -> Custody; owner="+CustodyOwner+" and all AdvancedK9 suspect task/health writes are blocked.");
+                        if(!MedicalResponseStarted||MedicalResponseComplete){_transportStarted=RequestCustodyOwnerTransport();_providerTransportRequestedAt=Game.GameTime;if(_transportStarted)_phase=FugitivePhase.Transport;}
                     }
-                    if(_custodyConfirmed&&NativeFunction.Natives.IS_PED_IN_ANY_VEHICLE<bool>(Subject,false)&&Game.GameTime-_phaseStarted>3000)
+                    if(_custodyConfirmed&&ProviderTransportLoaded()&&Game.GameTime-_phaseStarted>3000)
                     {
                         _phase=FugitivePhase.Complete;Resolve("~g~Fugitive Trail complete: external-provider custody and prisoner transport confirmed.");
                     }
-                    else if(_custodyConfirmed&&!_transportStarted&&Game.GameTime-_phaseStarted>(CustodyOwner=="Policing Redefined"?15000u:10000u))
+                    else if(_custodyConfirmed&&_transportStarted&&_providerTransportRequestedAt>0&&Game.GameTime-_providerTransportRequestedAt>35000u)
                     {
-                        _transportStarted=true;_phase=FugitivePhase.Transport;_phaseStarted=Game.GameTime;
-                        Game.LogTrivial("AdvancedK9 Callouts: external custody remained stable but no provider transport materialized; on-scene patrol fallback transport started.");
+                        _providerTransportRequestedAt=0;_phase=FugitivePhase.Transport;_phaseStarted=Game.GameTime;
+                        Game.LogTrivial("AdvancedK9 Callouts: provider transport did not load the prisoner inside the monitored window; dedicated fallback transport started.");
                         BeginAutomaticTransport("~g~Fugitive Trail complete: prisoner transferred to the on-scene patrol transport unit.");
                     }
                 }

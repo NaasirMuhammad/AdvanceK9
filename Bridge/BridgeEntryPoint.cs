@@ -17,6 +17,9 @@ namespace AdvancedK9.LSPDFRBridge
         private static readonly string StatePath=Path.Combine(DirectoryPath,"CompatibilityBridge.state");
         private static readonly string TempPath=StatePath+".tmp";
         private static readonly string RequestPath=Path.Combine(DirectoryPath,"CompatibilityBridge.request");
+        private static readonly string CalloutStatePath=Path.Combine(DirectoryPath,"CalloutBridge.state");
+        private static readonly string CalloutTempPath=CalloutStatePath+".tmp";
+        private static readonly string CalloutRequestPath=Path.Combine(DirectoryPath,"CalloutBridge.request");
         private static readonly string[] VehicleNames={"GetActiveStopVehicle","GetCurrentStopVehicle","GetTrafficStopVehicle","GetPulloverVehicle","ActiveStopVehicle","CurrentStopVehicle","TrafficStopVehicle","PulloverVehicle","ContextVehicle","SelectedVehicle"};
         private static readonly string[] PedNames={"GetActiveInteractionPed","GetCurrentStopPed","GetStoppedPed","GetSelectedPed","ActiveInteractionPed","CurrentStopPed","StoppedPed","ContextPed","SelectedPed"};
         private static readonly string[] PursuitNames={"GetActivePursuitSuspect","GetCurrentPursuitSuspect","ActivePursuitSuspect","CurrentPursuitSuspect","GetSuspect","PursuitSuspect"};
@@ -29,6 +32,9 @@ namespace AdvancedK9.LSPDFRBridge
         private static readonly Dictionary<string,PendingOfficerSearch> PendingOfficerSearches=new Dictionary<string,PendingOfficerSearch>(StringComparer.OrdinalIgnoreCase);
         private static readonly HashSet<string> InitializedPrSearchInventories=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private static DateTime _nextOfficerSearchReconciliationUtc=DateTime.MinValue;
+        private static string _calloutRequestId="",_calloutResult="",_custodyOwner="None",_custodyStage="None",_transportStage="NotRequested",_transportProvider="None";
+        private static int _observedPedHandle;
+        private static bool _prOwnershipSticky;
 
         public override void Initialize()
         {
@@ -49,7 +55,7 @@ namespace AdvancedK9.LSPDFRBridge
         public override void Finally()
         {
             _running=false;
-            try{if(File.Exists(StatePath))File.Delete(StatePath);if(File.Exists(TempPath))File.Delete(TempPath);if(File.Exists(RequestPath))File.Delete(RequestPath);}catch{}
+            try{if(File.Exists(StatePath))File.Delete(StatePath);if(File.Exists(TempPath))File.Delete(TempPath);if(File.Exists(RequestPath))File.Delete(RequestPath);if(File.Exists(CalloutStatePath))File.Delete(CalloutStatePath);if(File.Exists(CalloutTempPath))File.Delete(CalloutTempPath);if(File.Exists(CalloutRequestPath))File.Delete(CalloutRequestPath);}catch{}
         }
 
         private static void Publish()
@@ -66,6 +72,7 @@ namespace AdvancedK9.LSPDFRBridge
             ProcessInventoryQuery(request,cdf,pr,query);
             ProcessK9Indication(request,nexus,pr,query);
             ProcessPendingOfficerSearches(pr,nexus);
+            ProcessCalloutBridge(pr,stp);
             var lines=new[]{
                 "Protocol=2",
                 "HeartbeatUtcTicks="+DateTime.UtcNow.Ticks,
@@ -91,6 +98,68 @@ namespace AdvancedK9.LSPDFRBridge
             if(!Directory.Exists(DirectoryPath))Directory.CreateDirectory(DirectoryPath);
             File.WriteAllLines(TempPath,lines);
             File.Copy(TempPath,StatePath,true);File.Delete(TempPath);
+        }
+
+        private static void ProcessCalloutBridge(Assembly pr,Assembly stp)
+        {
+            IDictionary<string,string> request=ReadMap(CalloutRequestPath);
+            string requestId=Read(request,"RequestId"),action=Read(request,"Action");
+            int requestedHandle;int.TryParse(Read(request,"PedHandle"),out requestedHandle);
+            if(requestedHandle>0&&requestedHandle!=_observedPedHandle){_observedPedHandle=requestedHandle;_prOwnershipSticky=false;_custodyOwner="None";_custodyStage="None";_transportStage="NotRequested";_transportProvider="None";}
+            Ped target=World.GetAllPeds().FirstOrDefault(p=>p!=null&&p.Exists()&&p.Handle==_observedPedHandle);
+            bool arrested=false,arresting=false;
+            if(target!=null&&target.Exists())
+            {
+                try{arrested=Rage.Native.NativeFunction.Natives.IS_PED_CUFFED<bool>(target)||Rage.Native.NativeFunction.Natives.IS_PED_HANDCUFFED<bool>(target);arresting=arrested||Rage.Native.NativeFunction.Natives.IS_PED_BEING_ARRESTED<bool>(target);}catch{}
+                arrested=arrested||TryLspdfrCustody(target,"IsPedArrested");arresting=arresting||TryLspdfrCustody(target,"IsPedGettingArrested");
+                if(pr!=null&&TryAssemblyCustody(pr,target))_prOwnershipSticky=true;
+                if(_prOwnershipSticky){_custodyOwner="Policing Redefined";_custodyStage=arrested?"InCustody":"ArrestInProgress";}
+                else if(arresting||arrested){_custodyOwner="LSPDFR";_custodyStage=arrested?"InCustody":"ArrestInProgress";}
+                if(Rage.Native.NativeFunction.Natives.IS_PED_IN_ANY_VEHICLE<bool>(target,false))_transportStage="Loaded";
+            }
+            if(!string.IsNullOrWhiteSpace(requestId)&&requestId!=_calloutRequestId)
+            {
+                _calloutRequestId=requestId;_calloutResult="Observed";
+                if(action.Equals("RequestTransport",StringComparison.OrdinalIgnoreCase))
+                {
+                    Assembly provider=_prOwnershipSticky?pr:(_custodyOwner=="Stop The Ped"?stp:null);
+                    _transportProvider=_prOwnershipSticky?"Policing Redefined":provider==stp?"Stop The Ped":"LSPDFR";
+                    bool requested=provider!=null&&TryRequestProviderTransport(provider,target);
+                    _transportStage=requested?"Requested":"Unavailable";_calloutResult=requested?"TransportRequested":"TransportSurfaceUnavailable";
+                }
+            }
+            var lines=new[]{"Protocol=1","HeartbeatUtcTicks="+DateTime.UtcNow.Ticks,"RequestId="+_calloutRequestId,"Result="+_calloutResult,"ObservedPedHandle="+_observedPedHandle,"CustodyOwner="+_custodyOwner,"CustodyStage="+_custodyStage,"TransportProvider="+_transportProvider,"TransportStage="+_transportStage};
+            if(!Directory.Exists(DirectoryPath))Directory.CreateDirectory(DirectoryPath);File.WriteAllLines(CalloutTempPath,lines);File.Copy(CalloutTempPath,CalloutStatePath,true);File.Delete(CalloutTempPath);
+        }
+
+        private static IDictionary<string,string> ReadMap(string path)
+        {
+            try{return !File.Exists(path)?new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase):File.ReadAllLines(path).Select(line=>new{line,split=line.IndexOf('=')}).Where(x=>x.split>0).ToDictionary(x=>x.line.Substring(0,x.split),x=>x.line.Substring(x.split+1),StringComparer.OrdinalIgnoreCase);}catch{return new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase);}
+        }
+
+        private static bool TryLspdfrCustody(Ped target,string name)
+        {
+            try{MethodInfo method=typeof(Functions).GetMethod(name,BindingFlags.Public|BindingFlags.Static);return method!=null&&(bool)method.Invoke(null,new object[]{target});}catch{return false;}
+        }
+
+        private static bool TryAssemblyCustody(Assembly assembly,Ped target)
+        {
+            string[] names={"IsPedArrested","IsArrested","IsPedCuffed","HasCustodyOfPed","IsPedInCustody"};
+            foreach(Type type in Types(new[]{assembly}))foreach(MethodInfo method in type.GetMethods(BindingFlags.Public|BindingFlags.Static|BindingFlags.Instance).Where(m=>names.Any(n=>m.Name.Equals(n,StringComparison.OrdinalIgnoreCase))&&m.ReturnType==typeof(bool)))
+            {object instance=null;if(!method.IsStatic&&!TryGetPublicSingleton(type,out instance))continue;ParameterInfo[] p=method.GetParameters();if(p.Length!=1||!p[0].ParameterType.IsInstanceOfType(target))continue;try{if((bool)method.Invoke(instance,new object[]{target}))return true;}catch{}}
+            return false;
+        }
+
+        private static bool TryRequestProviderTransport(Assembly assembly,Ped target)
+        {
+            string[] names={"RequestPoliceTransport","RequestPrisonerTransport","CallPoliceTransport","RequestTransport"};
+            foreach(Type type in Types(new[]{assembly}))foreach(MethodInfo method in type.GetMethods(BindingFlags.Public|BindingFlags.Static|BindingFlags.Instance).Where(m=>names.Any(n=>m.Name.Equals(n,StringComparison.OrdinalIgnoreCase))))
+            {
+                object instance=null;if(!method.IsStatic&&!TryGetPublicSingleton(type,out instance))continue;ParameterInfo[] p=method.GetParameters();object[] args=new object[p.Length];bool valid=true;
+                for(int i=0;i<p.Length;i++){Type t=p[i].ParameterType;if(target!=null&&t.IsInstanceOfType(target))args[i]=target;else if(t==typeof(bool))args[i]=i==0;else if(t.IsEnum){string code2=Enum.GetNames(t).FirstOrDefault(n=>n.Equals("Code2",StringComparison.OrdinalIgnoreCase));args[i]=Enum.Parse(t,code2??Enum.GetNames(t)[0]);}else if(t==typeof(Vector3))args[i]=target==null?Game.LocalPlayer.Character.Position:target.Position;else if(p[i].HasDefaultValue)args[i]=p[i].DefaultValue;else{valid=false;break;}}
+                if(!valid)continue;try{object result=method.Invoke(instance,args);if(method.ReturnType==typeof(bool)&&(bool)result==false)continue;Game.LogTrivial("AdvancedK9 bridge: provider transport requested through "+type.FullName+"."+method.Name+".");return true;}catch(Exception ex){Game.LogTrivial("AdvancedK9 bridge: transport surface rejected request: "+Unwrap(ex).Message);}
+            }
+            return false;
         }
 
         private static Dictionary<string,string> ReadRequest()
@@ -361,7 +430,7 @@ namespace AdvancedK9.LSPDFRBridge
         private static void LogIntegrationSurfaces(Assembly cdf,Assembly pr,Assembly nexus)
         {
             Game.LogTrivial("AdvancedK9 bridge inventory integration: CDF="+(cdf!=null)+", PR="+(pr!=null)+", NexusMDT="+(nexus!=null)+"; AdvancedK9 never modifies third-party inventory files or records.");
-            foreach(Assembly assembly in new[]{cdf,pr,nexus}.Where(a=>a!=null))foreach(Type type in Types(new[]{assembly}))foreach(MethodInfo method in type.GetMethods(BindingFlags.Public|BindingFlags.Static|BindingFlags.Instance).Where(m=>ContainsAny(m.Name,"GetPedData","GetVehicleData","GetPedSearchItems","GetVehicleSearchItems","AppendIncidentNote","CaptureSearch","RecordK9Indication")))Game.LogTrivial("AdvancedK9 bridge API surface: "+type.FullName+"."+method.Name+"("+string.Join(",",method.GetParameters().Select(p=>p.ParameterType.Name+" "+p.Name))+ ").");
+            foreach(Assembly assembly in new[]{cdf,pr,nexus}.Where(a=>a!=null))foreach(Type type in Types(new[]{assembly}))foreach(MethodInfo method in type.GetMethods(BindingFlags.Public|BindingFlags.Static|BindingFlags.Instance).Where(m=>ContainsAny(m.Name,"GetPedData","GetVehicleData","GetPedSearchItems","GetVehicleSearchItems","AppendIncidentNote","CaptureSearch","RecordK9Indication","IsPedArrested","IsPedCuffed","Custody","RequestPoliceTransport","RequestPrisonerTransport","DispatchNarrat","SpeakIncident","DispatchEvent")))Game.LogTrivial("AdvancedK9 bridge API surface: "+type.FullName+"."+method.Name+"("+string.Join(",",method.GetParameters().Select(p=>p.ParameterType.Name+" "+p.Name))+ ").");
         }
 
         private sealed class PendingOfficerSearch

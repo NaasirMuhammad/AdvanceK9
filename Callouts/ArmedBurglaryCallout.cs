@@ -101,6 +101,7 @@ namespace AdvancedK9.Callouts
 
         public override void Process()
         {
+            ObserveSuspectLifecycle();
             if(Finished||Subject==null||!Subject.Exists()){if(!Finished)Resolve("~r~Armed Burglary ended: suspect unavailable.");return;}
             var player=Game.LocalPlayer.Character;
             if(player.DistanceTo(Scene)<80f)ControlLiveTraffic(Scene,24f);
@@ -142,7 +143,7 @@ namespace AdvancedK9.Callouts
                 else if(!_outcomeTaskIssued&&!controlLocked&&Game.GameTime>=_verbalGraceUntil)
                 {
                     _outcomeTaskIssued=true;
-                    if(_outcome<=1)NativeFunction.Natives.TASK_HANDS_UP(Subject,120000,player,-1,true);
+                    if(_outcome<=1&&!ArrestProviderOwnsSubject)NativeFunction.Natives.TASK_HANDS_UP(Subject,120000,player,-1,true);
                     else if(_outcome<=3)NativeFunction.Natives.TASK_SMART_FLEE_PED(Subject,player,700f,-1,false,false);
                     else NativeFunction.Natives.TASK_COMBAT_PED(Subject,player,0,16);
                     Game.LogTrivial("AdvancedK9 Callouts: armed verbal challenge expired; scripted outcome resumed because no NPCI/LSPDFR compliance was detected.");
@@ -155,13 +156,13 @@ namespace AdvancedK9.Callouts
                 else if(custodyLease&&CustodyOwnerStable&&(!MedicalResponseStarted||MedicalResponseComplete)&&!_transportStarted)
                 {
                     if(_custodyReadyAt==0)_custodyReadyAt=Game.GameTime;
-                    if(Game.GameTime-_custodyReadyAt>=10000)
+                    if(Game.GameTime-_custodyReadyAt>=1500)
                     {
-                        _transportStarted=true;
-                        Game.DisplayNotification("~b~Dispatch:~s~ "+CustodyOwner+" custody is stable and medically cleared. On-scene patrol is beginning prisoner transport.");
-                        BeginAutomaticTransport("~g~Armed Burglary complete: EMS treatment and prisoner transport completed.");
+                        _transportStarted=RequestCustodyOwnerTransport();
+                        Game.DisplayNotification("~b~Dispatch:~s~ "+CustodyOwner+" custody is stable and medically cleared. The owning provider has been asked for transport.");
                     }
                 }
+                else if(_transportStarted&&ProviderTransportLoaded())Resolve("~g~Armed Burglary complete: provider custody and prisoner transport confirmed.");
                 else if(Game.GameTime-_locatedAt>300000)Resolve("~o~Armed Burglary concluded after suspect location.");
             }
             else if(Game.GameTime-StartedAt>420000)Resolve("~r~Armed Burglary: suspect escaped the containment area.");

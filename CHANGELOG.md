@@ -505,3 +505,12 @@ All published AdvancedK9 versions are beta builds.
 - Removed the nonfunctional cross-AppDomain reflection duty gate.
 - Starts the K9 controller directly from the RPH plugin entry point.
 - Corrected the kennel/profile shortcut documentation to Left Ctrl + U.
+# 0.24.0.40
+
+- Split surrender, arrest initiation, custody settling, custody ownership, and transport into explicit one-way callout states.
+- Removed the arrest-handoff ragdoll and invincibility writes and blocked all AdvancedK9 suspect task/health writes after provider arrest begins.
+- Added a dedicated LSPDFR-domain custody bridge with sticky Policing Redefined takeover detection and provider-specific transport requests.
+- Added monitored provider transport and a separate live-location fallback transport unit with one alternate-node retry.
+- Prevented duplicate surrender tasks during LSPDFR arrest, retained the false-death debounce, and made arrest/custody dispatch fields consistent.
+- Strengthened roadside lane/curb formation validation, off-road endpoint validation, live traffic containment, and persistent officer roles.
+- Added one-time Nexus/Gemini narration API surface discovery and structured dynamic event submission logging.
