@@ -106,7 +106,7 @@ namespace AdvancedK9.LSPDFRBridge
             string requestId=Read(request,"RequestId"),action=Read(request,"Action");
             int requestedHandle;int.TryParse(Read(request,"PedHandle"),out requestedHandle);
             if(requestedHandle>0&&requestedHandle!=_observedPedHandle){_observedPedHandle=requestedHandle;_prOwnershipSticky=false;_custodyOwner="None";_custodyStage="None";_transportStage="NotRequested";_transportProvider="None";}
-            Ped target=World.GetAllPeds().FirstOrDefault(p=>p!=null&&p.Exists()&&p.Handle.ToString()==_observedPedHandle.ToString());
+            Ped target=World.GetAllPeds().FirstOrDefault(p=>p!=null&&p.Exists()&&HandleOf(p)==_observedPedHandle.ToString());
             bool arrested=false,arresting=false;
             if(target!=null&&target.Exists())
             {
