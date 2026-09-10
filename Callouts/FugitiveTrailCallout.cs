@@ -186,19 +186,18 @@ namespace AdvancedK9.Callouts
             if(SceneVehicle==null||!SceneVehicle.Exists())return RejectCurrentScene("suspect vehicle spawn failed");
             SceneVehicle.IsPersistent=true;
             _sceneHeading=SceneVehicle.Heading;
+            // Preserve the lane-node position calculated by SpawnVehicle.
             NativeFunction.Natives.SET_VEHICLE_ON_GROUND_PROPERLY(SceneVehicle);
+            GameFiber.Yield();
             if(!StagePoliceScene())return RejectCurrentScene("police scene staging failed");
-            if(PoliceVehicle!=null&&PoliceVehicle.Exists()){PoliceVehicle.Heading=_sceneHeading;NativeFunction.Natives.SET_VEHICLE_ON_GROUND_PROPERLY(PoliceVehicle);}
-            if(!ValidateTrafficStopFormation(SceneVehicle,PoliceVehicle,_sceneHeading))
-            {
-                // Native road classification is inconsistent at curb/shoulder seams.
-                // The callout is already accepted, so repair the deterministic formation
-                // instead of tearing down a valid incident after the player accepts it.
-                PoliceVehicle.Position=SceneVehicle.GetOffsetPosition(new Vector3(0f,-9f,0f));
-                PoliceVehicle.Heading=SceneVehicle.Heading;
-                NativeFunction.Natives.SET_VEHICLE_ON_GROUND_PROPERLY(PoliceVehicle);
-                Game.LogTrivial("AdvancedK9 Callouts: post-acceptance traffic-stop audit requested a formation repair; cruiser was realigned behind the stopped vehicle and the callout continued.");
-            }
+            if(PoliceVehicle==null||!PoliceVehicle.Exists())return RejectCurrentScene("police cruiser unavailable after staging");
+            float vehicleRadians=(float)(_sceneHeading*System.Math.PI/180.0);
+            PoliceVehicle.Position=SceneVehicle.Position-new Vector3((float)System.Math.Sin(vehicleRadians)*7.5f,(float)System.Math.Cos(vehicleRadians)*7.5f,0f);
+            PoliceVehicle.Heading=_sceneHeading;
+            PoliceVehicle.IsPersistent=true;
+            NativeFunction.Natives.SET_VEHICLE_ON_GROUND_PROPERLY(PoliceVehicle);
+            GameFiber.Yield();
+            Game.LogTrivial("AdvancedK9 Callouts: traffic-stop cruiser snapped 7.5 metres behind the lane-aligned suspect vehicle using the native road heading.");
             ConfigureTrafficStopScene();
             ControlSceneTraffic();
             StartBackupOfficerInvestigationLoops();
