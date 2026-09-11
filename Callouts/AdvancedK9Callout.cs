@@ -704,6 +704,7 @@ namespace AdvancedK9.Callouts
             if(OfficerOne!=null&&OfficerOne.Exists())
             {
                 OfficerOne.BlockPermanentEvents=true;
+                if(!_supportFormationLogged){NativeFunction.Natives.SET_PED_KEEP_TASK(OfficerOne,false);OfficerOne.Tasks.ClearImmediately();}
                 NativeFunction.Natives.GIVE_WEAPON_TO_PED(OfficerOne,taser,2,false,true);
                 NativeFunction.Natives.SET_CURRENT_PED_WEAPON(OfficerOne,taser,true);
                 NativeFunction.Natives.SET_PED_COMBAT_ABILITY(OfficerOne,2);
@@ -711,12 +712,13 @@ namespace AdvancedK9.Callouts
                 float distance=OfficerOne.DistanceTo(handler);
                 if(distance>28f){Vector3 catchup=handler.GetOffsetPosition(new Vector3(-3.2f,-9f,0f));Vector3 safe;if(TryResolveSafePedPosition(catchup,out safe))OfficerOne.Position=safe;}
                 NativeFunction.Natives.SET_PED_AS_GROUP_MEMBER(OfficerOne,NativeFunction.Natives.GET_PED_GROUP_INDEX<int>(handler));
-                NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(OfficerOne,handler,-3.2f,-7.5f,0f,distance>25f?7.5f:5.8f,-1,3.5f,true);
+                NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(OfficerOne,handler,-1.5f,-2.0f,0f,distance>25f?7.5f:5.2f,-1,2.5f,true);
                 NativeFunction.Natives.SET_PED_KEEP_TASK(OfficerOne,true);
             }
             if(OfficerTwo!=null&&OfficerTwo.Exists())
             {
                 OfficerTwo.BlockPermanentEvents=true;
+                if(!_supportFormationLogged){NativeFunction.Natives.SET_PED_KEEP_TASK(OfficerTwo,false);OfficerTwo.Tasks.ClearImmediately();}
                 NativeFunction.Natives.GIVE_WEAPON_TO_PED(OfficerTwo,pistol,60,false,true);
                 NativeFunction.Natives.SET_CURRENT_PED_WEAPON(OfficerTwo,pistol,true);
                 NativeFunction.Natives.SET_PED_COMBAT_ABILITY(OfficerTwo,2);
@@ -724,7 +726,7 @@ namespace AdvancedK9.Callouts
                 float distance=OfficerTwo.DistanceTo(handler);
                 if(distance>28f){Vector3 catchup=handler.GetOffsetPosition(new Vector3(3.2f,-11f,0f));Vector3 safe;if(TryResolveSafePedPosition(catchup,out safe))OfficerTwo.Position=safe;}
                 NativeFunction.Natives.SET_PED_AS_GROUP_MEMBER(OfficerTwo,NativeFunction.Natives.GET_PED_GROUP_INDEX<int>(handler));
-                NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(OfficerTwo,handler,3.2f,-9f,0f,distance>25f?7.2f:5.6f,-1,3.8f,true);
+                NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(OfficerTwo,handler,1.5f,-2.0f,0f,distance>25f?7.2f:5.0f,-1,2.5f,true);
                 NativeFunction.Natives.SET_PED_KEEP_TASK(OfficerTwo,true);
             }
             if(!_supportFormationLogged){_supportFormationLogged=true;Game.LogTrivial("AdvancedK9 Callouts: support search formation assigned behind the K9 handler; K9 handle="+_cachedDogHandle+".");}
@@ -800,9 +802,9 @@ namespace AdvancedK9.Callouts
             hidingPosition=center;
             try
             {
-                var cover=World.GetAllObjects().Where(o=>o.Exists()&&o.DistanceTo(center)<28f&&o.DistanceTo(Scene)>45f).OrderBy(o=>o.DistanceTo(center)).FirstOrDefault(o=>{
+                var cover=World.GetAllObjects().Where(o=>o.Exists()&&o.DistanceTo(center)<48f&&o.DistanceTo(Scene)>45f).OrderBy(o=>o.DistanceTo(center)).FirstOrDefault(o=>{
                     string name=(o.Model.Name??"").ToLowerInvariant();
-                    return name.Contains("bush")||name.Contains("hedge")||name.Contains("tree")||name.Contains("planter")||name.Contains("pillar")||name.Contains("column")||name.Contains("wall")||name.Contains("fence")||name.Contains("crate")||name.Contains("container");
+                    return name.Contains("bush")||name.Contains("hedge")||name.Contains("tree")||name.Contains("planter")||name.Contains("pillar")||name.Contains("column")||name.Contains("wall")||name.Contains("fence")||name.Contains("gate")||name.Contains("barrier")||name.Contains("dumpster")||name.Contains("crate")||name.Contains("container")||name.Contains("rock");
                 });
                 if(cover==null||!cover.Exists())return false;
                 Vector3 objectPosition=cover.Position;float dx=objectPosition.X-Scene.X,dy=objectPosition.Y-Scene.Y;float length=(float)Math.Sqrt(dx*dx+dy*dy);
