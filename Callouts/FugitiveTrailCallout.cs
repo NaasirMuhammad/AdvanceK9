@@ -48,6 +48,8 @@ namespace AdvancedK9.Callouts
         private bool _controlDispatchSent;
         private bool _manualTransportNoticeSent;
         private Vector3 _curbAlignedVehiclePosition;
+        private bool _isHidingAnimationPlaying;
+        private bool _trackingEventsSubscribed;
 
         private static readonly Vector3[] RoadsideScenes={
             new Vector3(-565f,-675f,33f),new Vector3(-1310f,-1261f,4f),new Vector3(-1430f,-590f,30f),
@@ -149,6 +151,7 @@ namespace AdvancedK9.Callouts
         public override bool OnCalloutAccepted()
         {
             StartedAt=Game.GameTime;_phaseStarted=StartedAt;_phase=FugitivePhase.EnRoute;_outcome=Random.Next(4);
+            _isHidingAnimationPlaying=false;
             SetCustodyObservationEnabled(false);
             float angle=Random.Next(360);float distance=Random.Next(65,96);Vector3 trailEnd=Scene;
             for(int attempt=0;attempt<10;attempt++)
@@ -326,6 +329,7 @@ namespace AdvancedK9.Callouts
                 Game.DisplayNotification("~b~On-scene officer:~s~ The suspect fled on foot. I preserved their scent from the driver seat.~n~~y~Deploy Rex beside the abandoned vehicle and command TRACK.");
                 if(OfficerOne!=null&&OfficerOne.Exists())NativeFunction.Natives.TASK_TURN_PED_TO_FACE_ENTITY(OfficerOne,player,5000);
                 AssignCalloutScent(Subject,_hidingPosition,"preserved scent article from abandoned vehicle driver seat; retained for full accepted-callout lifecycle");
+                SubscribeToTrackingEvents();
                 DispatchUpdate("OfficerBriefing","Failed traffic stop","Local patrol jurisdiction","Gray Primo; driver-seat scent preserved","Adult male in work clothes","Away from the stopped vehicle","Unknown weapon status","Contact officer briefing: adult male in work clothes, last seen fleeing away from the stopped vehicle. The driver-seat scent article remains preserved.","OFFICERS_REPORT SUSPECT_LAST_SEEN",Scene);
             }
             if(!ApiRequested&&_sceneBriefed)
@@ -333,6 +337,7 @@ namespace AdvancedK9.Callouts
                 AssignCalloutScent(Subject,_hidingPosition,"preserved scent article from abandoned vehicle driver seat; retained for full accepted-callout lifecycle");
                 if(ApiRequested){ClearSceneRoute();Game.LogTrivial("AdvancedK9 Callouts: fugitive vehicle scent source registered; awaiting handler command.");}
             }
+            if(ApiRequested&&!_trackingEventsSubscribed)SubscribeToTrackingEvents();
 
             if(ApiRequested&&K9TrackingActive()&&_phase==FugitivePhase.AwaitingScent){_phase=FugitivePhase.Tracking;_phaseStarted=Game.GameTime;Game.LogTrivial("AdvancedK9 Callouts: FugitiveTrail phase -> Tracking.");}
             if(_phase==FugitivePhase.Tracking&&!_trackingDispatchSent)
@@ -392,8 +397,15 @@ namespace AdvancedK9.Callouts
                 if(offRoad&&_naturalCoverReserved)
                 {
                     _coverConfirmed=true;
-                    NativeFunction.Natives.TASK_COWER(Subject,5000);
-                    Game.LogTrivial("AdvancedK9 Callouts: fugitive reached verified physical cover; Rex may now complete the scent alert.");
+                    if(!_isHidingAnimationPlaying)
+                    {
+                        _isHidingAnimationPlaying=true;
+                        Subject.BlockPermanentEvents=true;
+                        Subject.Tasks.ClearImmediately();
+                        Subject.Tasks.PlayAnimation("amb@code_human_cower@male@base","base",1.0f,AnimationFlags.Loop);
+                        NativeFunction.Natives.SET_PED_KEEP_TASK(Subject,true);
+                        Game.LogTrivial("AdvancedK9 Callouts: fugitive reached verified physical cover; persistent cower stance locked until the K9 alert transition.");
+                    }
                 }
                 else
                 {
@@ -410,6 +422,7 @@ namespace AdvancedK9.Callouts
             }
             if(_rexReachedSubject&&!_suspectLocated&&Game.GameTime-_rexReachedAt>=500)
             {
+                TransitionSuspectAwayFromHiding();
                 _suspectLocated=true;_locatedAt=Game.GameTime;_phase=FugitivePhase.Located;_phaseStarted=Game.GameTime;
                 SetCustodyObservationEnabled(true);
                 EndSupportTracking();
@@ -429,6 +442,7 @@ namespace AdvancedK9.Callouts
                 MaintainSupportContainment(CustodyLocked||SubjectIsInCustody());
                 if(controlLocked)
                 {
+                    TransitionSuspectAwayFromHiding();
                     _fleeActive=false;_outcomeTaskIssued=true;
                     K9ApiSnapshot liveK9;
                     if(!_k9DisengageIssued&&AdvancedK9Api.TryGetSnapshot(out liveK9)&&(liveK9.State=="Apprehending"||liveK9.State=="HoldingSuspect"))
@@ -453,6 +467,7 @@ namespace AdvancedK9.Callouts
                 else if(!_outcomeTaskIssued&&!controlLocked&&Game.GameTime>=_verbalGraceUntil)
                 {
                     _outcomeTaskIssued=true;
+                    TransitionSuspectAwayFromHiding();
                     if(_outcome==0&&!ArrestProviderOwnsSubject)NativeFunction.Natives.TASK_HANDS_UP(Subject,120000,player,-1,true);
                     else
                     {
@@ -468,6 +483,7 @@ namespace AdvancedK9.Callouts
                     if(!inWater&&escapeDistance<125f)_lastSafeSubjectPosition=Subject.Position;
                     if(inWater)
                     {
+                        TransitionSuspectAwayFromHiding();
                         Subject.Position=_lastSafeSubjectPosition;
                         Subject.Tasks.ClearImmediately();
                         if(!ArrestProviderOwnsSubject)NativeFunction.Natives.TASK_HANDS_UP(Subject,120000,player,-1,true);
@@ -477,6 +493,7 @@ namespace AdvancedK9.Callouts
                     }
                     else if(escapeDistance>=125f)
                     {
+                        TransitionSuspectAwayFromHiding();
                         Subject.Tasks.Clear();
                         if(!ArrestProviderOwnsSubject)NativeFunction.Natives.TASK_HANDS_UP(Subject,120000,player,-1,true);
                         _fleeActive=false;
@@ -558,6 +575,73 @@ namespace AdvancedK9.Callouts
             }
             else if(!ApiRequested&&Game.GameTime-StartedAt>900000)Resolve("~r~Fugitive Trail: response expired before scent collection.");
             base.Process();
+        }
+
+        private void SubscribeToTrackingEvents()
+        {
+            if(_trackingEventsSubscribed)return;
+            AdvancedK9TrackingEvents.TrackingTick+=HandleCalloutTrackingTick;
+            AdvancedK9TrackingEvents.TrackingCompleted+=HandleCalloutTrackingCompleted;
+            _trackingEventsSubscribed=true;
+            Game.LogTrivial("AdvancedK9 Callouts: FugitiveTrail subscribed to core K9 tracking events.");
+        }
+
+        private void UnsubscribeFromTrackingEvents()
+        {
+            if(!_trackingEventsSubscribed)return;
+            AdvancedK9TrackingEvents.TrackingTick-=HandleCalloutTrackingTick;
+            AdvancedK9TrackingEvents.TrackingCompleted-=HandleCalloutTrackingCompleted;
+            _trackingEventsSubscribed=false;
+        }
+
+        private bool IsCurrentTrackingEvent(K9TrackingEvent tracking)
+        {
+            return tracking!=null&&string.Equals(tracking.ContextId,ContextId,System.StringComparison.Ordinal)&&Subject!=null&&Subject.Exists()&&tracking.TargetHandle==HandleOf(Subject);
+        }
+
+        private void HandleCalloutTrackingTick(K9TrackingEvent tracking)
+        {
+            if(Finished||!_supportCommitted||!IsCurrentTrackingEvent(tracking))return;
+            SupportOfficersFollowK9();
+        }
+
+        private void HandleCalloutTrackingCompleted(K9TrackingEvent tracking)
+        {
+            if(!IsCurrentTrackingEvent(tracking)){UnsubscribeFromTrackingEvents();return;}
+            EndSupportTracking();
+            if(OfficerOne!=null&&OfficerOne.Exists())
+            {
+                OfficerOne.BlockPermanentEvents=true;
+                OfficerOne.Tasks.Clear();
+                OfficerOne.Tasks.AimAt(Subject,-1);
+                NativeFunction.Natives.SET_PED_KEEP_TASK(OfficerOne,true);
+            }
+            if(OfficerTwo!=null&&OfficerTwo.Exists())
+            {
+                OfficerTwo.BlockPermanentEvents=true;
+                OfficerTwo.Tasks.Clear();
+                OfficerTwo.Tasks.AimAt(Subject,-1);
+                NativeFunction.Natives.SET_PED_KEEP_TASK(OfficerTwo,true);
+            }
+            UnsubscribeFromTrackingEvents();
+            Game.LogTrivial("AdvancedK9 Callouts: core K9 track completed; support follow paths cleared and officers assigned armed containment.");
+        }
+
+        private void TransitionSuspectAwayFromHiding()
+        {
+            if(!_isHidingAnimationPlaying)return;
+            _isHidingAnimationPlaying=false;
+            if(Subject==null||!Subject.Exists())return;
+            NativeFunction.Natives.SET_PED_KEEP_TASK(Subject,false);
+            Subject.Tasks.ClearImmediately();
+            Game.LogTrivial("AdvancedK9 Callouts: suspect task persistence released and hiding animation cleared safely.");
+        }
+
+        public override void End()
+        {
+            UnsubscribeFromTrackingEvents();
+            TransitionSuspectAwayFromHiding();
+            base.End();
         }
     }
 }
