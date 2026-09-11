@@ -54,12 +54,12 @@ namespace AdvancedK9.Callouts
         private static readonly Vector3[] RoadsideScenes={
             new Vector3(-565f,-675f,33f),new Vector3(-1310f,-1261f,4f),new Vector3(-1430f,-590f,30f),
             new Vector3(215f,-920f,30f),new Vector3(830f,-1830f,29f),
-            new Vector3(1000f,-2535f,28f),new Vector3(-296f,-2732f,6f),
+            new Vector3(-2250f,4290f,46f),new Vector3(-296f,-2732f,6f),
             new Vector3(1850f,3700f,34f),new Vector3(1080f,-690f,57f),new Vector3(-1500f,-790f,10f),
             new Vector3(116f,-1942f,20f),new Vector3(-153f,6346f,31f),new Vector3(-3150f,1100f,20f)
         };
 
-        private static readonly float[] RoadsideHeadings={270f,110f,90f,160f,180f,85f,145f,30f,90f,140f,50f,45f,350f};
+        private static readonly float[] RoadsideHeadings={270f,110f,90f,160f,180f,145f,145f,30f,90f,140f,50f,45f,350f};
 
         private bool PrepareRoadsideScene()
         {
