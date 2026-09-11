@@ -1,5 +1,5 @@
 name: Build AdvancedK9 v0.24.0-beta
-# Produces the verified Windows release artifacts.
+# Produces the verified Windows release artifacts for approved development branches.
 on:
   workflow_dispatch:
   pull_request:
