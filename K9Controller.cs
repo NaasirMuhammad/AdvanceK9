@@ -1584,6 +1584,7 @@ namespace AdvancedK9
                 if(!calloutTrack)CaptureTargetTrailPoint(target);
                 if (_dog.DistanceTo(target) < 3f)
                 {
+                    if(calloutTrack)AdvancedK9ApiHost.PublishTrackingCompleted(_activeSharedApiContextId,ApiHandleOf(_dog),ApiHandleOf(target),_dog.Position.X,_dog.Position.Y,_dog.Position.Z);
                     _dog.Tasks.Clear();
                     Bark(2);
                     Sit();
@@ -1627,6 +1628,7 @@ namespace AdvancedK9
                     if(_dog.DistanceTo(destination)<5f&&routeIndex<route.Count)routeIndex++;
                     else if(_dog.DistanceTo(Game.LocalPlayer.Character)>6.5f)Game.DisplaySubtitle("~b~Advance with your K9~s~ — "+_profile.Name+" is holding the scent line ahead.",900);
                 }
+                if(calloutTrack)AdvancedK9ApiHost.PublishTrackingTick(_activeSharedApiContextId,ApiHandleOf(_dog),ApiHandleOf(target),_dog.Position.X,_dog.Position.Y,_dog.Position.Z);
                 _activeTrackDistance+=previous.DistanceTo(_dog.Position);previous=_dog.Position;
                 _profile.UseStamina(1);
                 GameFiber.Yield();
