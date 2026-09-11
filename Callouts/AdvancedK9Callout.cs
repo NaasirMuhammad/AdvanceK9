@@ -871,7 +871,8 @@ namespace AdvancedK9.Callouts
             Vector3 requested=new Vector3(objectPosition.X+dx*clearance,objectPosition.Y+dy*clearance,objectPosition.Z);
             if(!TryResolveSafePedPosition(requested,out candidate))return false;
             if(candidate.DistanceTo(requested)>4f||NativeFunction.Natives.IS_POINT_ON_ROAD<bool>(candidate.X,candidate.Y,candidate.Z,0))return false;
-            bool occupied=World.GetAllPeds().Any(p=>p!=null&&p.Exists()&&p!=Subject&&p!=OfficerOne&&p!=OfficerTwo&&p!=Game.LocalPlayer.Character&&p.DistanceTo(candidate)<6f);
+            Vector3 candidatePosition=candidate;
+            bool occupied=World.GetAllPeds().Any(p=>p!=null&&p.Exists()&&p!=Subject&&p!=OfficerOne&&p!=OfficerTwo&&p!=Game.LocalPlayer.Character&&p.DistanceTo(candidatePosition)<6f);
             if(occupied)return false;
             Entity observer=OfficerOne!=null&&OfficerOne.Exists()?(Entity)OfficerOne:SceneVehicle!=null&&SceneVehicle.Exists()?(Entity)SceneVehicle:null;
             if(observer==null)return false;
