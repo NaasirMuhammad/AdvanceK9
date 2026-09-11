@@ -33,6 +33,8 @@ namespace AdvancedK9.Callouts
         protected uint StartedAt;
         protected bool Finished;
         private bool _cleanupCompleted;
+        private bool _lifecycleClosed;
+        private int _lifecycleGeneration;
         private bool _trafficControlled;
         private uint _nextSupportMove;
         private bool _medicalResponseStarted;
@@ -86,6 +88,17 @@ namespace AdvancedK9.Callouts
                 ObserveSuspectLifecycle();
                 return k9Contact||MedicalResponseStarted||SubjectIsComplying()||ArrestProviderOwnsSubject;
             }
+        }
+
+        protected int BeginAcceptanceWork()
+        {
+            if(_lifecycleClosed||_cleanupCompleted)return -1;
+            return ++_lifecycleGeneration;
+        }
+
+        protected bool AcceptanceWorkIsActive(int generation)
+        {
+            return generation>0&&!_lifecycleClosed&&!_cleanupCompleted&&!Finished&&generation==_lifecycleGeneration;
         }
 
         protected bool Prepare(string message,Vector3 scene,float radius,bool snapToStreet=true)
@@ -1177,13 +1190,18 @@ namespace AdvancedK9.Callouts
         public override void End()
         {
             if(_cleanupCompleted)return;
+            bool completedBeforeCleanup=Finished;
+            _lifecycleClosed=true;
+            _lifecycleGeneration++;
+            Finished=true;
+            _backupInvestigationActive=false;
             _cleanupCompleted=true;
             ClearSceneRoute();
             if(SubjectBlip!=null&&SubjectBlip.Exists())SubjectBlip.Delete();
             if(Reporter!=null&&Reporter.Exists())Reporter.Dismiss();
             if(ParentTwo!=null&&ParentTwo.Exists())ParentTwo.Dismiss();
             if(Subject!=null&&Subject.Exists())Subject.Dismiss();
-            if(SceneVehicle!=null&&SceneVehicle.Exists()){if(Finished)PreserveSceneVehicleForReturn(SceneVehicle);else SceneVehicle.Dismiss();}SceneVehicle=null;
+            if(SceneVehicle!=null&&SceneVehicle.Exists()){if(completedBeforeCleanup)PreserveSceneVehicleForReturn(SceneVehicle);else SceneVehicle.Dismiss();}SceneVehicle=null;
             if(EvidenceProp!=null&&EvidenceProp.Exists())EvidenceProp.Dismiss();
             if(CoverProp!=null&&CoverProp.Exists())CoverProp.Dismiss();
             if(MedicOne!=null&&MedicOne.Exists())MedicOne.Dismiss();
