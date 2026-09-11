@@ -613,14 +613,14 @@ namespace AdvancedK9.Callouts
             {
                 OfficerOne.BlockPermanentEvents=true;
                 OfficerOne.Tasks.Clear();
-                OfficerOne.Tasks.AimAt(Subject,-1);
+                NativeFunction.Natives.TASK_AIM_GUN_AT_ENTITY(OfficerOne,Subject,-1,false);
                 NativeFunction.Natives.SET_PED_KEEP_TASK(OfficerOne,true);
             }
             if(OfficerTwo!=null&&OfficerTwo.Exists())
             {
                 OfficerTwo.BlockPermanentEvents=true;
                 OfficerTwo.Tasks.Clear();
-                OfficerTwo.Tasks.AimAt(Subject,-1);
+                NativeFunction.Natives.TASK_AIM_GUN_AT_ENTITY(OfficerTwo,Subject,-1,false);
                 NativeFunction.Natives.SET_PED_KEEP_TASK(OfficerTwo,true);
             }
             UnsubscribeFromTrackingEvents();
