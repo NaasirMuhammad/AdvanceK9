@@ -50,6 +50,9 @@ namespace AdvancedK9.Callouts
         private Vector3 _curbAlignedVehiclePosition;
         private bool _isHidingAnimationPlaying;
         private bool _backupArrestAttempted;
+        private bool _coverMoveAssigned;
+        private Vector3 _assignedCoverPosition;
+        private static readonly HashSet<int> RemovedRoadsideScenes=new HashSet<int>{4};
 
         private static readonly Vector3[] RoadsideScenes={
             new Vector3(-565f,-675f,33f),new Vector3(-1035f,-2735f,20f),new Vector3(-1430f,-590f,30f),
@@ -68,7 +71,7 @@ namespace AdvancedK9.Callouts
             var eligible=new List<int>();
             for(int i=0;i<RoadsideScenes.Length;i++)
             {
-                if(RecentRoadsideScenes.Contains(i)||FailedRoadsideScenes.Contains(i))continue;
+                if(RemovedRoadsideScenes.Contains(i)||RecentRoadsideScenes.Contains(i)||FailedRoadsideScenes.Contains(i))continue;
                 float distance=player.DistanceTo(RoadsideScenes[i]);
                 if(distance<180f||distance>2200f)continue;
                 int interior=NativeFunction.Natives.GET_INTERIOR_AT_COORDS<int>(RoadsideScenes[i].X,RoadsideScenes[i].Y,RoadsideScenes[i].Z);
@@ -80,7 +83,7 @@ namespace AdvancedK9.Callouts
             if(eligible.Count==0)
             {
                 FailedRoadsideScenes.Clear();
-                for(int i=0;i<RoadsideScenes.Length;i++)if(!RecentRoadsideScenes.Contains(i))eligible.Add(i);
+                for(int i=0;i<RoadsideScenes.Length;i++)if(!RemovedRoadsideScenes.Contains(i)&&!RecentRoadsideScenes.Contains(i))eligible.Add(i);
             }
             if(eligible.Count==0)return false;
             int best=eligible[Random.Next(eligible.Count)];
@@ -359,8 +362,12 @@ namespace AdvancedK9.Callouts
                 if(TryFindExistingCover(_hidingPosition,out liveCover)&&TryResolveSafePedPosition(liveCover,out safeLiveCover))
                 {
                     _hidingPosition=safeLiveCover;_naturalCoverReserved=true;_coverConfirmed=false;
-                    NativeFunction.Natives.TASK_FOLLOW_NAV_MESH_TO_COORD(Subject,safeLiveCover.X,safeLiveCover.Y,safeLiveCover.Z,4.8f,18000,1.5f,0,0f);
-                    Game.LogTrivial("AdvancedK9 Callouts: streamed environmental cover confirmed and fugitive hiding task refreshed.");
+                    if(!_coverMoveAssigned||_assignedCoverPosition.DistanceTo(safeLiveCover)>3f)
+                    {
+                        _coverMoveAssigned=true;_assignedCoverPosition=safeLiveCover;
+                        NativeFunction.Natives.TASK_FOLLOW_NAV_MESH_TO_COORD(Subject,safeLiveCover.X,safeLiveCover.Y,safeLiveCover.Z,4.8f,18000,1.5f,0,0f);
+                        Game.LogTrivial("AdvancedK9 Callouts: one-time movement assigned toward newly verified solid cover.");
+                    }
                 }
                 else
                 {
@@ -413,14 +420,13 @@ namespace AdvancedK9.Callouts
             }
 
             float rexDistance=K9DistanceTo(Subject.Position);
-            if(ApiRequested&&!_suspectLocated&&!_rexReachedSubject&&rexDistance<3f)
+            if(ApiRequested&&!_suspectLocated&&!_rexReachedSubject&&rexDistance<=4.75f)
             {
                 _rexReachedSubject=true;_rexReachedAt=Game.GameTime;
-                Game.LogTrivial("AdvancedK9 Callouts: Rex physically reached FugitiveTrail subject; preserving the suspect's cover/flee task until the alert transition.");
+                Game.LogTrivial("AdvancedK9 Callouts: Rex entered the 4.75 metre containment handoff radius without contacting the subject.");
             }
             if(_rexReachedSubject&&!_suspectLocated)
             {
-                TransitionSuspectAwayFromHiding();
                 _suspectLocated=true;_locatedAt=Game.GameTime;_phase=FugitivePhase.Located;_phaseStarted=Game.GameTime;
                 SetCustodyObservationEnabled(true);
                 EndSupportTracking();
@@ -437,9 +443,11 @@ namespace AdvancedK9.Callouts
             {
                 ObserveCooperativeControl("verbal challenge");
                 bool controlLocked=SuspectControlLocked;
-                MaintainSupportContainment(CustodyLocked||SubjectIsInCustody());
+                MaintainSupportContainment(CustodyLocked||ArrestProviderOwnsSubject||SubjectIsInCustody());
                 if(controlLocked)
                 {
+                    bool complying=SubjectIsComplying();
+                    if(complying&&!ArrestProviderOwnsSubject&&!SubjectIsInCustody())BeginBackupOfficerArrestAttempt();
                     TransitionSuspectAwayFromHiding();
                     _fleeActive=false;_outcomeTaskIssued=true;
                     K9ApiSnapshot liveK9;
@@ -600,9 +608,14 @@ namespace AdvancedK9.Callouts
                     arrestOfficer.BlockPermanentEvents=true;
                     uint taser=NativeFunction.Natives.GET_HASH_KEY<uint>("WEAPON_STUNGUN");
                     NativeFunction.Natives.SET_CURRENT_PED_WEAPON(arrestOfficer,taser,true);
+                    if(OfficerTwo!=null&&OfficerTwo.Exists())NativeFunction.Natives.TASK_AIM_GUN_AT_ENTITY(OfficerTwo,suspect,-1,false);
                     NativeFunction.Natives.TASK_GO_TO_ENTITY(arrestOfficer,suspect,-1,2.2f,2.8f,0f,0);
                     uint approachDeadline=Game.GameTime+10000;
-                    while(!Finished&&arrestOfficer.Exists()&&suspect.Exists()&&arrestOfficer.DistanceTo(suspect)>2.8f&&Game.GameTime<approachDeadline)GameFiber.Wait(200);
+                    while(!Finished&&arrestOfficer.Exists()&&suspect.Exists()&&arrestOfficer.DistanceTo(suspect)>2.8f&&Game.GameTime<approachDeadline)
+                    {
+                        if(ArrestProviderOwnsSubject||SubjectIsInCustody()){ReleaseSupportForCustody();return;}
+                        GameFiber.Wait(200);
+                    }
                     if(!Finished&&arrestOfficer.Exists()&&suspect.Exists()&&!ArrestProviderOwnsSubject&&!SubjectIsInCustody())
                     {
                         NativeFunction.Natives.TASK_ARREST_PED(arrestOfficer,suspect);
