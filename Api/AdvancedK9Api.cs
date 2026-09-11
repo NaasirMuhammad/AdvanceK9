@@ -49,42 +49,6 @@ namespace AdvancedK9.API
         public string Detail { get; set; } = "";
     }
 
-    public sealed class K9TrackingEvent
-    {
-        public string ContextId { get; set; } = "";
-        public int DogHandle { get; set; }
-        public int TargetHandle { get; set; }
-        public float DogX { get; set; }
-        public float DogY { get; set; }
-        public float DogZ { get; set; }
-    }
-
-    public static class AdvancedK9TrackingEvents
-    {
-        public static event Action<K9TrackingEvent> TrackingTick;
-        public static event Action<K9TrackingEvent> TrackingCompleted;
-
-        internal static void PublishTrackingTick(K9TrackingEvent tracking)
-        {
-            PublishSafely(TrackingTick,tracking);
-        }
-
-        internal static void PublishTrackingCompleted(K9TrackingEvent tracking)
-        {
-            PublishSafely(TrackingCompleted,tracking);
-        }
-
-        private static void PublishSafely(Action<K9TrackingEvent> handlers,K9TrackingEvent tracking)
-        {
-            if(handlers==null||tracking==null)return;
-            foreach(Delegate subscriber in handlers.GetInvocationList())
-            {
-                var handler=(Action<K9TrackingEvent>)subscriber;
-                try{handler(tracking);}catch{}
-            }
-        }
-    }
-
     public static class AdvancedK9Api
     {
         public const int ProtocolVersion = 1;
@@ -236,14 +200,5 @@ namespace AdvancedK9.API
             });
         }
 
-        public static void PublishTrackingTick(string contextId,int dogHandle,int targetHandle,float dogX,float dogY,float dogZ)
-        {
-            AdvancedK9TrackingEvents.PublishTrackingTick(new K9TrackingEvent{ContextId=contextId??"",DogHandle=dogHandle,TargetHandle=targetHandle,DogX=dogX,DogY=dogY,DogZ=dogZ});
-        }
-
-        public static void PublishTrackingCompleted(string contextId,int dogHandle,int targetHandle,float dogX,float dogY,float dogZ)
-        {
-            AdvancedK9TrackingEvents.PublishTrackingCompleted(new K9TrackingEvent{ContextId=contextId??"",DogHandle=dogHandle,TargetHandle=targetHandle,DogX=dogX,DogY=dogY,DogZ=dogZ});
-        }
     }
 }
