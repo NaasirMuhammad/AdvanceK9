@@ -5,7 +5,7 @@ on:
   pull_request:
     branches: [ main ]
   push:
-    branches: [ main, codex/advancedk9-v0.23.1-beta, codex/advancedk9-next-beta, codex/advancedk9-coordinated-callout-fix ]
+    branches: [ main, codex/advancedk9-v0.23.1-beta, codex/advancedk9-next-beta, codex/advancedk9-coordinated-callout-fix, codex/advancedk9-seven-issue-fix ]
 jobs:
   build:
     runs-on: windows-latest
