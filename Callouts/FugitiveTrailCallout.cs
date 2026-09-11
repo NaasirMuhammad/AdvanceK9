@@ -185,7 +185,7 @@ namespace AdvancedK9.Callouts
 
         private bool InitializeAcceptedCallout(int acceptanceGeneration)
         {
-            if(!AcceptanceWorkIsActive(acceptanceGeneration))return false;
+            if(!AcceptanceCheckpoint(acceptanceGeneration))return false;
             StartedAt=Game.GameTime;_phaseStarted=StartedAt;_phase=FugitivePhase.EnRoute;_outcome=Random.Next(4);
             _isHidingAnimationPlaying=false;
             SetCustodyObservationEnabled(false);
@@ -236,35 +236,38 @@ namespace AdvancedK9.Callouts
             _hidingPosition=hidingPosition;
 
             SceneVehicle=SpawnVehicle("primo",_curbAlignedVehiclePosition,_sceneHeading,true);
+            if(!AcceptanceCheckpoint(acceptanceGeneration))return false;
             if(SceneVehicle==null||!SceneVehicle.Exists())return RejectCurrentScene("suspect vehicle spawn failed");
             SceneVehicle.IsPersistent=true;
             SceneVehicle.Position=_curbAlignedVehiclePosition;
             SceneVehicle.Heading=_sceneHeading;
             NativeFunction.Natives.SET_VEHICLE_ON_GROUND_PROPERLY(SceneVehicle);
             GameFiber.Yield();
-            if(!AcceptanceWorkIsActive(acceptanceGeneration))return false;
+            if(!AcceptanceCheckpoint(acceptanceGeneration))return false;
             float vehicleRadians=(float)(_sceneHeading*System.Math.PI/180.0);
             Vector3 roadForward=new Vector3(-(float)System.Math.Sin(vehicleRadians),(float)System.Math.Cos(vehicleRadians),0f);
             Vector3 cruiserPosition=SceneVehicle.Position-roadForward*9f;
             if(!StagePoliceScene(cruiserPosition,_sceneHeading,true))return RejectCurrentScene("police scene staging failed");
+            if(!AcceptanceCheckpoint(acceptanceGeneration))return false;
             if(PoliceVehicle==null||!PoliceVehicle.Exists())return RejectCurrentScene("police cruiser unavailable after staging");
             PoliceVehicle.Position=cruiserPosition;
             PoliceVehicle.Heading=_sceneHeading;
             PoliceVehicle.IsPersistent=true;
             NativeFunction.Natives.SET_VEHICLE_ON_GROUND_PROPERLY(PoliceVehicle);
             GameFiber.Yield();
-            if(!AcceptanceWorkIsActive(acceptanceGeneration))return false;
+            if(!AcceptanceCheckpoint(acceptanceGeneration))return false;
             Game.LogTrivial("AdvancedK9 Callouts: final curb formation locked: suspect="+SceneVehicle.Position+", cruiser="+PoliceVehicle.Position+", heading="+_sceneHeading+", gap="+SceneVehicle.DistanceTo(PoliceVehicle)+".");
             ConfigureTrafficStopScene();
             ControlSceneTraffic();
             StartBackupOfficerInvestigationLoops();
-            if(!AcceptanceWorkIsActive(acceptanceGeneration))return false;
+            if(!AcceptanceCheckpoint(acceptanceGeneration))return false;
             Game.LogTrivial("AdvancedK9 Callouts: accepted roadside scene spawned after successful trail validation.");
 
             Vector3 escapeStart=hidingPosition;
             Vector3 safeEscapeStart;
             if(TryResolveSafePedPosition(escapeStart,out safeEscapeStart))escapeStart=safeEscapeStart;
             Subject=SpawnPed("a_m_m_hillbilly_01",escapeStart,Random.Next(360));if(Subject==null||!Subject.Exists())return RejectCurrentScene("subject spawn failed");
+            if(!AcceptanceCheckpoint(acceptanceGeneration))return false;
             Subject.Tasks.Clear();Subject.MaxHealth=500;Subject.Health=500;Subject.BlockPermanentEvents=true;Subject.IsPersistent=true;
             var escapingSubject=Subject;var finalCover=hidingPosition;
             GameFiber.StartNew(delegate
@@ -280,7 +283,7 @@ namespace AdvancedK9.Callouts
                     }
                     NativeFunction.Natives.SET_PED_KEEP_TASK(escapingSubject,true);
                     uint escapeStarted=Game.GameTime;
-                    while(!Finished&&escapingSubject!=null&&escapingSubject.Exists()&&escapingSubject.DistanceTo(finalCover)>5f&&Game.GameTime-escapeStarted<90000)
+                    while(AcceptanceWorkIsActive(acceptanceGeneration)&&escapingSubject!=null&&escapingSubject.Exists()&&escapingSubject.DistanceTo(finalCover)>5f&&Game.GameTime-escapeStarted<90000)
                     {
                         if(Game.GameTime-escapeStarted>14000&&Game.LocalPlayer.Character.DistanceTo(escapingSubject)>85f)
                         {
@@ -290,7 +293,7 @@ namespace AdvancedK9.Callouts
                         }
                         GameFiber.Wait(250);
                     }
-                    if(!Finished&&escapingSubject!=null&&escapingSubject.Exists()&&escapingSubject.DistanceTo(finalCover)<=7f)
+                    if(AcceptanceWorkIsActive(acceptanceGeneration)&&escapingSubject!=null&&escapingSubject.Exists()&&escapingSubject.DistanceTo(finalCover)<=7f)
                     {
                         Vector3 safeFinal;
                         if(TryResolveSafePedPosition(finalCover,out safeFinal))escapingSubject.Position=safeFinal;
@@ -306,11 +309,24 @@ namespace AdvancedK9.Callouts
             _lastSafeSubjectPosition=escapeStart;
             _nextCoverSearch=Game.GameTime+3000;
             Game.LogTrivial("AdvancedK9 Callouts: fugitive trail constrained to a local outdoor 65-95 metre pedestrian search; live concealment will be confirmed after streaming.");
-            if(!AcceptanceWorkIsActive(acceptanceGeneration))return false;
+            if(!AcceptanceCheckpoint(acceptanceGeneration))return false;
             DispatchUpdate("CalloutAccepted","Failed traffic stop","Local patrol jurisdiction","Gray Primo stopped at curb with marked cruiser behind","Adult male in work clothes","Away from the driver side of the stopped vehicle","Unknown weapon status","Respond to a failed traffic stop. The driver abandoned the vehicle and fled on foot. Two patrol officers are holding the scene.","WE_HAVE CRIME_RESIST_ARREST IN_OR_ON_POSITION",Scene);
-            if(!AcceptanceWorkIsActive(acceptanceGeneration))return false;
+            if(!AcceptanceCheckpoint(acceptanceGeneration))return false;
             RouteToScene("Respond to the failed traffic stop. The driver abandoned the stopped vehicle and fled on foot; officers preserved the driver-seat scent.");
             return AcceptanceWorkIsActive(acceptanceGeneration);
+        }
+
+        private bool AcceptanceCheckpoint(int generation)
+        {
+            if(AcceptanceWorkIsActive(generation))return true;
+            StopBackupOfficerInvestigation();
+            if(Subject!=null&&Subject.Exists())Subject.Dismiss();Subject=null;
+            if(OfficerOne!=null&&OfficerOne.Exists())OfficerOne.Dismiss();OfficerOne=null;
+            if(OfficerTwo!=null&&OfficerTwo.Exists())OfficerTwo.Dismiss();OfficerTwo=null;
+            if(PoliceVehicle!=null&&PoliceVehicle.Exists())PoliceVehicle.Dismiss();PoliceVehicle=null;
+            if(SceneVehicle!=null&&SceneVehicle.Exists())SceneVehicle.Dismiss();SceneVehicle=null;
+            Game.LogTrivial("AdvancedK9 Callouts: canceled delayed Fugitive Trail setup after LSPDFR ended the callout.");
+            return false;
         }
 
         private bool RejectCurrentScene(string reason)
