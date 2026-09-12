@@ -281,7 +281,7 @@ namespace AdvancedK9.Callouts
                     while(AcceptanceWorkIsActive(acceptanceGeneration)&&Game.GameTime<deadline)
                     {
                         Vector3 candidate;
-                        Vector3 safeCandidate;
+                        Vector3 safeCandidate=Vector3.Zero;
                         if(TryFindExistingCover(_coverSearchAnchor,out candidate)&&TryResolveSafePedPosition(candidate,out safeCandidate)&&
                            !NativeFunction.Natives.IS_POINT_ON_ROAD<bool>(safeCandidate.X,safeCandidate.Y,safeCandidate.Z,0))
                         {
