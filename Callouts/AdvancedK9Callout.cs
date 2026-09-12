@@ -864,6 +864,113 @@ namespace AdvancedK9.Callouts
             catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: cover search contained: "+ex.Message);return false;}
         }
 
+        protected bool TryFindWorldGeometryCover(Vector3 center,out Vector3 hidingPosition)
+        {
+            hidingPosition=Vector3.Zero;
+            try
+            {
+                Entity roadObserver=SceneVehicle!=null&&SceneVehicle.Exists()?(Entity)SceneVehicle:
+                    OfficerOne!=null&&OfficerOne.Exists()?(Entity)OfficerOne:null;
+                Ped player=Game.LocalPlayer.Character;
+                if(roadObserver==null||player==null||!player.Exists())return false;
+                int roadObserverHandle=HandleOf(roadObserver);
+                int playerHandle=HandleOf(player);
+                if(roadObserverHandle==0||playerHandle==0)return false;
+
+                float[] radii={8f,12f,17f,23f,30f,38f,46f};
+                int acceptedGroundPoints=0;
+                int groundFailures=0;
+                int navmeshFailures=0;
+                int roadwayFailures=0;
+                int interiorFailures=0;
+                int occludedFromRoad=0;
+                int approachOcclusionFailures=0;
+                for(int ring=0;ring<radii.Length;ring++)
+                {
+                    int samples=ring<2?12:18;
+                    float phase=(ring%2)*10f;
+                    for(int sample=0;sample<samples;sample++)
+                    {
+                        float degrees=phase+sample*(360f/samples);
+                        float radians=(float)(degrees*Math.PI/180.0);
+                        Vector3 requested=center+new Vector3((float)Math.Sin(radians)*radii[ring],(float)Math.Cos(radians)*radii[ring],0f);
+                        Vector3 candidate=Vector3.Zero;
+                        float groundZ=0f;
+                        NativeFunction.Natives.REQUEST_COLLISION_AT_COORD(requested.X,requested.Y,requested.Z);
+                        if(!NativeFunction.Natives.GET_GROUND_Z_FOR_3D_COORD<bool>(requested.X,requested.Y,requested.Z+75f,out groundZ,false))
+                        {
+                            groundFailures++;
+                            continue;
+                        }
+                        candidate=new Vector3(requested.X,requested.Y,groundZ+0.15f);
+                        if(Math.Abs(candidate.Z-Scene.Z)>8f)
+                        {
+                            groundFailures++;
+                            continue;
+                        }
+                        if(NativeFunction.Natives.GET_INTERIOR_AT_COORDS<int>(candidate.X,candidate.Y,candidate.Z)!=0)
+                        {
+                            interiorFailures++;
+                            continue;
+                        }
+                        Vector3 navPoint=Vector3.Zero;
+                        if(!NativeFunction.Natives.GET_SAFE_COORD_FOR_PED<bool>(candidate.X,candidate.Y,candidate.Z,true,out navPoint,16)||navPoint.DistanceTo(candidate)>15f)
+                        {
+                            navmeshFailures++;
+                            continue;
+                        }
+                        Vector3 roadNode=Vector3.Zero;float roadHeading=0f;
+                        bool roadNodeFound=NativeFunction.Natives.GET_CLOSEST_VEHICLE_NODE_WITH_HEADING<bool>(candidate.X,candidate.Y,candidate.Z,out roadNode,out roadHeading,1,3f,0);
+                        bool classifiedRoad=NativeFunction.Natives.IS_POINT_ON_ROAD<bool>(candidate.X,candidate.Y,candidate.Z,0);
+                        if(candidate.DistanceTo(Scene)<45f||(classifiedRoad&&roadNodeFound&&candidate.DistanceTo(roadNode)<3.25f))
+                        {
+                            roadwayFailures++;
+                            continue;
+                        }
+                        acceptedGroundPoints++;
+
+                        float[] heights={0.2f,0.7f,1.2f};
+                        bool roadFullyOccluded=true;
+                        for(int h=0;h<heights.Length;h++)
+                        {
+                            if(NativeFunction.Natives.HAS_ENTITY_CLEAR_LOS_TO_COORD<bool>(roadObserverHandle,candidate.X,candidate.Y,candidate.Z+heights[h],17))
+                            {
+                                roadFullyOccluded=false;
+                                break;
+                            }
+                        }
+                        if(!roadFullyOccluded)continue;
+                        occludedFromRoad++;
+
+                        bool approachFullyOccluded=true;
+                        for(int h=0;h<heights.Length;h++)
+                        {
+                            if(NativeFunction.Natives.HAS_ENTITY_CLEAR_LOS_TO_COORD<bool>(playerHandle,candidate.X,candidate.Y,candidate.Z+heights[h],17))
+                            {
+                                approachFullyOccluded=false;
+                                break;
+                            }
+                        }
+                        if(!approachFullyOccluded){approachOcclusionFailures++;continue;}
+
+                        hidingPosition=candidate;
+                        Game.LogTrivial("AdvancedK9 Callouts: solid map-geometry concealment selected at "+candidate+"; road and approach occlusion passed at 0.2m, 0.7m, and 1.2m.");
+                        return true;
+                    }
+                }
+                Game.LogTrivial("AdvancedK9 Callouts: map-geometry cover scan rejected candidates by stage: ground="+groundFailures+
+                    ", navmesh="+navmeshFailures+", roadway="+roadwayFailures+", interior="+interiorFailures+
+                    "; acceptedGround="+acceptedGroundPoints+", roadOccluded="+occludedFromRoad+
+                    ", approachRejected="+approachOcclusionFailures+".");
+                return false;
+            }
+            catch(System.Exception ex)
+            {
+                Game.LogTrivial("AdvancedK9 Callouts: map-geometry cover scan contained: "+ex.Message);
+                return false;
+            }
+        }
+
         private bool TryBuildOccludedCoverCandidate(Entity cover,out Vector3 candidate)
         {
             candidate=Vector3.Zero;
@@ -884,9 +991,6 @@ namespace AdvancedK9.Callouts
             Vector3 requested=new Vector3(objectPosition.X+dx*clearance,objectPosition.Y+dy*clearance,objectPosition.Z);
             if(!TryResolveSafePedPosition(requested,out candidate))return false;
             if(candidate.DistanceTo(requested)>4f||NativeFunction.Natives.IS_POINT_ON_ROAD<bool>(candidate.X,candidate.Y,candidate.Z,0))return false;
-            Vector3 candidatePosition=candidate;
-            bool occupied=World.GetAllPeds().Any(p=>p!=null&&p.Exists()&&p!=Subject&&p!=OfficerOne&&p!=OfficerTwo&&p!=Game.LocalPlayer.Character&&p.DistanceTo(candidatePosition)<6f);
-            if(occupied)return false;
             Entity observer=OfficerOne!=null&&OfficerOne.Exists()?(Entity)OfficerOne:SceneVehicle!=null&&SceneVehicle.Exists()?(Entity)SceneVehicle:null;
             if(observer==null)return false;
             bool clearAtCrouch=NativeFunction.Natives.HAS_ENTITY_CLEAR_LOS_TO_COORD<bool>(observer,candidate.X,candidate.Y,candidate.Z+0.8f,17);
