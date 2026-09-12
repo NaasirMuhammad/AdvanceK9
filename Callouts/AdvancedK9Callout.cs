@@ -33,6 +33,8 @@ namespace AdvancedK9.Callouts
         protected uint StartedAt;
         protected bool Finished;
         private bool _cleanupCompleted;
+        private bool _lifecycleClosed;
+        private int _lifecycleGeneration;
         private bool _trafficControlled;
         private uint _nextSupportMove;
         private bool _medicalResponseStarted;
@@ -55,11 +57,18 @@ namespace AdvancedK9.Callouts
         private string _calloutBridgeRequestId="";
         private uint _nextCalloutBridgeObservation;
         private bool _supportContainmentLogged;
+        private bool _supportWeaponsInitialized;
+        private bool _supportContainmentAssigned;
+        private bool _supportCustodyGuardAssigned;
+        private bool _backupInvestigationActive;
+        private bool _custodyObservationEnabled=true;
+        protected bool _k9DisengageIssued;
         private string _incidentVariant="General",_incidentJurisdiction="Local patrol jurisdiction",_incidentVehicle="Not yet reported",_incidentSuspect="Not yet reported",_incidentDirection="Not yet reported",_incidentRisk="Not yet determined";
         private string _lastDispatchSignature="";
         private uint _lastDispatchAt;
         private string _medicalStage="not-requested";
         private string _transportStage="not-requested";
+        private bool _suspectLocationPublished;
         private static bool _nexusAudioSurfacesLogged;
         protected bool MedicalResponseStarted{get{return _medicalResponseStarted;}}
         protected bool MedicalResponseComplete;
@@ -68,6 +77,7 @@ namespace AdvancedK9.Callouts
         protected bool CustodyLocked{get{return _custodyLeaseActive;}}
         protected bool CustodyOwnerStable{get{return _custodyLeaseActive&&Game.GameTime>=_custodyOwnerSettleUntil&&!string.Equals(_custodyOwner,"Determining provider",StringComparison.OrdinalIgnoreCase);}}
         protected bool ArrestProviderOwnsSubject{get{return _suspectLifecycle>=SuspectLifecycle.ArrestInProgress;}}
+        protected void SetCustodyObservationEnabled(bool enabled){_custodyObservationEnabled=enabled;}
         protected bool SuspectControlLocked
         {
             get
@@ -78,6 +88,17 @@ namespace AdvancedK9.Callouts
                 ObserveSuspectLifecycle();
                 return k9Contact||MedicalResponseStarted||SubjectIsComplying()||ArrestProviderOwnsSubject;
             }
+        }
+
+        protected int BeginAcceptanceWork()
+        {
+            if(_lifecycleClosed||_cleanupCompleted)return -1;
+            return ++_lifecycleGeneration;
+        }
+
+        protected bool AcceptanceWorkIsActive(int generation)
+        {
+            return generation>0&&!_lifecycleClosed&&!_cleanupCompleted&&!Finished&&generation==_lifecycleGeneration;
         }
 
         protected bool Prepare(string message,Vector3 scene,float radius,bool snapToStreet=true)
@@ -109,10 +130,100 @@ namespace AdvancedK9.Callouts
             if(ped!=null&&ped.Exists()){ped.IsPersistent=true;ped.BlockPermanentEvents=true;}return ped;
         }
 
-        protected Vehicle SpawnVehicle(string modelName,Vector3 position,float heading)
+        protected Vehicle SpawnVehicle(string modelName,Vector3 position,float heading,bool exactPlacement=false)
         {
-            var model=new Model(modelName);if(!model.IsValid)return null;model.LoadAndWait();var vehicle=new Vehicle(model,position,heading);model.Dismiss();
-            if(vehicle!=null&&vehicle.Exists())vehicle.IsPersistent=true;return vehicle;
+            Vector3 nodePosition;
+            float nodeHeading;
+            bool nodeFound=NativeFunction.Natives.GET_CLOSEST_VEHICLE_NODE_WITH_HEADING<bool>(
+                position.X,position.Y,position.Z,out nodePosition,out nodeHeading,1,3f,0);
+            Vector3 spawnPosition=exactPlacement?position:(nodeFound?nodePosition:position);
+            float spawnHeading=exactPlacement?heading:(nodeFound?nodeHeading:heading);
+
+            Game.LogTrivial("AdvancedK9 Callouts: vehicle spawn request model="+modelName+
+                ", requested="+position+", exactPlacement="+exactPlacement+", nodeFound="+nodeFound+
+                ", resolved="+spawnPosition+", heading="+spawnHeading+".");
+
+            var model=new Model(modelName);
+            if(!model.IsValid)
+            {
+                Game.LogTrivial("AdvancedK9 Callouts: vehicle spawn rejected; invalid model "+modelName+".");
+                return null;
+            }
+
+            model.LoadAndWait();
+            GameFiber.Yield();
+            var vehicle=new Vehicle(model,spawnPosition,spawnHeading);
+            model.Dismiss();
+            GameFiber.Yield();
+
+            if(vehicle==null||!vehicle.Exists())
+            {
+                Game.LogTrivial("AdvancedK9 Callouts: vehicle spawn failed after construction for "+modelName+".");
+                return null;
+            }
+
+            vehicle.IsPersistent=true;
+            vehicle.Position=spawnPosition;
+            vehicle.Heading=spawnHeading;
+            NativeFunction.Natives.SET_VEHICLE_ON_GROUND_PROPERLY(vehicle);
+            Game.LogTrivial("AdvancedK9 Callouts: vehicle spawn complete model="+modelName+
+                ", position="+vehicle.Position+", heading="+vehicle.Heading+".");
+            return vehicle;
+        }
+
+        protected void StartBackupOfficerInvestigationLoops()
+        {
+            if(SceneVehicle==null||!SceneVehicle.Exists())return;
+
+            Vector3 driverRear=SceneVehicle.GetOffsetPosition(new Vector3(-1.8f,-2.2f,0f));
+            Vector3 driverDoor=SceneVehicle.GetOffsetPosition(new Vector3(-1.8f,.2f,0f));
+            Vector3 frontCheck=SceneVehicle.GetOffsetPosition(new Vector3(-1.2f,2.4f,0f));
+            Vector3 passengerRear=SceneVehicle.GetOffsetPosition(new Vector3(1.8f,-2.2f,0f));
+            Vector3 passengerDoor=SceneVehicle.GetOffsetPosition(new Vector3(1.8f,.2f,0f));
+            Vector3 trunkCheck=SceneVehicle.GetOffsetPosition(new Vector3(1.1f,-2.8f,0f));
+
+            _backupInvestigationActive=true;
+            StartOfficerInvestigationLoop(OfficerOne,new[]{driverRear,driverDoor,frontCheck},"driver-side");
+            StartOfficerInvestigationLoop(OfficerTwo,new[]{passengerRear,passengerDoor,trunkCheck},"passenger-side");
+        }
+
+        protected void StopBackupOfficerInvestigation()
+        {
+            _backupInvestigationActive=false;
+            Game.LogTrivial("AdvancedK9 Callouts: backup investigation ownership released for the next callout phase.");
+        }
+
+        private void StartOfficerInvestigationLoop(Ped officer,Vector3[] points,string role)
+        {
+            if(officer==null||!officer.Exists())return;
+            GameFiber.StartNew(delegate
+            {
+                try
+                {
+                    while(!Finished&&_backupInvestigationActive&&officer.Exists()&&SceneVehicle!=null&&SceneVehicle.Exists())
+                    {
+                        officer.BlockPermanentEvents=true;
+                        officer.Tasks.Clear();
+                        using(var sequence=new TaskSequence(officer))
+                        {
+                            sequence.Tasks.FollowNavigationMeshToPosition(points[0],SceneVehicle.Heading,1.25f);
+                            sequence.Tasks.PlayAnimation("amb@code_human_police_investigate@idle_a","idle_a",1.0f,AnimationFlags.Loop);
+                            sequence.Tasks.StandStill(1200);
+                            sequence.Tasks.FollowNavigationMeshToPosition(points[1],SceneVehicle.Heading,1.1f);
+                            sequence.Tasks.PlayAnimation("amb@code_human_police_investigate@idle_a","idle_a",1.0f,AnimationFlags.Loop);
+                            sequence.Tasks.StandStill(2200);
+                            sequence.Tasks.FollowNavigationMeshToPosition(points[2],SceneVehicle.Heading,1.15f);
+                            sequence.Tasks.PlayAnimation("amb@code_human_police_investigate@idle_a","idle_a",1.0f,AnimationFlags.Loop);
+                            sequence.Tasks.StandStill(1600);
+                        }
+                        NativeFunction.Natives.SET_PED_KEEP_TASK(officer,true);
+                        Game.LogTrivial("AdvancedK9 Callouts: "+role+" backup investigation sequence assigned.");
+                        uint cycleStarted=Game.GameTime;
+                        while(!Finished&&_backupInvestigationActive&&officer.Exists()&&Game.GameTime-cycleStarted<22000)GameFiber.Wait(250);
+                    }
+                }
+                catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: "+role+" investigation loop contained: "+ex.Message);}
+            },"AdvancedK9 "+role+" investigation");
         }
 
         protected Rage.Object SpawnProp(string modelName,Vector3 position)
@@ -121,12 +232,12 @@ namespace AdvancedK9.Callouts
             if(prop!=null&&prop.Exists()){prop.IsPersistent=true;NativeFunction.Natives.PLACE_OBJECT_ON_GROUND_PROPERLY(prop);}return prop;
         }
 
-        private Vehicle SpawnPoliceVehicle(Vector3 position,float heading)
+        private Vehicle SpawnPoliceVehicle(Vector3 position,float heading,bool exactPlacement=false)
         {
             string[] models={"police3","police","sheriff"};
             foreach(string model in models)
             {
-                var vehicle=SpawnVehicle(model,position,heading);
+                var vehicle=SpawnVehicle(model,position,heading,exactPlacement);
                 if(vehicle!=null&&vehicle.Exists())return vehicle;
             }
             return null;
@@ -172,11 +283,11 @@ namespace AdvancedK9.Callouts
             return vehicleReady&&officersReady;
         }
 
-        protected bool StagePoliceScene(Vector3 cruiserPosition,float heading)
+        protected bool StagePoliceScene(Vector3 cruiserPosition,float heading,bool exactVehiclePlacement=false)
         {
             Vector3 officerOnePosition=new Vector3(Scene.X-2.5f,Scene.Y-2f,Scene.Z);
             Vector3 officerTwoPosition=new Vector3(Scene.X+2.5f,Scene.Y-2f,Scene.Z);
-            if(PoliceVehicle==null||!PoliceVehicle.Exists())PoliceVehicle=SpawnPoliceVehicle(cruiserPosition,heading);
+            if(PoliceVehicle==null||!PoliceVehicle.Exists())PoliceVehicle=SpawnPoliceVehicle(cruiserPosition,heading,exactVehiclePlacement);
             if(OfficerOne==null||!OfficerOne.Exists())OfficerOne=SpawnPoliceOfficer(officerOnePosition,heading);
             if(OfficerTwo==null||!OfficerTwo.Exists())OfficerTwo=SpawnPoliceOfficer(officerTwoPosition,heading);
             if(PoliceVehicle!=null&&PoliceVehicle.Exists())
@@ -243,7 +354,8 @@ namespace AdvancedK9.Callouts
             if(eventName=="TransportRequested")_transportStage="requested";else if(eventName=="TransportArrived")_transportStage="arrived";else if(eventName=="TransportLoaded")_transportStage="loaded";else if(eventName=="TransportComplete")_transportStage="complete";else if(eventName=="TransportFailed")_transportStage="failed";
             string k9State="not-tracking";K9ApiSnapshot snapshot;
             if(AdvancedK9Api.TryGetSnapshot(out snapshot)&&!string.IsNullOrWhiteSpace(snapshot.State))k9State=snapshot.State;
-            string located=eventName=="SuspectLocated"||eventName=="K9Apprehension"||_custodyLeaseActive?"located":"not-located";
+            if(eventName=="SuspectLocated"||eventName=="K9Apprehension"||eventName=="SuspectSurrender"||_custodyLeaseActive)_suspectLocationPublished=true;
+            string located=_suspectLocationPublished?"located":"not-located";
             string apprehension=eventName=="K9Apprehension"?"k9-controlled":_custodyLeaseActive?"arrest-provider-control":"none";
             string surrender=_suspectLifecycle>=SuspectLifecycle.ArrestInProgress?"secured":eventName=="SuspectSurrender"||SubjectIsComplying()?"complying":"not-compliant";
             string bite=eventName=="K9Apprehension"||_medicalStage!="not-requested"?"injured":"none";
@@ -494,7 +606,7 @@ namespace AdvancedK9.Callouts
 
         protected void ObserveSuspectLifecycle()
         {
-            if(Subject==null||!Subject.Exists())return;
+            if(!_custodyObservationEnabled||Subject==null||!Subject.Exists())return;
             bool arresting=false;
             try{arresting=NativeFunction.Natives.IS_PED_BEING_ARRESTED<bool>(Subject);}catch{}
             try
@@ -593,44 +705,55 @@ namespace AdvancedK9.Callouts
 
         protected void SupportOfficersFollowK9()
         {
-            if(_supportTrackingEnded)return;
+            _backupInvestigationActive=false;
+            if(_supportTrackingEnded||_custodyLeaseActive||ArrestProviderOwnsSubject)return;
             if(Game.GameTime<_nextSupportMove)return;
             K9ApiSnapshot snapshot;
             Vector3 dogPosition=Game.LocalPlayer.Character.Position;
             if(AdvancedK9Api.TryGetSnapshot(out snapshot)&&snapshot.DogHandle>0)_cachedDogHandle=snapshot.DogHandle;
             if(_cachedDogHandle>0&&NativeFunction.Natives.DOES_ENTITY_EXIST<bool>(_cachedDogHandle))
                 dogPosition=NativeFunction.Natives.GET_ENTITY_COORDS<Vector3>(_cachedDogHandle,true);
-            _nextSupportMove=Game.GameTime+1500;
+            _nextSupportMove=Game.GameTime+2200;
             var handler=Game.LocalPlayer.Character;
             uint taser=NativeFunction.Natives.GET_HASH_KEY<uint>("WEAPON_STUNGUN");
             uint pistol=NativeFunction.Natives.GET_HASH_KEY<uint>("WEAPON_COMBATPISTOL");
             if(OfficerOne!=null&&OfficerOne.Exists())
             {
                 OfficerOne.BlockPermanentEvents=true;
-                NativeFunction.Natives.GIVE_WEAPON_TO_PED(OfficerOne,taser,2,false,true);
-                NativeFunction.Natives.SET_CURRENT_PED_WEAPON(OfficerOne,taser,true);
+                if(!_supportFormationLogged){NativeFunction.Natives.SET_PED_KEEP_TASK(OfficerOne,false);OfficerOne.Tasks.ClearImmediately();}
+                if(!_supportWeaponsInitialized){NativeFunction.Natives.GIVE_WEAPON_TO_PED(OfficerOne,taser,2,false,true);NativeFunction.Natives.SET_CURRENT_PED_WEAPON(OfficerOne,taser,true);}
+                NativeFunction.Natives.SET_PED_USING_ACTION_MODE(OfficerOne,true);
+                NativeFunction.Natives.SET_PED_COMBAT_ATTRIBUTES(OfficerOne,1,true);
                 NativeFunction.Natives.SET_PED_COMBAT_ABILITY(OfficerOne,2);
                 NativeFunction.Natives.SET_PED_COMBAT_MOVEMENT(OfficerOne,2);
                 float distance=OfficerOne.DistanceTo(handler);
-                if(distance>55f){Vector3 catchup=handler.GetOffsetPosition(new Vector3(-3.2f,-9f,0f));Vector3 safe;if(TryResolveSafePedPosition(catchup,out safe))OfficerOne.Position=safe;}
-                NativeFunction.Natives.SET_PED_AS_GROUP_MEMBER(OfficerOne,NativeFunction.Natives.GET_PED_GROUP_INDEX<int>(handler));
-                NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(OfficerOne,handler,-3.2f,-7.5f,0f,distance>25f?7.5f:5.8f,-1,3.5f,true);
-                NativeFunction.Natives.SET_PED_KEEP_TASK(OfficerOne,true);
+                if(distance>28f){Vector3 catchup=handler.GetOffsetPosition(new Vector3(-3.2f,-9f,0f));Vector3 safe;if(TryResolveSafePedPosition(catchup,out safe))OfficerOne.Position=safe;}
+                if(!_supportFormationLogged||distance>6.5f)
+                {
+                    NativeFunction.Natives.SET_PED_AS_GROUP_MEMBER(OfficerOne,NativeFunction.Natives.GET_PED_GROUP_INDEX<int>(handler));
+                    NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(OfficerOne,handler,-1.5f,-2.0f,0f,distance>25f?7.5f:5.2f,-1,2.5f,true);
+                    NativeFunction.Natives.SET_PED_KEEP_TASK(OfficerOne,true);
+                }
             }
             if(OfficerTwo!=null&&OfficerTwo.Exists())
             {
                 OfficerTwo.BlockPermanentEvents=true;
-                NativeFunction.Natives.GIVE_WEAPON_TO_PED(OfficerTwo,pistol,60,false,true);
-                NativeFunction.Natives.SET_CURRENT_PED_WEAPON(OfficerTwo,pistol,true);
+                if(!_supportFormationLogged){NativeFunction.Natives.SET_PED_KEEP_TASK(OfficerTwo,false);OfficerTwo.Tasks.ClearImmediately();}
+                if(!_supportWeaponsInitialized){NativeFunction.Natives.GIVE_WEAPON_TO_PED(OfficerTwo,pistol,60,false,true);NativeFunction.Natives.SET_CURRENT_PED_WEAPON(OfficerTwo,pistol,true);}
+                NativeFunction.Natives.SET_PED_USING_ACTION_MODE(OfficerTwo,true);
+                NativeFunction.Natives.SET_PED_COMBAT_ATTRIBUTES(OfficerTwo,1,true);
                 NativeFunction.Natives.SET_PED_COMBAT_ABILITY(OfficerTwo,2);
                 NativeFunction.Natives.SET_PED_COMBAT_MOVEMENT(OfficerTwo,2);
                 float distance=OfficerTwo.DistanceTo(handler);
-                if(distance>55f){Vector3 catchup=handler.GetOffsetPosition(new Vector3(3.2f,-11f,0f));Vector3 safe;if(TryResolveSafePedPosition(catchup,out safe))OfficerTwo.Position=safe;}
-                NativeFunction.Natives.SET_PED_AS_GROUP_MEMBER(OfficerTwo,NativeFunction.Natives.GET_PED_GROUP_INDEX<int>(handler));
-                NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(OfficerTwo,handler,3.2f,-9f,0f,distance>25f?7.2f:5.6f,-1,3.8f,true);
-                NativeFunction.Natives.SET_PED_KEEP_TASK(OfficerTwo,true);
+                if(distance>28f){Vector3 catchup=handler.GetOffsetPosition(new Vector3(3.2f,-11f,0f));Vector3 safe;if(TryResolveSafePedPosition(catchup,out safe))OfficerTwo.Position=safe;}
+                if(!_supportFormationLogged||distance>6.5f)
+                {
+                    NativeFunction.Natives.SET_PED_AS_GROUP_MEMBER(OfficerTwo,NativeFunction.Natives.GET_PED_GROUP_INDEX<int>(handler));
+                    NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(OfficerTwo,handler,1.5f,-2.0f,0f,distance>25f?7.2f:5.0f,-1,2.5f,true);
+                    NativeFunction.Natives.SET_PED_KEEP_TASK(OfficerTwo,true);
+                }
             }
-            if(!_supportFormationLogged){_supportFormationLogged=true;Game.LogTrivial("AdvancedK9 Callouts: support search formation assigned behind the K9 handler; K9 handle="+_cachedDogHandle+".");}
+            if(!_supportFormationLogged){_supportFormationLogged=true;_supportWeaponsInitialized=true;Game.LogTrivial("AdvancedK9 Callouts: one-time tactical search formation and weapon roles assigned; K9 handle="+_cachedDogHandle+".");}
         }
 
         protected void ControlApprehensionTraffic(Vector3 center)
@@ -644,7 +767,8 @@ namespace AdvancedK9.Callouts
 
         protected void SupportOfficersContainSubject()
         {
-            if(Subject==null||!Subject.Exists())return;
+            if(_supportContainmentAssigned||_custodyLeaseActive||ArrestProviderOwnsSubject||Subject==null||!Subject.Exists())return;
+            _supportContainmentAssigned=true;
             uint taser=NativeFunction.Natives.GET_HASH_KEY<uint>("WEAPON_STUNGUN");
             uint pistol=NativeFunction.Natives.GET_HASH_KEY<uint>("WEAPON_COMBATPISTOL");
             var handler=Game.LocalPlayer.Character;float dx=handler.Position.X-Subject.Position.X,dy=handler.Position.Y-Subject.Position.Y;
@@ -653,31 +777,53 @@ namespace AdvancedK9.Callouts
             Vector3 lethalCover=new Vector3(Subject.Position.X+dx*11f+dy*4.5f,Subject.Position.Y+dy*11f-dx*4.5f,Subject.Position.Z);
             if(OfficerOne!=null&&OfficerOne.Exists())
             {
-                NativeFunction.Natives.GIVE_WEAPON_TO_PED(OfficerOne,taser,2,false,true);
+                if(!_supportWeaponsInitialized)NativeFunction.Natives.GIVE_WEAPON_TO_PED(OfficerOne,taser,2,false,false);
                 NativeFunction.Natives.SET_CURRENT_PED_WEAPON(OfficerOne,taser,true);
-                if(OfficerOne.DistanceTo(lessLethal)>2.5f)NativeFunction.Natives.TASK_FOLLOW_NAV_MESH_TO_COORD(OfficerOne,lessLethal.X,lessLethal.Y,lessLethal.Z,3.5f,7000,1.5f,0,0f);
-                else NativeFunction.Natives.TASK_AIM_GUN_AT_ENTITY(OfficerOne,Subject,-1,false);
+                OfficerOne.Tasks.ClearImmediately();
+                NativeFunction.Natives.TASK_FOLLOW_NAV_MESH_TO_COORD(OfficerOne,lessLethal.X,lessLethal.Y,lessLethal.Z,3.5f,9000,1.5f,0,0f);
             }
             if(OfficerTwo!=null&&OfficerTwo.Exists())
             {
-                NativeFunction.Natives.GIVE_WEAPON_TO_PED(OfficerTwo,pistol,60,false,true);
+                if(!_supportWeaponsInitialized)NativeFunction.Natives.GIVE_WEAPON_TO_PED(OfficerTwo,pistol,60,false,false);
                 NativeFunction.Natives.SET_CURRENT_PED_WEAPON(OfficerTwo,pistol,true);
-                if(OfficerTwo.DistanceTo(lethalCover)>2.5f)NativeFunction.Natives.TASK_FOLLOW_NAV_MESH_TO_COORD(OfficerTwo,lethalCover.X,lethalCover.Y,lethalCover.Z,3.2f,7000,1.5f,0,0f);
-                else NativeFunction.Natives.TASK_AIM_GUN_AT_ENTITY(OfficerTwo,Subject,-1,false);
+                OfficerTwo.Tasks.ClearImmediately();
+                NativeFunction.Natives.TASK_FOLLOW_NAV_MESH_TO_COORD(OfficerTwo,lethalCover.X,lethalCover.Y,lethalCover.Z,3.2f,9000,1.5f,0,0f);
             }
+            var contactOfficer=OfficerOne;var coverOfficer=OfficerTwo;var containedSubject=Subject;
+            GameFiber.StartNew(delegate
+            {
+                uint deadline=Game.GameTime+9000;
+                while(!Finished&&!_custodyLeaseActive&&!ArrestProviderOwnsSubject&&containedSubject!=null&&containedSubject.Exists()&&Game.GameTime<deadline&&
+                      ((contactOfficer!=null&&contactOfficer.Exists()&&contactOfficer.DistanceTo(lessLethal)>3f)||(coverOfficer!=null&&coverOfficer.Exists()&&coverOfficer.DistanceTo(lethalCover)>3f)))GameFiber.Wait(200);
+                if(Finished||_custodyLeaseActive||ArrestProviderOwnsSubject||containedSubject==null||!containedSubject.Exists())return;
+                if(contactOfficer!=null&&contactOfficer.Exists())NativeFunction.Natives.TASK_AIM_GUN_AT_ENTITY(contactOfficer,containedSubject,-1,false);
+                if(coverOfficer!=null&&coverOfficer.Exists())NativeFunction.Natives.TASK_AIM_GUN_AT_ENTITY(coverOfficer,containedSubject,-1,false);
+                Game.LogTrivial("AdvancedK9 Callouts: backup officers established one-time entity aim locks from separated containment positions.");
+            },"AdvancedK9 tactical containment positions");
             if(!_supportContainmentLogged){_supportContainmentLogged=true;Game.LogTrivial("AdvancedK9 Callouts: support officers transitioned from search movement to persistent armed containment.");}
         }
 
         protected void MaintainSupportContainment(bool custody)
         {
-            if(Subject==null||!Subject.Exists()||Game.GameTime<_nextSupportMove)return;
-            _nextSupportMove=Game.GameTime+2500;
+            if(Subject==null||!Subject.Exists())return;
             if(!custody){SupportOfficersContainSubject();return;}
-            uint taser=NativeFunction.Natives.GET_HASH_KEY<uint>("WEAPON_STUNGUN");
-            uint pistol=NativeFunction.Natives.GET_HASH_KEY<uint>("WEAPON_COMBATPISTOL");
-            Vector3 contact=Subject.GetOffsetPosition(new Vector3(-3f,-6f,0f)),cover=Subject.GetOffsetPosition(new Vector3(4f,-9f,0f));
-            if(OfficerOne!=null&&OfficerOne.Exists()){NativeFunction.Natives.SET_CURRENT_PED_WEAPON(OfficerOne,taser,true);NativeFunction.Natives.TASK_FOLLOW_NAV_MESH_TO_COORD(OfficerOne,contact.X,contact.Y,contact.Z,2.2f,5000,1.8f,0,0f);NativeFunction.Natives.SET_PED_KEEP_TASK(OfficerOne,true);}
-            if(OfficerTwo!=null&&OfficerTwo.Exists()){NativeFunction.Natives.SET_CURRENT_PED_WEAPON(OfficerTwo,pistol,true);NativeFunction.Natives.TASK_FOLLOW_NAV_MESH_TO_COORD(OfficerTwo,cover.X,cover.Y,cover.Z,2.2f,5000,1.8f,0,0f);NativeFunction.Natives.SET_PED_KEEP_TASK(OfficerTwo,true);}
+            ReleaseSupportForCustody();
+        }
+
+        protected void ReleaseSupportForCustody()
+        {
+            if(_supportCustodyGuardAssigned)return;
+            _supportCustodyGuardAssigned=true;_supportTrackingEnded=true;_backupInvestigationActive=false;
+            Ped[] officers={OfficerOne,OfficerTwo};
+            foreach(Ped officer in officers)
+            {
+                if(officer==null||!officer.Exists())continue;
+                NativeFunction.Natives.SET_PED_KEEP_TASK(officer,false);
+                NativeFunction.Natives.SET_PED_USING_ACTION_MODE(officer,false);
+                officer.Tasks.ClearImmediately();
+                NativeFunction.Natives.TASK_STAND_STILL(officer,5000);
+            }
+            Game.LogTrivial("AdvancedK9 Callouts: custody/arrest interception cleared backup combat tasks once; weapon and movement reassignment is disabled.");
         }
 
         protected bool ValidateTrafficStopFormation(Vehicle stoppedVehicle,Vehicle cruiser,float expectedHeading)
@@ -693,7 +839,7 @@ namespace AdvancedK9.Callouts
             // points in the same lane. Boundary availability is useful, but comparing
             // the returned distances is not a stable same-lane test. The explicit
             // behind-vehicle offset is the authoritative lateral/longitudinal check.
-            bool valid=roadA&&roadB&&curbResolvedA&&curbResolvedB&&delta<=12f&&expectedDelta<=12f&&gap>=6f&&gap<=15f&&laneOffset<=4.5f;
+            bool valid=roadA&&roadB&&curbResolvedA&&curbResolvedB&&delta<=8f&&expectedDelta<=8f&&gap>=7f&&gap<=12f&&laneOffset<=1.5f;
             Game.LogTrivial("AdvancedK9 Callouts: traffic-stop formation audit: road="+roadA+"/"+roadB+", boundary="+curbResolvedA+"/"+curbResolvedB+", headingDelta="+delta+", expectedDelta="+expectedDelta+", gap="+gap+", laneOffset="+laneOffset+", diagnosticCurbDifference="+curbDifference+", valid="+valid+".");
             return valid;
         }
@@ -703,22 +849,154 @@ namespace AdvancedK9.Callouts
             hidingPosition=center;
             try
             {
-                var cover=World.GetAllObjects().Where(o=>o.Exists()&&o.DistanceTo(center)<28f&&o.DistanceTo(Scene)>45f).OrderBy(o=>o.DistanceTo(center)).FirstOrDefault(o=>{
-                    string name=(o.Model.Name??"").ToLowerInvariant();
-                    return name.Contains("bush")||name.Contains("hedge")||name.Contains("tree")||name.Contains("planter")||name.Contains("pillar")||name.Contains("column")||name.Contains("wall")||name.Contains("fence")||name.Contains("crate")||name.Contains("container");
-                });
-                if(cover==null||!cover.Exists())return false;
-                Vector3 objectPosition=cover.Position;float dx=objectPosition.X-Scene.X,dy=objectPosition.Y-Scene.Y;float length=(float)Math.Sqrt(dx*dx+dy*dy);
-                if(length<.1f){dx=1f;dy=0f;length=1f;}
-                hidingPosition=new Vector3(objectPosition.X+dx/length*1.4f,objectPosition.Y+dy/length*1.4f,objectPosition.Z);
-                if(NativeFunction.Natives.IS_POINT_ON_ROAD<bool>(hidingPosition.X,hidingPosition.Y,hidingPosition.Z,0))return false;
-                Vector3 candidatePosition=hidingPosition;
-                bool occupied=World.GetAllPeds().Any(p=>p!=null&&p.Exists()&&p!=Subject&&p!=OfficerOne&&p!=OfficerTwo&&p!=Game.LocalPlayer.Character&&p.DistanceTo(candidatePosition)<8f);
-                if(occupied){Game.LogTrivial("AdvancedK9 Callouts: cover candidate rejected because civilians occupy the apprehension radius.");return false;}
-                Game.LogTrivial("AdvancedK9 Callouts: existing environmental cover selected: "+cover.Model.Name+" at "+hidingPosition+".");
-                return true;
+                Entity[] solidObjects=World.GetAllObjects().Where(o=>o!=null&&o.Exists()&&o.DistanceTo(center)<48f&&o.DistanceTo(Scene)>45f).Cast<Entity>().ToArray();
+                Entity[] parkedVehicles=World.GetAllVehicles().Where(v=>v!=null&&v.Exists()&&v!=SceneVehicle&&v!=PoliceVehicle&&v.DistanceTo(center)<40f&&v.DistanceTo(Scene)>45f&&v.Speed<1.0f).Cast<Entity>().ToArray();
+                foreach(Entity cover in solidObjects.Concat(parkedVehicles).OrderBy(o=>o.DistanceTo(center)))
+                {
+                    Vector3 candidate;
+                    if(!TryBuildOccludedCoverCandidate(cover,out candidate))continue;
+                    hidingPosition=candidate;
+                    Game.LogTrivial("AdvancedK9 Callouts: solid environmental cover selected: "+(cover.Model.Name??"world geometry")+" at "+hidingPosition+".");
+                    return true;
+                }
+                return false;
             }
             catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: cover search contained: "+ex.Message);return false;}
+        }
+
+        protected bool TryFindWorldGeometryCover(Vector3 center,out Vector3 hidingPosition)
+        {
+            hidingPosition=Vector3.Zero;
+            try
+            {
+                Entity roadObserver=SceneVehicle!=null&&SceneVehicle.Exists()?(Entity)SceneVehicle:
+                    OfficerOne!=null&&OfficerOne.Exists()?(Entity)OfficerOne:null;
+                Ped player=Game.LocalPlayer.Character;
+                if(roadObserver==null||player==null||!player.Exists())return false;
+                int roadObserverHandle=HandleOf(roadObserver);
+                int playerHandle=HandleOf(player);
+                if(roadObserverHandle==0||playerHandle==0)return false;
+
+                float[] radii={8f,12f,17f,23f,30f,38f,46f};
+                int acceptedGroundPoints=0;
+                int groundFailures=0;
+                int navmeshFailures=0;
+                int roadwayFailures=0;
+                int interiorFailures=0;
+                int occludedFromRoad=0;
+                int approachOcclusionFailures=0;
+                for(int ring=0;ring<radii.Length;ring++)
+                {
+                    int samples=ring<2?12:18;
+                    float phase=(ring%2)*10f;
+                    for(int sample=0;sample<samples;sample++)
+                    {
+                        float degrees=phase+sample*(360f/samples);
+                        float radians=(float)(degrees*Math.PI/180.0);
+                        Vector3 requested=center+new Vector3((float)Math.Sin(radians)*radii[ring],(float)Math.Cos(radians)*radii[ring],0f);
+                        Vector3 candidate=Vector3.Zero;
+                        float groundZ=0f;
+                        NativeFunction.Natives.REQUEST_COLLISION_AT_COORD(requested.X,requested.Y,requested.Z);
+                        if(!NativeFunction.Natives.GET_GROUND_Z_FOR_3D_COORD<bool>(requested.X,requested.Y,requested.Z+75f,out groundZ,false))
+                        {
+                            groundFailures++;
+                            continue;
+                        }
+                        candidate=new Vector3(requested.X,requested.Y,groundZ+0.15f);
+                        if(Math.Abs(candidate.Z-Scene.Z)>8f)
+                        {
+                            groundFailures++;
+                            continue;
+                        }
+                        if(NativeFunction.Natives.GET_INTERIOR_AT_COORDS<int>(candidate.X,candidate.Y,candidate.Z)!=0)
+                        {
+                            interiorFailures++;
+                            continue;
+                        }
+                        Vector3 navPoint=Vector3.Zero;
+                        if(!NativeFunction.Natives.GET_SAFE_COORD_FOR_PED<bool>(candidate.X,candidate.Y,candidate.Z,true,out navPoint,16)||navPoint.DistanceTo(candidate)>15f)
+                        {
+                            navmeshFailures++;
+                            continue;
+                        }
+                        Vector3 roadNode=Vector3.Zero;float roadHeading=0f;
+                        bool roadNodeFound=NativeFunction.Natives.GET_CLOSEST_VEHICLE_NODE_WITH_HEADING<bool>(candidate.X,candidate.Y,candidate.Z,out roadNode,out roadHeading,1,3f,0);
+                        bool classifiedRoad=NativeFunction.Natives.IS_POINT_ON_ROAD<bool>(candidate.X,candidate.Y,candidate.Z,0);
+                        if(candidate.DistanceTo(Scene)<45f||(classifiedRoad&&roadNodeFound&&candidate.DistanceTo(roadNode)<3.25f))
+                        {
+                            roadwayFailures++;
+                            continue;
+                        }
+                        acceptedGroundPoints++;
+
+                        float[] heights={0.2f,0.7f,1.2f};
+                        bool roadFullyOccluded=true;
+                        for(int h=0;h<heights.Length;h++)
+                        {
+                            if(NativeFunction.Natives.HAS_ENTITY_CLEAR_LOS_TO_COORD<bool>(roadObserverHandle,candidate.X,candidate.Y,candidate.Z+heights[h],17))
+                            {
+                                roadFullyOccluded=false;
+                                break;
+                            }
+                        }
+                        if(!roadFullyOccluded)continue;
+                        occludedFromRoad++;
+
+                        bool approachFullyOccluded=true;
+                        for(int h=0;h<heights.Length;h++)
+                        {
+                            if(NativeFunction.Natives.HAS_ENTITY_CLEAR_LOS_TO_COORD<bool>(playerHandle,candidate.X,candidate.Y,candidate.Z+heights[h],17))
+                            {
+                                approachFullyOccluded=false;
+                                break;
+                            }
+                        }
+                        if(!approachFullyOccluded){approachOcclusionFailures++;continue;}
+
+                        hidingPosition=candidate;
+                        Game.LogTrivial("AdvancedK9 Callouts: solid map-geometry concealment selected at "+candidate+"; road and approach occlusion passed at 0.2m, 0.7m, and 1.2m.");
+                        return true;
+                    }
+                }
+                Game.LogTrivial("AdvancedK9 Callouts: map-geometry cover scan rejected candidates by stage: ground="+groundFailures+
+                    ", navmesh="+navmeshFailures+", roadway="+roadwayFailures+", interior="+interiorFailures+
+                    "; acceptedGround="+acceptedGroundPoints+", roadOccluded="+occludedFromRoad+
+                    ", approachRejected="+approachOcclusionFailures+".");
+                return false;
+            }
+            catch(System.Exception ex)
+            {
+                Game.LogTrivial("AdvancedK9 Callouts: map-geometry cover scan contained: "+ex.Message);
+                return false;
+            }
+        }
+
+        private bool TryBuildOccludedCoverCandidate(Entity cover,out Vector3 candidate)
+        {
+            candidate=Vector3.Zero;
+            if(cover==null||!cover.Exists())return false;
+            string name=cover.Model.Name??"";string lower=name.ToLowerInvariant();
+            if(lower.Contains("fnclink")||lower.Contains("fence")||lower.Contains("gate")||lower.Contains("bush")||lower.Contains("hedge")||lower.Contains("tree")||
+               lower.Contains("sign")||lower.Contains("lamp")||lower.Contains("light")||lower.Contains("pole")||lower.Contains("glass"))return false;
+            bool solidName=cover is Vehicle||lower.Contains("wall")||lower.Contains("pillar")||lower.Contains("column")||lower.Contains("barrier")||
+                           lower.Contains("dumpster")||lower.Contains("crate")||lower.Contains("container")||lower.Contains("rock")||lower.Contains("building");
+            if(!solidName)return false;
+            Vector3 min,max;
+            try{NativeFunction.Natives.GET_MODEL_DIMENSIONS(cover.Model.Hash,out min,out max);}catch{return false;}
+            float width=max.X-min.X,depth=max.Y-min.Y,height=max.Z-min.Z;
+            if(height<1.0f||Math.Max(width,depth)<1.4f)return false;
+            Vector3 objectPosition=cover.Position;float dx=objectPosition.X-Scene.X,dy=objectPosition.Y-Scene.Y;float length=(float)Math.Sqrt(dx*dx+dy*dy);
+            if(length<.1f)return false;dx/=length;dy/=length;
+            float clearance=Math.Max(1.25f,Math.Min(2.6f,Math.Max(width,depth)*.55f+.6f));
+            Vector3 requested=new Vector3(objectPosition.X+dx*clearance,objectPosition.Y+dy*clearance,objectPosition.Z);
+            if(!TryResolveSafePedPosition(requested,out candidate))return false;
+            if(candidate.DistanceTo(requested)>4f||NativeFunction.Natives.IS_POINT_ON_ROAD<bool>(candidate.X,candidate.Y,candidate.Z,0))return false;
+            Entity observer=OfficerOne!=null&&OfficerOne.Exists()?(Entity)OfficerOne:SceneVehicle!=null&&SceneVehicle.Exists()?(Entity)SceneVehicle:null;
+            if(observer==null)return false;
+            bool clearAtCrouch=NativeFunction.Natives.HAS_ENTITY_CLEAR_LOS_TO_COORD<bool>(observer,candidate.X,candidate.Y,candidate.Z+0.8f,17);
+            bool clearAtShoulder=NativeFunction.Natives.HAS_ENTITY_CLEAR_LOS_TO_COORD<bool>(observer,candidate.X,candidate.Y,candidate.Z+1.2f,17);
+            if(clearAtCrouch||clearAtShoulder)return false;
+            return true;
         }
 
         protected void BeginAutomaticTransport(string completionMessage)
@@ -818,7 +1096,7 @@ namespace AdvancedK9.Callouts
                     DispatchUpdate("MedicalRequested","K9 apprehension injury","Current jurisdiction","EMS response","Injured restrained suspect","Live apprehension location","K9 bite injury", "K9 apprehension injury reported. EMS is responding Code 3 to the live suspect location.","ATTENTION_ALL_UNITS AMBULANCE_RESPOND_CODE_3",downedPosition);
                     Game.DisplayNotification("~b~Dispatch:~s~ K9 apprehension injury reported. EMS has been requested Code 3 to the suspect's live location.");
                     Game.LogTrivial("AdvancedK9 Callouts: requested LSPDFR ambulance response to live downed suspect position "+downedPosition+".");
-                    Ped respondingMedic=null;uint responseDeadline=Game.GameTime+60000;
+                    Ped respondingMedic=null;uint responseDeadline=Game.GameTime+25000;
                     while(suspect.Exists()&&Game.GameTime<responseDeadline)
                     {
                         respondingMedic=FindRespondingMedic(suspect,existingPedHandles);
@@ -843,7 +1121,14 @@ namespace AdvancedK9.Callouts
                     NativeFunction.Natives.TASK_FOLLOW_NAV_MESH_TO_COORD(respondingMedic,suspect.Position.X,suspect.Position.Y,suspect.Position.Z,2.2f,12000,1.4f,0,0f);
                     uint approachDeadline=Game.GameTime+12000;
                     while(respondingMedic.Exists()&&suspect.Exists()&&respondingMedic.DistanceTo(suspect)>2.2f&&Game.GameTime<approachDeadline)GameFiber.Wait(250);
-                    if(!respondingMedic.Exists()||!suspect.Exists()||respondingMedic.DistanceTo(suspect)>2.2f)
+                    if(respondingMedic!=null&&respondingMedic.Exists()&&suspect.Exists()&&respondingMedic.DistanceTo(suspect)>2.2f)
+                    {
+                        Vector3 closeContact=suspect.GetOffsetPosition(new Vector3(1.5f,-1.2f,0f));Vector3 safeContact;
+                        if(TryResolveSafePedPosition(closeContact,out safeContact))respondingMedic.Position=safeContact;
+                        GameFiber.Yield();
+                        Game.LogTrivial("AdvancedK9 Callouts: EMS pathing timed out; medic was safely restaged at the live patient position.");
+                    }
+                    if(!respondingMedic.Exists()||!suspect.Exists()||respondingMedic.DistanceTo(suspect)>3.2f)
                     {
                         _medicalStage="failed";
                         DispatchUpdate("MedicalFailed","K9 apprehension injury","Current jurisdiction","EMS on scene","Injured restrained suspect","Live apprehension location","No patient contact","EMS arrived but did not reach the suspect. Medical clearance is withheld.","",suspect.Position);
@@ -871,10 +1156,11 @@ namespace AdvancedK9.Callouts
                     if(!ArrestProviderOwnsSubject&&!UpdateCustodyLease())suspect.Health=System.Math.Max(suspect.Health,serious?System.Math.Max(50,suspect.MaxHealth/2):System.Math.Max(75,suspect.MaxHealth*3/4));
                     if(serious)
                     {
-                        Game.DisplayNotification("~o~Dispatch:~s~ EMS reports serious injuries and will assume hospital transport; patrol retains the arrest hold.");
+                        Game.DisplayNotification("~o~Dispatch:~s~ EMS reports serious injuries. Request medical transport manually if hospital care is required.");
                         SeriousMedicalTransport=true;
-                        _medicalStage="serious-transport";
+                        _medicalStage="serious-treated";
                         MedicalResponseComplete=true;
+                        DispatchUpdate("MedicalComplete","K9 apprehension injury","Current jurisdiction","EMS on scene","Seriously injured restrained suspect","Live apprehension location","Serious but treated","EMS completed on-scene stabilization. Any hospital or prisoner transport must be requested manually.","",suspect.Position);
                         return;
                     }
                     else
@@ -1008,13 +1294,18 @@ namespace AdvancedK9.Callouts
         public override void End()
         {
             if(_cleanupCompleted)return;
+            bool completedBeforeCleanup=Finished;
+            _lifecycleClosed=true;
+            _lifecycleGeneration++;
+            Finished=true;
+            _backupInvestigationActive=false;
             _cleanupCompleted=true;
             ClearSceneRoute();
             if(SubjectBlip!=null&&SubjectBlip.Exists())SubjectBlip.Delete();
             if(Reporter!=null&&Reporter.Exists())Reporter.Dismiss();
             if(ParentTwo!=null&&ParentTwo.Exists())ParentTwo.Dismiss();
             if(Subject!=null&&Subject.Exists())Subject.Dismiss();
-            if(SceneVehicle!=null&&SceneVehicle.Exists()){if(Finished)PreserveSceneVehicleForReturn(SceneVehicle);else SceneVehicle.Dismiss();}SceneVehicle=null;
+            if(SceneVehicle!=null&&SceneVehicle.Exists()){if(completedBeforeCleanup)PreserveSceneVehicleForReturn(SceneVehicle);else SceneVehicle.Dismiss();}SceneVehicle=null;
             if(EvidenceProp!=null&&EvidenceProp.Exists())EvidenceProp.Dismiss();
             if(CoverProp!=null&&CoverProp.Exists())CoverProp.Dismiss();
             if(MedicOne!=null&&MedicOne.Exists())MedicOne.Dismiss();

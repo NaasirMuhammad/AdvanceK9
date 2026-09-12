@@ -1480,6 +1480,13 @@ namespace AdvancedK9
             if(_containTarget!=null&&(!_containTarget.Exists()||_containTarget.IsDead||IsProtectedOperationalPed(_containTarget))){Sit();_containTarget=null;Game.DisplayNotification("~g~K9 containment complete.~s~ Suspect is no longer an active threat.");return;}
             if(_containTarget!=null)_perimeterCenter=_containTarget.Position;
             if(Game.GameTime<_nextPerimeterMove)return;
+            if(_containTarget!=null&&!string.IsNullOrWhiteSpace(_activeSharedApiContextId))
+            {
+                _nextPerimeterMove=Game.GameTime+(uint)_random.Next(1500,2201);
+                NativeFunction.Natives.TASK_TURN_PED_TO_FACE_ENTITY(_dog,_containTarget,700);
+                Bark(1);
+                return;
+            }
             _nextPerimeterMove=Game.GameTime+3500;
             double angle=_perimeterPoint++*(Math.PI/2.0);var point=new Vector3(_perimeterCenter.X+(float)Math.Cos(angle)*_perimeterRadius,_perimeterCenter.Y+(float)Math.Sin(angle)*_perimeterRadius,_perimeterCenter.Z);
             _dog.Tasks.FollowNavigationMeshToPosition(point,_containTarget!=null?_containTarget.Heading:_dog.Heading,2.8f);
@@ -1582,12 +1589,37 @@ namespace AdvancedK9
             while (_running && DogExists() && target.Exists() && !target.IsDead && Game.GameTime < end && _state == K9State.Tracking)
             {
                 if(!calloutTrack)CaptureTargetTrailPoint(target);
-                if (_dog.DistanceTo(target) < 3f)
+                if (_dog.DistanceTo(target) <= 4.5f)
                 {
-                    _dog.Tasks.Clear();
-                    Bark(2);
-                    Sit();
-                    Game.DisplayNotification("~g~Track complete — person located.~s~~n~K9 is sitting and holding. Aim at the suspect and command APPREHEND only if deployment is required.");K9IncidentLog.Write(_profile.Name,"Track","Subject located; alert bark and hold only",target.Position);
+                    _dog.Tasks.ClearImmediately();
+                    if(calloutTrack)
+                    {
+                        _containTarget=target;_perimeterCenter=target.Position;_perimeterRadius=3.2f;_perimeterPoint=0;_state=K9State.Containing;
+                        Bark(1);
+                        _nextPerimeterMove=Game.GameTime+(uint)_random.Next(1500,2201);
+                        _nextSharedApiPublish=0;
+                        PublishSharedApi();
+                        Game.DisplayNotification("~g~Suspect located.~s~~n~Rex is maintaining active containment and will continue barking until the suspect is controlled.");
+                        var containmentDog=_dog;var containmentTarget=target;string containmentContext=_activeSharedApiContextId;
+                        GameFiber.StartNew(delegate
+                        {
+                            if(containmentDog==null||!containmentDog.Exists()||containmentTarget==null||!containmentTarget.Exists())return;
+                            NativeFunction.Natives.TASK_TURN_PED_TO_FACE_ENTITY(containmentDog,containmentTarget,1200);
+                            GameFiber.Wait(1200);
+                            if(_running&&_state==K9State.Containing&&_containTarget!=null&&_containTarget.Exists()&&
+                               containmentDog.Exists()&&containmentTarget.Exists()&&containmentTarget.Handle==_containTarget.Handle&&
+                               string.Equals(containmentContext,_activeSharedApiContextId,StringComparison.Ordinal))
+                                NativeFunction.Natives.TASK_STAND_STILL(containmentDog,-1);
+                        },"AdvancedK9 callout containment orientation");
+                        Game.LogTrivial("AdvancedK9 callout containment: Rex stopped at "+_dog.DistanceTo(target).ToString("0.0")+"m and issued the immediate alert bark.");
+                    }
+                    else
+                    {
+                        Bark(2);
+                        Sit();
+                        Game.DisplayNotification("~g~Track complete — person located.~s~~n~K9 is sitting and holding. Aim at the suspect and command APPREHEND only if deployment is required.");
+                    }
+                    K9IncidentLog.Write(_profile.Name,"Track",calloutTrack?"Subject located; active bark containment":"Subject located; alert bark and hold only",target.Position);
                     _pr.RecordLocatedSuspect(target);
                     _trust.Change(2, "successful track");
                     AwardOperationalXp("Completed scent track",12,25,1,3);
@@ -1608,6 +1640,11 @@ namespace AdvancedK9
                 float dx = destination.X - _dog.Position.X, dy = destination.Y - _dog.Position.Y;
                 float distance = (float)Math.Sqrt(dx * dx + dy * dy);
                 var waypoint=destination;
+                if(calloutTrack&&distance>4.5f)
+                {
+                    float approachDistance=3.8f;
+                    waypoint=new Vector3(target.Position.X-dx/distance*approachDistance,target.Position.Y-dy/distance*approachDistance,target.Position.Z);
+                }
                 _dog.Tasks.Clear();
                 if(Game.GameTime>=nextScentCheck)
                 {

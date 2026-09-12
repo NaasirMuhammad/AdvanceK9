@@ -199,5 +199,6 @@ namespace AdvancedK9.API
                 AdvancedK9Api.Pair("Detail",detail??"")
             });
         }
+
     }
 }
