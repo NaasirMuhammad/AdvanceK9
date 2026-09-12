@@ -55,7 +55,7 @@ namespace AdvancedK9.Callouts
         private bool _acceptanceSetupPending;
         private bool _suspectSpawnPending;
         private Vector3 _coverSearchAnchor;
-        private static readonly HashSet<int> RemovedRoadsideScenes=new HashSet<int>{1,2,4};
+        private static readonly HashSet<int> RemovedRoadsideScenes=new HashSet<int>{1,2,3,4};
 
         private static readonly Vector3[] RoadsideScenes={
             new Vector3(-565f,-675f,33f),new Vector3(-1035f,-2735f,20f),new Vector3(-1430f,-590f,30f),
