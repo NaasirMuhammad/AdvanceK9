@@ -864,6 +864,76 @@ namespace AdvancedK9.Callouts
             catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: cover search contained: "+ex.Message);return false;}
         }
 
+        protected bool TryFindWorldGeometryCover(Vector3 center,out Vector3 hidingPosition)
+        {
+            hidingPosition=Vector3.Zero;
+            try
+            {
+                Entity roadObserver=SceneVehicle!=null&&SceneVehicle.Exists()?(Entity)SceneVehicle:
+                    OfficerOne!=null&&OfficerOne.Exists()?(Entity)OfficerOne:null;
+                Ped player=Game.LocalPlayer.Character;
+                if(roadObserver==null||player==null||!player.Exists())return false;
+                Ped[] streamedPeds=World.GetAllPeds();
+
+                float[] radii={8f,12f,17f,23f,30f,38f,46f};
+                int acceptedGroundPoints=0;
+                int occludedFromRoad=0;
+                for(int ring=0;ring<radii.Length;ring++)
+                {
+                    int samples=ring<2?12:18;
+                    float phase=(ring%2)*10f;
+                    for(int sample=0;sample<samples;sample++)
+                    {
+                        float degrees=phase+sample*(360f/samples);
+                        float radians=(float)(degrees*Math.PI/180.0);
+                        Vector3 requested=center+new Vector3((float)Math.Sin(radians)*radii[ring],(float)Math.Cos(radians)*radii[ring],0f);
+                        Vector3 candidate=Vector3.Zero;
+                        if(!TryResolveSafePedPosition(requested,out candidate)||candidate.DistanceTo(requested)>5f)continue;
+                        if(candidate.DistanceTo(Scene)<45f||NativeFunction.Natives.IS_POINT_ON_ROAD<bool>(candidate.X,candidate.Y,candidate.Z,0))continue;
+                        if(NativeFunction.Natives.GET_INTERIOR_AT_COORDS<int>(candidate.X,candidate.Y,candidate.Z)!=0)continue;
+                        Vector3 candidatePosition=candidate;
+                        if(streamedPeds.Any(p=>p!=null&&p.Exists()&&p!=Subject&&p!=OfficerOne&&p!=OfficerTwo&&p!=player&&p.DistanceTo(candidatePosition)<4.5f))continue;
+                        acceptedGroundPoints++;
+
+                        float[] heights={0.2f,0.7f,1.2f};
+                        bool roadFullyOccluded=true;
+                        for(int h=0;h<heights.Length;h++)
+                        {
+                            if(NativeFunction.Natives.HAS_ENTITY_CLEAR_LOS_TO_COORD<bool>(roadObserver,candidate.X,candidate.Y,candidate.Z+heights[h],17))
+                            {
+                                roadFullyOccluded=false;
+                                break;
+                            }
+                        }
+                        if(!roadFullyOccluded)continue;
+                        occludedFromRoad++;
+
+                        bool approachFullyOccluded=true;
+                        for(int h=0;h<heights.Length;h++)
+                        {
+                            if(NativeFunction.Natives.HAS_ENTITY_CLEAR_LOS_TO_COORD<bool>(player,candidate.X,candidate.Y,candidate.Z+heights[h],17))
+                            {
+                                approachFullyOccluded=false;
+                                break;
+                            }
+                        }
+                        if(!approachFullyOccluded)continue;
+
+                        hidingPosition=candidate;
+                        Game.LogTrivial("AdvancedK9 Callouts: solid map-geometry concealment selected at "+candidate+"; road and approach occlusion passed at 0.2m, 0.7m, and 1.2m.");
+                        return true;
+                    }
+                }
+                Game.LogTrivial("AdvancedK9 Callouts: map-geometry cover scan found "+acceptedGroundPoints+" off-road ground candidates and "+occludedFromRoad+" road-occluded candidates, but none passed full approach occlusion.");
+                return false;
+            }
+            catch(System.Exception ex)
+            {
+                Game.LogTrivial("AdvancedK9 Callouts: map-geometry cover scan contained: "+ex.Message);
+                return false;
+            }
+        }
+
         private bool TryBuildOccludedCoverCandidate(Entity cover,out Vector3 candidate)
         {
             candidate=Vector3.Zero;
