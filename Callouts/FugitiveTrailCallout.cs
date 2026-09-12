@@ -55,7 +55,7 @@ namespace AdvancedK9.Callouts
         private bool _acceptanceSetupPending;
         private bool _suspectSpawnPending;
         private Vector3 _coverSearchAnchor;
-        private static readonly HashSet<int> RemovedRoadsideScenes=new HashSet<int>{2,4};
+        private static readonly HashSet<int> RemovedRoadsideScenes=new HashSet<int>{1,2,4};
 
         private static readonly Vector3[] RoadsideScenes={
             new Vector3(-565f,-675f,33f),new Vector3(-1035f,-2735f,20f),new Vector3(-1430f,-590f,30f),
@@ -118,7 +118,7 @@ namespace AdvancedK9.Callouts
                         return PrepareRoadsideScene();
                     }
                     inwardX/=inwardLength;inwardY/=inwardLength;
-                    float curbInset=best==11?0.90f:1.35f;
+                    float curbInset=(best==0||best==11)?0.90f:1.35f;
                     _curbAlignedVehiclePosition=new Vector3(curb.X+inwardX*curbInset,curb.Y+inwardY*curbInset,curb.Z);
                     stagedScene=_curbAlignedVehiclePosition;
                     Game.LogTrivial("AdvancedK9 Callouts: curb formation resolved for scene "+best+": boundary="+curb+", roadReference="+verifiedRoad+", vehicleCenter="+stagedScene+", fixedHeading="+_sceneHeading+".");
@@ -282,7 +282,8 @@ namespace AdvancedK9.Callouts
                     {
                         Vector3 candidate;
                         Vector3 safeCandidate=Vector3.Zero;
-                        if(TryFindExistingCover(_coverSearchAnchor,out candidate)&&TryResolveSafePedPosition(candidate,out safeCandidate)&&
+                        if((TryFindExistingCover(_coverSearchAnchor,out candidate)||TryFindWorldGeometryCover(_coverSearchAnchor,out candidate))&&
+                           TryResolveSafePedPosition(candidate,out safeCandidate)&&
                            !NativeFunction.Natives.IS_POINT_ON_ROAD<bool>(safeCandidate.X,safeCandidate.Y,safeCandidate.Z,0))
                         {
                             verifiedCover=safeCandidate;found=true;break;
