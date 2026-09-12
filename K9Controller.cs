@@ -362,13 +362,44 @@ namespace AdvancedK9
 
         private void RefreshProfileMenu(){_menu.Update("K9 PROFILE — "+_profile.Name,new[]{L("Language")+": "+Localization.LanguageName,"K9 Roster ("+_roster.Entries.Count+")",L("Identity & Appearance"),L("HUD & Display"),L("Kennel Location Editor"),L("Vehicle Seat Configuration"),L("Profile, Health & Certifications"),VoiceMenuLabel()});}
         private void OpenAppearanceMenu(){_menuMode="profile_appearance";_menu.Open("K9 PROFILE — "+L("Appearance").ToUpperInvariant(),new[]{L("Edit name")+": "+_profile.Name,L("Breed/model")+": "+_profile.Breed,L("Skin/coat")+": "+(_profile.CoatVariation+1),L("Equipment/vest")+": "+_profile.Vest,L("Vest texture")+": "+_profile.VestTextureName(_dog),"← "+L("Back to K9 Profile")});}
-        private void OpenCalloutMenu(){_menuMode="callouts";_menu.Open("ADVANCED K9 — CALLOUTS",new[]{"Missing Vulnerable Teen","Fugitive Trail from an Abandoned Vehicle","Armed Burglary Suspect Hiding","← "+L("Back to Command Categories")});}
+        private void OpenCalloutMenu(){_menuMode="callouts";_menu.Open("ADVANCED K9 — CALLOUTS",new[]{"Missing Vulnerable Teen","Fugitive Trail from an Abandoned Vehicle","Fugitive Trail Scene Calibration","Armed Burglary Suspect Hiding","← "+L("Back to Command Categories")});}
+        private void OpenFugitiveCalibrationMenu()
+        {
+            _menuMode="fugitive_calibration";
+            var entries=new List<string>{"Normal random scene"};
+            for(int i=0;i<13;i++)entries.Add("Force code scene "+i);
+            entries.Add("Log current player coordinates");
+            entries.Add("← Back to Callouts");
+            _menu.Open("FUGITIVE TRAIL — CALIBRATION",entries);
+        }
+        private void RequestFugitiveCalibrationScene(int sceneIndex)
+        {
+            AdvancedK9Api.RequestFugitiveSceneCalibration(sceneIndex);
+            RequestCallout("AdvancedK9: Fugitive Trail");
+            Game.LogTrivial("AdvancedK9 calibration: requested Fugitive Trail code scene "+sceneIndex+" for one launch.");
+        }
+        private void LogCalibrationPosition()
+        {
+            Ped player=Game.LocalPlayer.Character;
+            if(player==null||!player.Exists())return;
+            Vector3 position=player.Position;
+            string line="AdvancedK9 CALIBRATION CAPTURE: position=new Vector3("+position.X.ToString("0.00")+"f, "+position.Y.ToString("0.00")+"f, "+position.Z.ToString("0.00")+"f), heading="+player.Heading.ToString("0.0")+"f";
+            Game.LogTrivial(line);
+            Game.DisplayNotification("~b~Calibration point captured~s~~n~"+position.X.ToString("0.00")+", "+position.Y.ToString("0.00")+", "+position.Z.ToString("0.00")+"~n~Heading: "+player.Heading.ToString("0.0")+"~n~Saved in RagePluginHook.log");
+        }
         private void RequestCallout(string name){_menu.Close();AdvancedK9Api.RequestCallout(name);Game.DisplayNotification("~b~AdvancedK9:~s~ requesting "+name+".");}
 
         private void OnMenuSelected(int index)
         {
             if(_menuMode=="commands_root"){if(index>=0&&index<7){OpenCommandGroup(index);return;}if(index==7){OpenCalloutMenu();return;}if(index==8){_menu.Close();Execute(K9Command.SpawnDismiss);return;}if(index==9)ToggleVoice();return;}
-            if(_menuMode=="callouts"){if(index==0)RequestCallout("AdvancedK9: Missing Vulnerable Teen");else if(index==1)RequestCallout("AdvancedK9: Fugitive Trail");else if(index==2)RequestCallout("AdvancedK9: Armed Burglary Suspect Hiding");else ShowCommandMenu();return;}
+            if(_menuMode=="callouts"){if(index==0)RequestCallout("AdvancedK9: Missing Vulnerable Teen");else if(index==1)RequestCallout("AdvancedK9: Fugitive Trail");else if(index==2)OpenFugitiveCalibrationMenu();else if(index==3)RequestCallout("AdvancedK9: Armed Burglary Suspect Hiding");else ShowCommandMenu();return;}
+            if(_menuMode=="fugitive_calibration")
+            {
+                if(index==0){RequestCallout("AdvancedK9: Fugitive Trail");return;}
+                if(index>=1&&index<=13){RequestFugitiveCalibrationScene(index-1);return;}
+                if(index==14){LogCalibrationPosition();OpenFugitiveCalibrationMenu();return;}
+                OpenCalloutMenu();return;
+            }
             if(_menuMode!=null&&_menuMode.StartsWith("commands_group_")){int group;if(!int.TryParse(_menuMode.Substring(15),out group)||group<0||group>=CommandGroups.Length)return;if(index>=0&&index<CommandGroups[group].Length){_menu.Close();Execute(CommandGroups[group][index]);}else ShowCommandMenu();return;}
             if(_menuMode=="hud_config"){HandleHudMenu(index);return;}
             if(_menuMode=="kennel_list"){HandleKennelList(index);return;}
