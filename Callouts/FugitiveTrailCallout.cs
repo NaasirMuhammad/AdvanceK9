@@ -57,6 +57,7 @@ namespace AdvancedK9.Callouts
         private Vector3 _coverSearchAnchor;
         private bool _calibrationMode;
         private int _forcedCalibrationScene=-1;
+        private int _forcedFullTestScene=-1;
         private static readonly HashSet<int> RemovedRoadsideScenes=new HashSet<int>();
 
         private static readonly Vector3[] RoadsideScenes={
@@ -89,9 +90,10 @@ namespace AdvancedK9.Callouts
             if(++_selectionAttempts>RoadsideScenes.Length)return false;
             var player=Game.LocalPlayer.Character;
             var eligible=new List<int>();
-            if(_calibrationMode&&_forcedCalibrationScene>=0&&_forcedCalibrationScene<RoadsideScenes.Length)
+            int forcedScene=_calibrationMode?_forcedCalibrationScene:_forcedFullTestScene;
+            if(forcedScene>=0&&forcedScene<RoadsideScenes.Length)
             {
-                eligible.Add(_forcedCalibrationScene);
+                eligible.Add(forcedScene);
             }
             else
             for(int i=0;i<RoadsideScenes.Length;i++)
@@ -108,7 +110,7 @@ namespace AdvancedK9.Callouts
             }
             if(eligible.Count==0)return false;
             int best=eligible[Random.Next(eligible.Count)];
-            if(!_calibrationMode)
+            if(!_calibrationMode&&_forcedFullTestScene<0)
             {
                 RecentRoadsideScenes.Enqueue(best);
                 while(RecentRoadsideScenes.Count>3)RecentRoadsideScenes.Dequeue();
@@ -138,6 +140,11 @@ namespace AdvancedK9.Callouts
                     _calibrationMode=true;
                     _forcedCalibrationScene=forcedScene;
                     Game.LogTrivial("AdvancedK9 CALIBRATION: forcing Fugitive Trail code scene "+forcedScene+" for this launch only.");
+                }
+                else if(AdvancedK9Api.TryTakeFugitiveSceneFullTest(out forcedScene)&&forcedScene>=0&&forcedScene<RoadsideScenes.Length)
+                {
+                    _forcedFullTestScene=forcedScene;
+                    Game.LogTrivial("AdvancedK9 FULL TEST: forcing complete Fugitive Trail code scene "+forcedScene+" with all suspect and K9 behavior enabled for this launch only.");
                 }
                 if(!PrepareRoadsideScene())return false;
             }
