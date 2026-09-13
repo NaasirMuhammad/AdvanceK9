@@ -366,13 +366,23 @@ namespace AdvancedK9.Callouts
             Game.DisplayNotification("~b~Dispatch:~s~ "+message);
             PublishCalloutInterfaceMessage(structured);
             bool nexusOwnsAudio=AppDomain.CurrentDomain.GetAssemblies().Any(a=>a.GetName().Name.IndexOf("Nexus",StringComparison.OrdinalIgnoreCase)>=0);
-            bool dynamicQueued=nexusOwnsAudio&&TryRequestNexusDynamicAudio(structured,message);
-            if(!nexusOwnsAudio&&!string.IsNullOrWhiteSpace(scannerAudio))
+            if(!string.IsNullOrWhiteSpace(scannerAudio))
             {
-                try{Functions.PlayScannerAudioUsingPosition(scannerAudio,position);}
+                try
+                {
+                    // Nexus Advanced Dispatch hooks this standard LSPDFR scanner request,
+                    // suppresses the stock scanner clips, and uses the active
+                    // CalloutInterface incident as the context for generated speech.
+                    // Skipping this call when Nexus was loaded left Nexus with text only
+                    // and never opened its spoken-dispatch pipeline.
+                    Functions.PlayScannerAudioUsingPosition(scannerAudio,position);
+                    Game.LogTrivial(nexusOwnsAudio
+                        ?"AdvancedK9 Callouts: Nexus audio trigger submitted through the intercepted LSPDFR scanner channel for "+eventName+"."
+                        :"AdvancedK9 Callouts: native LSPDFR scanner audio submitted for "+eventName+" because Nexus is not loaded.");
+                }
                 catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: scanner update contained: "+ex.Message);}
             }
-            else if(nexusOwnsAudio&&!dynamicQueued)Game.LogTrivial("AdvancedK9 Callouts: Nexus owns dispatch audio; structured Gemini narrative published through CalloutInterface and text retained as fallback.");
+            else if(nexusOwnsAudio)Game.LogTrivial("AdvancedK9 Callouts: Nexus incident text published for "+eventName+"; this transition intentionally has no audio trigger.");
             Game.LogTrivial("AdvancedK9 Callouts: dispatch incident update ["+ContextId+"]: "+message);
         }
 
