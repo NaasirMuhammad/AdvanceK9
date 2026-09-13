@@ -326,6 +326,23 @@ namespace AdvancedK9.Callouts
             return true;
         }
 
+        protected void MaintainSpawnedPoliceAssets()
+        {
+            Vehicle[] vehicles={PoliceVehicle,PoliceVehicleTwo};
+            foreach(Vehicle vehicle in vehicles)if(vehicle!=null&&vehicle.Exists())
+            {
+                vehicle.IsPersistent=true;
+                NativeFunction.Natives.SET_ENTITY_AS_MISSION_ENTITY(vehicle,true,true);
+            }
+            Ped[] officers={OfficerOne,OfficerTwo,OfficerThree};
+            foreach(Ped officer in officers)if(officer!=null&&officer.Exists())
+            {
+                officer.IsPersistent=true;
+                officer.BlockPermanentEvents=true;
+                NativeFunction.Natives.SET_ENTITY_AS_MISSION_ENTITY(officer,true,true);
+            }
+        }
+
         private void AssignSceneSecurityRoles(float heading)
         {
             uint taser=NativeFunction.Natives.GET_HASH_KEY<uint>("WEAPON_STUNGUN");
@@ -858,7 +875,9 @@ namespace AdvancedK9.Callouts
                 NativeFunction.Natives.SET_PED_KEEP_TASK(officer,false);
                 NativeFunction.Natives.SET_PED_USING_ACTION_MODE(officer,false);
                 officer.Tasks.ClearImmediately();
-                NativeFunction.Natives.TASK_STAND_STILL(officer,5000);
+                NativeFunction.Natives.TASK_STAND_STILL(officer,-1);
+                officer.IsPersistent=true;
+                NativeFunction.Natives.SET_ENTITY_AS_MISSION_ENTITY(officer,true,true);
             }
             Game.LogTrivial("AdvancedK9 Callouts: custody/arrest interception cleared backup combat tasks once; weapon and movement reassignment is disabled.");
         }
