@@ -1563,7 +1563,7 @@ namespace AdvancedK9
 
         private void BeginTrack()
         {
-            if(_trackFiberRunning){Game.DisplayNotification("~y~Rex is already tracking.~s~~n~Issue any other K9 command to cancel or redirect him.");return;}
+            if(_trackFiberRunning){Game.DisplayNotification("~y~Rex is already tracking.~s~~n~Issue another K9 command to cancel or redirect him.");return;}
             _trackFiberRunning=true;
             GameFiber.StartNew(delegate
             {
@@ -1616,8 +1616,8 @@ namespace AdvancedK9
             GameFiber.Wait(250);
             var end = Game.GameTime + (sceneOneLongRange?480000u:120000u);
             uint nextScentCheck=Game.GameTime+(uint)_random.Next(18000,28001);
-            var route=sceneOneLongRange?BuildLongRangeCalloutRoute(_dog.Position,target.Position):(calloutTrack?new List<Vector3>{target.Position}:BuildRecordedTrailRoute(target));int routeIndex=0;Vector3 initialDirection=route.Count>0?route[0]:target.Position;PerformFullCircleDirectionTest(initialDirection,scentQuality,rain);_activeTrackDistance=0f;_activeTrackStarted=Game.GameTime;Vector3 previous=_dog.Position;
-            if(calloutTrack)Game.LogTrivial("AdvancedK9 callout track: using stable assigned final scent position instead of sparse moving-subject history.");
+            var route=calloutTrack?BuildCalloutNavigationRoute(_dog.Position,target.Position,sceneOneLongRange?60f:40f):BuildRecordedTrailRoute(target);int routeIndex=0;int stalledAttempts=0;Vector3 initialDirection=route.Count>0?route[0]:target.Position;PerformFullCircleDirectionTest(initialDirection,scentQuality,rain);_activeTrackDistance=0f;_activeTrackStarted=Game.GameTime;Vector3 previous=_dog.Position;
+            if(calloutTrack)Game.LogTrivial("AdvancedK9 callout track: stable endpoint expanded into "+route.Count+" staged navmesh waypoint(s) from "+_dog.DistanceTo(target).ToString("0.0")+"m away.");
             if(sceneOneLongRange)Game.LogTrivial("AdvancedK9 Palomino Scene 1: extended track armed with "+route.Count+" staged navigation points, "+scentQuality+"% starting quality, and an eight-minute limit.");
             while (_running && DogExists() && target.Exists() && !target.IsDead && Game.GameTime < end && _state == K9State.Tracking)
             {
@@ -1661,7 +1661,7 @@ namespace AdvancedK9
                 }
                 if(routeIndex>=route.Count)
                 {
-                    route=sceneOneLongRange?BuildLongRangeCalloutRoute(_dog.Position,target.Position):(calloutTrack?new List<Vector3>{target.Position}:BuildRecordedTrailRoute(target));routeIndex=0;if(route.Count>0&&!calloutTrack)IndicateTrackDirection(route[0]);
+                    route=calloutTrack?BuildCalloutNavigationRoute(_dog.Position,target.Position,sceneOneLongRange?60f:40f):BuildRecordedTrailRoute(target);routeIndex=0;stalledAttempts=0;if(route.Count>0&&!calloutTrack)IndicateTrackDirection(route[0]);
                     if(!calloutTrack&&route.Count==0&&_dog.DistanceTo(target)>25f)
                     {
                         _trailLost=true;_dog.Tasks.Clear();Sit();Game.DisplayNotification("~o~K9 lost the recorded scent trail.~s~~n~Move to the last-known area and command REACQUIRE TRAIL.");K9IncidentLog.Write(_profile.Name,"Track","Trail lost",_dog.Position);return;
@@ -1685,17 +1685,36 @@ namespace AdvancedK9
                     GameFiber.Wait(150);
                     nextScentCheck=Game.GameTime+(uint)_random.Next(18000,28001);
                 }
+                Vector3 taskStart=_dog.Position;
+                float distanceBefore=taskStart.DistanceTo(waypoint);
+                Game.LogTrivial("AdvancedK9 track navigation: waypoint "+(routeIndex+1)+"/"+route.Count+" start="+FormatVector(taskStart)+", destination="+FormatVector(waypoint)+", distance="+distanceBefore.ToString("0.0")+"m.");
                 if(_workingLeashed)
                 {
                     _dog.Tasks.FollowNavigationMeshToPosition(waypoint,target.Heading,(rain>.35f?3.6f:4.8f)*Math.Max(.8f,environment.SpeedMultiplier)).WaitForCompletion(3200);
-                    if(_dog.DistanceTo(destination)<5f&&routeIndex<route.Count)routeIndex++;
+                    if(_dog.DistanceTo(waypoint)<6f&&routeIndex<route.Count){routeIndex++;stalledAttempts=0;}
                     else Game.DisplaySubtitle("~b~Follow the leash~s~ — "+_profile.Name+" is holding the scent line.",900);
                 }
                 else
                 {
                     _dog.Tasks.FollowNavigationMeshToPosition(waypoint,target.Heading,(rain>.35f?4.4f:5.8f)*Math.Max(.8f,environment.SpeedMultiplier)).WaitForCompletion(3800);
-                    if(_dog.DistanceTo(destination)<5f&&routeIndex<route.Count)routeIndex++;
+                    if(_dog.DistanceTo(waypoint)<6f&&routeIndex<route.Count){routeIndex++;stalledAttempts=0;}
                     else if(_dog.DistanceTo(Game.LocalPlayer.Character)>6.5f)Game.DisplaySubtitle("~b~Advance with your K9~s~ — "+_profile.Name+" is holding the scent line ahead.",900);
+                }
+                float moved=taskStart.DistanceTo(_dog.Position);
+                float remaining=_dog.DistanceTo(waypoint);
+                Game.LogTrivial("AdvancedK9 track navigation result: moved="+moved.ToString("0.0")+"m, remaining="+remaining.ToString("0.0")+"m, state="+_state+".");
+                if(calloutTrack&&routeIndex<route.Count&&moved<0.8f&&remaining>6f)
+                {
+                    stalledAttempts++;
+                    Game.LogTrivial("AdvancedK9 callout track stall: waypoint "+(routeIndex+1)+" failed to produce movement (attempt "+stalledAttempts+").");
+                    if(stalledAttempts>=2)
+                    {
+                        Vector3 failedWaypoint=waypoint;
+                        route=BuildCalloutNavigationRoute(_dog.Position,target.Position,35f);
+                        routeIndex=0;stalledAttempts=0;
+                        Game.DisplaySubtitle("~o~Rex is recasting the scent route around an obstruction.~s~",1200);
+                        Game.LogTrivial("AdvancedK9 callout track recovery: discarded unreachable waypoint "+FormatVector(failedWaypoint)+" and rebuilt "+route.Count+" staged waypoint(s).");
+                    }
                 }
                 _activeTrackDistance+=previous.DistanceTo(_dog.Position);previous=_dog.Position;
                 _profile.UseStamina(1);
@@ -1707,19 +1726,47 @@ namespace AdvancedK9
 
         private List<Vector3> BuildLongRangeCalloutRoute(Vector3 start,Vector3 destination)
         {
+            return BuildCalloutNavigationRoute(start,destination,60f);
+        }
+
+        private List<Vector3> BuildCalloutNavigationRoute(Vector3 start,Vector3 destination,float maximumSpacing)
+        {
             var route=new List<Vector3>();
             float total=start.DistanceTo(destination);
-            int segments=Math.Max(1,(int)Math.Ceiling(total/90f));
+            int segments=Math.Max(1,(int)Math.Ceiling(total/Math.Max(25f,maximumSpacing)));
             Vector3 previous=start;
             for(int i=1;i<segments;i++)
             {
                 float t=i/(float)segments;
                 Vector3 sample=new Vector3(start.X+(destination.X-start.X)*t,start.Y+(destination.Y-start.Y)*t,start.Z+(destination.Z-start.Z)*t);
-                Vector3 street=World.GetNextPositionOnStreet(sample);
-                if(street.DistanceTo(previous)>18f&&street.DistanceTo(destination)>25f){route.Add(street);previous=street;}
+                Vector3 waypoint;
+                if(!TryResolvePedNavigationPoint(sample,out waypoint))waypoint=World.GetNextPositionOnStreet(sample);
+                if(waypoint.DistanceTo(previous)>12f&&waypoint.DistanceTo(destination)>15f){route.Add(waypoint);previous=waypoint;}
             }
             route.Add(destination);
+            Game.LogTrivial("AdvancedK9 staged callout route built: total="+total.ToString("0.0")+"m, spacing="+maximumSpacing.ToString("0")+"m, waypoints="+route.Count+".");
             return route;
+        }
+
+        private bool TryResolvePedNavigationPoint(Vector3 requested,out Vector3 resolved)
+        {
+            resolved=requested;
+            try
+            {
+                Vector3 nav;
+                if(!NativeFunction.Natives.GET_SAFE_COORD_FOR_PED<bool>(requested.X,requested.Y,requested.Z,true,out nav,16))return false;
+                if(nav.DistanceTo(requested)>28f)return false;
+                float ground;
+                if(NativeFunction.Natives.GET_GROUND_Z_FOR_3D_COORD<bool>(nav.X,nav.Y,nav.Z+20f,out ground,false))nav=new Vector3(nav.X,nav.Y,ground);
+                resolved=nav;
+                return true;
+            }
+            catch{return false;}
+        }
+
+        private static string FormatVector(Vector3 value)
+        {
+            return "X:"+value.X.ToString("0.00")+" Y:"+value.Y.ToString("0.00")+" Z:"+value.Z.ToString("0.00");
         }
 
         private List<Vector3> BuildRecordedTrailRoute(Ped target)
