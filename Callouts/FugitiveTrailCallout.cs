@@ -51,6 +51,7 @@ namespace AdvancedK9.Callouts
         private bool _isHidingAnimationPlaying;
         private bool _backupArrestAttempted;
         private bool _coverMoveAssigned;
+        private bool _suspectWeaponAssigned;
         private Vector3 _assignedCoverPosition;
         private bool _acceptanceSetupPending;
         private bool _suspectSpawnPending;
@@ -192,7 +193,7 @@ namespace AdvancedK9.Callouts
         {
             if(!AcceptanceCheckpoint(acceptanceGeneration))return false;
             StartedAt=Game.GameTime;_phaseStarted=StartedAt;_phase=FugitivePhase.EnRoute;_outcome=Random.Next(4);
-            _isHidingAnimationPlaying=false;
+            _isHidingAnimationPlaying=false;_suspectWeaponAssigned=false;
             SetCustodyObservationEnabled(false);
             Vector3 selectedVerifiedCover=VerifiedHidingSpots[_sceneIndex][Random.Next(VerifiedHidingSpots[_sceneIndex].Length)];
             _coverSearchAnchor=selectedVerifiedCover;
@@ -555,8 +556,9 @@ namespace AdvancedK9.Callouts
                 _verbalGraceUntil=Game.GameTime+(_activeEscapeFallback?8000u:45000u);
                 ControlApprehensionTraffic(Subject.Position);
                 SupportOfficersContainSubject();
-                Game.DisplayNotification("~o~Rex alerted on the hidden fugitive.~s~ Tracking is complete. Give verbal commands through NPCI; the suspect may surrender, flee, or resist.");
-                if(!_locatedDispatchSent){_locatedDispatchSent=true;DispatchUpdate("SuspectLocated","Fugitive foot trail","Local patrol jurisdiction","Abandoned gray Primo","Adult male in work clothes","Live K9 alert location","Unknown weapon status","K9 has located the fugitive. Units are establishing armed containment at the live location.","SUSPECT_LOCATED UNITS_RESPOND_CODE_3",Subject.Position);}
+                bool armedResistance=BeginArmedResistanceIfConfigured(player);
+                Game.DisplayNotification(armedResistance?"~r~Rex located an armed fugitive.~s~~n~The weapon is visible and the suspect is actively resisting. Establish cover.":"~o~Rex alerted on the hidden fugitive.~s~ Tracking is complete. Give verbal commands through NPCI; the suspect may surrender or flee.");
+                if(!_locatedDispatchSent){_locatedDispatchSent=true;DispatchUpdate("SuspectLocated","Fugitive foot trail","Local patrol jurisdiction","Abandoned gray Primo","Adult male in work clothes","Live K9 alert location",armedResistance?(_outcome==2?"Visible handgun":"Visible knife"):"No weapon observed","K9 has located the fugitive. Units are establishing armed containment at the live location.","SUSPECT_LOCATED UNITS_RESPOND_CODE_3",Subject.Position);}
                 Game.LogTrivial("AdvancedK9 Callouts: alert-first FugitiveTrail transition completed after Rex reached the stationary hidden subject.");
             }
 
@@ -711,6 +713,24 @@ namespace AdvancedK9.Callouts
             return _sceneIndex==1
                 ?"Scene1LongRange Palomino Freeway preserved driver-seat scent; extended verified trail profile"
                 :"preserved scent article from abandoned vehicle driver seat; retained for full accepted-callout lifecycle";
+        }
+
+        private bool BeginArmedResistanceIfConfigured(Ped player)
+        {
+            if(_suspectWeaponAssigned||_outcome<2||Subject==null||!Subject.Exists()||player==null||!player.Exists()||ArrestProviderOwnsSubject||SubjectIsInCustody())return _suspectWeaponAssigned;
+            _suspectWeaponAssigned=true;_outcomeTaskIssued=true;_fleeActive=false;
+            TransitionSuspectAwayFromHiding();
+            uint weapon=NativeFunction.Natives.GET_HASH_KEY<uint>(_outcome==2?"WEAPON_COMBATPISTOL":"WEAPON_KNIFE");
+            NativeFunction.Natives.GIVE_WEAPON_TO_PED(Subject,weapon,_outcome==2?72:1,false,true);
+            NativeFunction.Natives.SET_CURRENT_PED_WEAPON(Subject,weapon,true);
+            NativeFunction.Natives.SET_PED_COMBAT_ATTRIBUTES(Subject,0,true);
+            NativeFunction.Natives.SET_PED_COMBAT_ATTRIBUTES(Subject,5,true);
+            NativeFunction.Natives.SET_PED_COMBAT_ABILITY(Subject,1);
+            NativeFunction.Natives.SET_PED_COMBAT_RANGE(Subject,_outcome==2?2:0);
+            NativeFunction.Natives.SET_PED_KEEP_TASK(Subject,true);
+            NativeFunction.Natives.TASK_COMBAT_PED(Subject,player,0,16);
+            Game.LogTrivial("AdvancedK9 Callouts: armed outcome entered once; suspect visibly equipped "+(_outcome==2?"combat pistol":"knife")+" and received an active resistance task.");
+            return true;
         }
 
         private void TransitionSuspectAwayFromHiding()
