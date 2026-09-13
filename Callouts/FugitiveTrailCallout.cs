@@ -372,7 +372,9 @@ namespace AdvancedK9.Callouts
             if(Subject!=null&&Subject.Exists())Subject.Dismiss();Subject=null;
             if(OfficerOne!=null&&OfficerOne.Exists())OfficerOne.Dismiss();OfficerOne=null;
             if(OfficerTwo!=null&&OfficerTwo.Exists())OfficerTwo.Dismiss();OfficerTwo=null;
+            if(OfficerThree!=null&&OfficerThree.Exists())OfficerThree.Dismiss();OfficerThree=null;
             if(PoliceVehicle!=null&&PoliceVehicle.Exists())PoliceVehicle.Dismiss();PoliceVehicle=null;
+            if(PoliceVehicleTwo!=null&&PoliceVehicleTwo.Exists())PoliceVehicleTwo.Dismiss();PoliceVehicleTwo=null;
             if(SceneVehicle!=null&&SceneVehicle.Exists())SceneVehicle.Dismiss();SceneVehicle=null;
             Game.LogTrivial("AdvancedK9 Callouts: canceled delayed Fugitive Trail setup after LSPDFR ended the callout.");
             return false;
@@ -416,6 +418,7 @@ namespace AdvancedK9.Callouts
 
         public override void Process()
         {
+            MaintainSpawnedPoliceAssets();
             if(_acceptanceSetupPending)return;
             if(_calibrationMode)
             {
@@ -710,14 +713,11 @@ namespace AdvancedK9.Callouts
                             Game.LogTrivial("AdvancedK9 Callouts: automatic prisoner transport is disabled; awaiting player/provider transport request.");
                         }
                     }
-                    if(_custodyConfirmed&&ProviderTransportLoaded()&&Game.GameTime-_phaseStarted>3000)
-                    {
-                        _phase=FugitivePhase.Complete;Resolve("~g~Fugitive Trail complete: external-provider custody and prisoner transport confirmed.");
-                    }
+                    // Custody and transport no longer end this callout automatically.
+                    // All three officers and both scene cruisers remain owned and
+                    // persistent until the player explicitly clears the callout.
                 }
-                else if(Game.GameTime-_locatedAt>600000)Resolve("~o~Fugitive Trail concluded after suspect location.");
             }
-            else if(!ApiRequested&&Game.GameTime-StartedAt>900000)Resolve("~r~Fugitive Trail: response expired before scent collection.");
             base.Process();
         }
 
