@@ -19,8 +19,10 @@ namespace AdvancedK9.Callouts
         protected Ped Reporter;
         protected Vehicle SceneVehicle;
         protected Vehicle PoliceVehicle;
+        protected Vehicle PoliceVehicleTwo;
         protected Ped OfficerOne;
         protected Ped OfficerTwo;
+        protected Ped OfficerThree;
         protected Ped ParentTwo;
         protected Vehicle MedicalVehicle;
         protected Ped MedicOne;
@@ -303,6 +305,27 @@ namespace AdvancedK9.Callouts
             return ready;
         }
 
+        protected bool StageDedicatedSceneSecurity(Vector3 cruiserPosition,float heading)
+        {
+            if(PoliceVehicleTwo==null||!PoliceVehicleTwo.Exists())PoliceVehicleTwo=SpawnPoliceVehicle(cruiserPosition,heading,true);
+            if(PoliceVehicleTwo==null||!PoliceVehicleTwo.Exists())return false;
+            PoliceVehicleTwo.Position=cruiserPosition;PoliceVehicleTwo.Heading=heading;PoliceVehicleTwo.IsPersistent=true;
+            NativeFunction.Natives.SET_VEHICLE_ON_GROUND_PROPERLY(PoliceVehicleTwo);
+            NativeFunction.Natives.SET_VEHICLE_HAS_MUTED_SIRENS(PoliceVehicleTwo,true);
+            NativeFunction.Natives.SET_VEHICLE_SIREN(PoliceVehicleTwo,true);
+            NativeFunction.Natives.SET_VEHICLE_LIGHTS(PoliceVehicleTwo,2);
+            Vector3 guardPosition=PoliceVehicleTwo.GetOffsetPosition(new Vector3(1.8f,1.2f,0f));
+            if(OfficerThree==null||!OfficerThree.Exists())OfficerThree=SpawnPoliceOfficer(guardPosition,heading);
+            if(OfficerThree==null||!OfficerThree.Exists())return false;
+            OfficerThree.BlockPermanentEvents=true;
+            NativeFunction.Natives.SET_PED_USING_ACTION_MODE(OfficerThree,true);
+            NativeFunction.Natives.SET_PED_COMBAT_ATTRIBUTES(OfficerThree,1,true);
+            NativeFunction.Natives.GIVE_WEAPON_TO_PED(OfficerThree,NativeFunction.Natives.GET_HASH_KEY<uint>("WEAPON_COMBATPISTOL"),60,false,false);
+            NativeFunction.Natives.TASK_STAND_GUARD(OfficerThree,guardPosition.X,guardPosition.Y,guardPosition.Z,heading,"WORLD_HUMAN_GUARD_STAND");
+            Game.LogTrivial("AdvancedK9 Callouts: dedicated third officer and second marked cruiser staged to secure the original scene.");
+            return true;
+        }
+
         private void AssignSceneSecurityRoles(float heading)
         {
             uint taser=NativeFunction.Natives.GET_HASH_KEY<uint>("WEAPON_STUNGUN");
@@ -326,14 +349,18 @@ namespace AdvancedK9.Callouts
 
         protected void MaintainPoliceEmergencyLights()
         {
-            if(PoliceVehicle==null||!PoliceVehicle.Exists()||Game.GameTime<_nextEmergencyLightRefresh)return;
+            if(Game.GameTime<_nextEmergencyLightRefresh)return;
             _nextEmergencyLightRefresh=Game.GameTime+500;
             try
             {
-                PoliceVehicle.IsPersistent=true;
-                NativeFunction.Natives.SET_VEHICLE_HAS_MUTED_SIRENS(PoliceVehicle,true);
-                NativeFunction.Natives.SET_VEHICLE_SIREN(PoliceVehicle,true);
-                NativeFunction.Natives.SET_VEHICLE_LIGHTS(PoliceVehicle,2);
+                Vehicle[] cruisers={PoliceVehicle,PoliceVehicleTwo};
+                foreach(Vehicle cruiser in cruisers)if(cruiser!=null&&cruiser.Exists())
+                {
+                    cruiser.IsPersistent=true;
+                    NativeFunction.Natives.SET_VEHICLE_HAS_MUTED_SIRENS(cruiser,true);
+                    NativeFunction.Natives.SET_VEHICLE_SIREN(cruiser,true);
+                    NativeFunction.Natives.SET_VEHICLE_LIGHTS(cruiser,2);
+                }
             }
             catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: emergency-light maintenance contained: "+ex.Message);}
         }
@@ -1244,12 +1271,14 @@ namespace AdvancedK9.Callouts
 
         private void BeginPoliceSceneDeparture()
         {
-            var officerOne=OfficerOne;var officerTwo=OfficerTwo;var cruiser=PoliceVehicle;
-            OfficerOne=null;OfficerTwo=null;PoliceVehicle=null;
+            var officerOne=OfficerOne;var officerTwo=OfficerTwo;var officerThree=OfficerThree;var cruiser=PoliceVehicle;var cruiserTwo=PoliceVehicleTwo;
+            OfficerOne=null;OfficerTwo=null;OfficerThree=null;PoliceVehicle=null;PoliceVehicleTwo=null;
             if(cruiser==null||!cruiser.Exists())
             {
                 if(officerOne!=null&&officerOne.Exists())officerOne.Dismiss();
                 if(officerTwo!=null&&officerTwo.Exists())officerTwo.Dismiss();
+                if(officerThree!=null&&officerThree.Exists())officerThree.Dismiss();
+                if(cruiserTwo!=null&&cruiserTwo.Exists())cruiserTwo.Dismiss();
                 return;
             }
             GameFiber.StartNew(delegate
@@ -1276,6 +1305,8 @@ namespace AdvancedK9.Callouts
                 if(officerOne!=null&&officerOne.Exists())officerOne.Dismiss();
                 if(officerTwo!=null&&officerTwo.Exists())officerTwo.Dismiss();
                 if(cruiser.Exists())cruiser.Dismiss();
+                if(officerThree!=null&&officerThree.Exists())officerThree.Dismiss();
+                if(cruiserTwo!=null&&cruiserTwo.Exists())cruiserTwo.Dismiss();
             },"AdvancedK9 police scene departure");
         }
 
