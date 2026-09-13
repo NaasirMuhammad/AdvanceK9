@@ -192,7 +192,7 @@ namespace AdvancedK9.Callouts
         private bool InitializeAcceptedCallout(int acceptanceGeneration)
         {
             if(!AcceptanceCheckpoint(acceptanceGeneration))return false;
-            StartedAt=Game.GameTime;_phaseStarted=StartedAt;_phase=FugitivePhase.EnRoute;_outcome=Random.Next(4);
+            StartedAt=Game.GameTime;_phaseStarted=StartedAt;_phase=FugitivePhase.EnRoute;_outcome=Random.Next(6);
             _isHidingAnimationPlaying=false;_suspectWeaponAssigned=false;
             SetCustodyObservationEnabled(false);
             Vector3 selectedVerifiedCover=VerifiedHidingSpots[_sceneIndex][Random.Next(VerifiedHidingSpots[_sceneIndex].Length)];
@@ -223,8 +223,12 @@ namespace AdvancedK9.Callouts
             NativeFunction.Natives.SET_VEHICLE_ON_GROUND_PROPERLY(PoliceVehicle);
             GameFiber.Yield();
             if(!AcceptanceCheckpoint(acceptanceGeneration))return false;
+            Vector3 securityCruiserPosition=SceneVehicle.Position-roadForward*18f;
+            if(!StageDedicatedSceneSecurity(securityCruiserPosition,_sceneHeading))return RejectCurrentScene("dedicated scene-security unit failed to stage");
+            GameFiber.Yield();
+            if(!AcceptanceCheckpoint(acceptanceGeneration))return false;
             if(!ValidateManualTrafficStopFormation(SceneVehicle,PoliceVehicle,_sceneHeading)&&!_calibrationMode)return RejectCurrentScene("manual traffic-stop formation failed validation");
-            Game.LogTrivial("AdvancedK9 Callouts: final curb formation locked: suspect="+SceneVehicle.Position+", cruiser="+PoliceVehicle.Position+", heading="+_sceneHeading+", gap="+SceneVehicle.DistanceTo(PoliceVehicle)+".");
+            Game.LogTrivial("AdvancedK9 Callouts: final curb formation locked: suspect="+SceneVehicle.Position+", tracking cruiser="+PoliceVehicle.Position+", security cruiser="+securityCruiserPosition+", heading="+_sceneHeading+", primary gap="+SceneVehicle.DistanceTo(PoliceVehicle)+".");
             ConfigureTrafficStopScene();
             ControlSceneTraffic();
             StartBackupOfficerInvestigationLoops();
@@ -243,7 +247,7 @@ namespace AdvancedK9.Callouts
                 Game.LogTrivial("AdvancedK9 Callouts: scene "+_sceneIndex+" suspect placement started for its selected manually verified endpoint; one-time crouched hiding is required.");
             }
             if(!AcceptanceCheckpoint(acceptanceGeneration))return false;
-            DispatchUpdate("CalloutAccepted","Failed traffic stop","Local patrol jurisdiction","Gray Primo stopped at curb with marked cruiser behind","Adult male in work clothes","Away from the driver side of the stopped vehicle","Unknown weapon status","Respond to a failed traffic stop. The driver abandoned the vehicle and fled on foot. Two patrol officers are holding the scene.","WE_HAVE CRIME_RESIST_ARREST IN_OR_ON_POSITION",Scene);
+            DispatchUpdate("CalloutAccepted","Failed traffic stop","Local patrol jurisdiction","Gray Primo stopped at curb with two marked units behind","Adult male in work clothes","Away from the driver side of the stopped vehicle","Unknown weapon status","Respond to a failed traffic stop. The driver abandoned the vehicle and fled on foot. Three patrol officers are holding the scene; two will accompany the K9 team and one will maintain scene security.","WE_HAVE CRIME_RESIST_ARREST IN_OR_ON_POSITION",Scene);
             if(!AcceptanceCheckpoint(acceptanceGeneration))return false;
             RouteToScene("Respond to the failed traffic stop. The driver abandoned the stopped vehicle and fled on foot; officers preserved the driver-seat scent.");
             return AcceptanceWorkIsActive(acceptanceGeneration);
@@ -550,20 +554,25 @@ namespace AdvancedK9.Callouts
             if(_rexReachedSubject&&!_suspectLocated)
             {
                 _suspectLocated=true;_locatedAt=Game.GameTime;_phase=FugitivePhase.Located;_phaseStarted=Game.GameTime;
+                CalloutPosition=Subject.Position;
                 SetCustodyObservationEnabled(true);
                 EndSupportTracking();
                 SubjectBlip=Subject.AttachBlip();SubjectBlip.IsRouteEnabled=true;Subject.IsInvincible=false;
                 _verbalGraceUntil=Game.GameTime+(_activeEscapeFallback?8000u:45000u);
                 ControlApprehensionTraffic(Subject.Position);
                 SupportOfficersContainSubject();
-                bool armedResistance=BeginArmedResistanceIfConfigured(player);
-                Game.DisplayNotification(armedResistance?"~r~Rex located an armed fugitive.~s~~n~The weapon is visible and the suspect is actively resisting. Establish cover.":"~o~Rex alerted on the hidden fugitive.~s~ Tracking is complete. Give verbal commands through NPCI; the suspect may surrender or flee.");
-                if(!_locatedDispatchSent){_locatedDispatchSent=true;DispatchUpdate("SuspectLocated","Fugitive foot trail","Local patrol jurisdiction","Abandoned gray Primo","Adult male in work clothes","Live K9 alert location",armedResistance?(_outcome==2?"Visible handgun":"Visible knife"):"No weapon observed","K9 has located the fugitive. Units are establishing armed containment at the live location.","SUSPECT_LOCATED UNITS_RESPOND_CODE_3",Subject.Position);}
+                bool armedVisible=BeginArmedResistanceIfConfigured(player);
+                Game.DisplayNotification(armedVisible?"~r~Rex located an armed fugitive.~s~~n~A weapon is visible. Hold containment and assess compliance before deploying Rex.":"~o~Rex alerted on the hidden fugitive.~s~ Tracking is complete. Give verbal commands through NPCI; the suspect may surrender or flee.");
+                if(!_locatedDispatchSent){_locatedDispatchSent=true;DispatchUpdate("SuspectLocated","Fugitive foot trail","Local patrol jurisdiction","Abandoned gray Primo","Adult male in work clothes","Live K9 alert location",armedVisible?(_outcome==4?"Visible knife":"Visible handgun"):"No weapon observed","K9 has located the fugitive. Units are establishing armed containment at the live location.","SUSPECT_LOCATED UNITS_RESPOND_CODE_3",Subject.Position);}
                 Game.LogTrivial("AdvancedK9 Callouts: alert-first FugitiveTrail transition completed after Rex reached the stationary hidden subject.");
             }
 
             if(_suspectLocated)
             {
+                // Keep Nexus/CalloutInterface's active incident anchor at the live
+                // suspect location so voice-requested EMS or coroner units do not
+                // route back to the abandoned traffic-stop vehicles.
+                if(Subject!=null&&Subject.Exists())CalloutPosition=Subject.Position;
                 ObserveCooperativeControl("verbal challenge");
                 bool controlLocked=SuspectControlLocked;
                 MaintainSupportContainment(CustodyLocked||ArrestProviderOwnsSubject||SubjectIsInCustody());
@@ -599,7 +608,11 @@ namespace AdvancedK9.Callouts
                 {
                     _outcomeTaskIssued=true;
                     TransitionSuspectAwayFromHiding();
-                    if(_outcome==0&&!ArrestProviderOwnsSubject)NativeFunction.Natives.TASK_HANDS_UP(Subject,120000,player,-1,true);
+                    if((_outcome==0||_outcome==5)&&!ArrestProviderOwnsSubject)
+                    {
+                        if(_outcome==5)NativeFunction.Natives.SET_CURRENT_PED_WEAPON(Subject,NativeFunction.Natives.GET_HASH_KEY<uint>("WEAPON_UNARMED"),true);
+                        NativeFunction.Natives.TASK_HANDS_UP(Subject,120000,player,-1,true);
+                    }
                     else
                     {
                         _fleeActive=true;_lastSafeSubjectPosition=Subject.Position;
@@ -718,18 +731,29 @@ namespace AdvancedK9.Callouts
         private bool BeginArmedResistanceIfConfigured(Ped player)
         {
             if(_suspectWeaponAssigned||_outcome<2||Subject==null||!Subject.Exists()||player==null||!player.Exists()||ArrestProviderOwnsSubject||SubjectIsInCustody())return _suspectWeaponAssigned;
-            _suspectWeaponAssigned=true;_outcomeTaskIssued=true;_fleeActive=false;
+            _suspectWeaponAssigned=true;_fleeActive=false;
             TransitionSuspectAwayFromHiding();
-            uint weapon=NativeFunction.Natives.GET_HASH_KEY<uint>(_outcome==2?"WEAPON_COMBATPISTOL":"WEAPON_KNIFE");
-            NativeFunction.Natives.GIVE_WEAPON_TO_PED(Subject,weapon,_outcome==2?72:1,false,true);
+            bool knife=_outcome==4;
+            uint weapon=NativeFunction.Natives.GET_HASH_KEY<uint>(knife?"WEAPON_KNIFE":"WEAPON_COMBATPISTOL");
+            NativeFunction.Natives.GIVE_WEAPON_TO_PED(Subject,weapon,knife?1:72,false,true);
             NativeFunction.Natives.SET_CURRENT_PED_WEAPON(Subject,weapon,true);
             NativeFunction.Natives.SET_PED_COMBAT_ATTRIBUTES(Subject,0,true);
             NativeFunction.Natives.SET_PED_COMBAT_ATTRIBUTES(Subject,5,true);
             NativeFunction.Natives.SET_PED_COMBAT_ABILITY(Subject,1);
-            NativeFunction.Natives.SET_PED_COMBAT_RANGE(Subject,_outcome==2?2:0);
-            NativeFunction.Natives.SET_PED_KEEP_TASK(Subject,true);
-            NativeFunction.Natives.TASK_COMBAT_PED(Subject,player,0,16);
-            Game.LogTrivial("AdvancedK9 Callouts: armed outcome entered once; suspect visibly equipped "+(_outcome==2?"combat pistol":"knife")+" and received an active resistance task.");
+            NativeFunction.Natives.SET_PED_COMBAT_RANGE(Subject,knife?0:2);
+            if(_outcome==3||_outcome==4)
+            {
+                _outcomeTaskIssued=true;
+                NativeFunction.Natives.SET_PED_KEEP_TASK(Subject,true);
+                NativeFunction.Natives.TASK_COMBAT_PED(Subject,player,0,16);
+                Game.LogTrivial("AdvancedK9 Callouts: active armed-resistance outcome entered once with a visible "+(knife?"knife":"combat pistol")+".");
+            }
+            else
+            {
+                _outcomeTaskIssued=false;
+                NativeFunction.Natives.TASK_TURN_PED_TO_FACE_ENTITY(Subject,player,1500);
+                Game.LogTrivial("AdvancedK9 Callouts: visible-weapon containment outcome entered without forcing immediate lethal combat; compliance window remains active.");
+            }
             return true;
         }
 
