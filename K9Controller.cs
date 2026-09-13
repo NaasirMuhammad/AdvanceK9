@@ -1607,16 +1607,18 @@ namespace AdvancedK9
             PublishSharedApi();
             Game.LogTrivial("AdvancedK9 API snapshot published immediately at tracking start for callout support synchronization.");
             if(_workingLeashed)ActionNotification("~b~Working leash retained.~s~ The K9 will lead the handler along the scent trail.");
-            float rain=NativeFunction.Natives.GET_RAIN_LEVEL<float>();float ageMinutes=_scentCollectedAt==0?0:(Game.GameTime-_scentCollectedAt)/60000f;float initialDistance=target.DistanceTo(Game.LocalPlayer.Character);bool inVehicle=target.CurrentVehicle!=null;int baseQuality=_activeScentSample==null?85:_activeScentSample.BaseQuality;int scentQuality=Math.Max(5,baseQuality-(int)(ageMinutes*8)-(int)(rain*35)-(int)(initialDistance/12)-(inVehicle?22:0));
+            bool sceneOneLongRange=calloutTrack&&!string.IsNullOrWhiteSpace(_pendingCalloutScentDetails)&&_pendingCalloutScentDetails.IndexOf("Scene1LongRange",StringComparison.OrdinalIgnoreCase)>=0;
+            float rain=NativeFunction.Natives.GET_RAIN_LEVEL<float>();float ageMinutes=_scentCollectedAt==0?0:(Game.GameTime-_scentCollectedAt)/60000f;float initialDistance=target.DistanceTo(Game.LocalPlayer.Character);bool inVehicle=target.CurrentVehicle!=null;int baseQuality=_activeScentSample==null?85:_activeScentSample.BaseQuality;float distanceDivisor=sceneOneLongRange?60f:12f;int scentQuality=Math.Max(5,baseQuality-(int)(ageMinutes*8)-(int)(rain*35)-(int)(initialDistance/distanceDivisor)-(inVehicle?22:0));
             if(scentQuality<18){Game.DisplayNotification("~r~Scent trail is too degraded.~s~~n~Collect a fresh scent article; rain, age, distance, and vehicles weaken odor.");Follow();return;}
             Game.DisplayNotification("~b~K9 recorded scent track started.~s~ Quality "+scentQuality+"%~n~The K9 follows trail points instead of continuously reading the suspect's live position.");K9IncidentLog.Write(_profile.Name,"Track","Started quality "+scentQuality+"% from "+_activeScentSource,target.Position);
             _dog.Tasks.Clear();
             PlayDogAnimation("creatures@rottweiler@indication@","indicate_low",700,0);
             GameFiber.Wait(250);
-            var end = Game.GameTime + 120000;
+            var end = Game.GameTime + (sceneOneLongRange?480000u:120000u);
             uint nextScentCheck=Game.GameTime+(uint)_random.Next(18000,28001);
-            var route=calloutTrack?new List<Vector3>{target.Position}:BuildRecordedTrailRoute(target);int routeIndex=0;Vector3 initialDirection=route.Count>0?route[0]:target.Position;PerformFullCircleDirectionTest(initialDirection,scentQuality,rain);_activeTrackDistance=0f;_activeTrackStarted=Game.GameTime;Vector3 previous=_dog.Position;
+            var route=sceneOneLongRange?BuildLongRangeCalloutRoute(_dog.Position,target.Position):(calloutTrack?new List<Vector3>{target.Position}:BuildRecordedTrailRoute(target));int routeIndex=0;Vector3 initialDirection=route.Count>0?route[0]:target.Position;PerformFullCircleDirectionTest(initialDirection,scentQuality,rain);_activeTrackDistance=0f;_activeTrackStarted=Game.GameTime;Vector3 previous=_dog.Position;
             if(calloutTrack)Game.LogTrivial("AdvancedK9 callout track: using stable assigned final scent position instead of sparse moving-subject history.");
+            if(sceneOneLongRange)Game.LogTrivial("AdvancedK9 Palomino Scene 1: extended track armed with "+route.Count+" staged navigation points, "+scentQuality+"% starting quality, and an eight-minute limit.");
             while (_running && DogExists() && target.Exists() && !target.IsDead && Game.GameTime < end && _state == K9State.Tracking)
             {
                 if(!calloutTrack)CaptureTargetTrailPoint(target);
@@ -1659,7 +1661,7 @@ namespace AdvancedK9
                 }
                 if(routeIndex>=route.Count)
                 {
-                    route=calloutTrack?new List<Vector3>{target.Position}:BuildRecordedTrailRoute(target);routeIndex=0;if(route.Count>0&&!calloutTrack)IndicateTrackDirection(route[0]);
+                    route=sceneOneLongRange?BuildLongRangeCalloutRoute(_dog.Position,target.Position):(calloutTrack?new List<Vector3>{target.Position}:BuildRecordedTrailRoute(target));routeIndex=0;if(route.Count>0&&!calloutTrack)IndicateTrackDirection(route[0]);
                     if(!calloutTrack&&route.Count==0&&_dog.DistanceTo(target)>25f)
                     {
                         _trailLost=true;_dog.Tasks.Clear();Sit();Game.DisplayNotification("~o~K9 lost the recorded scent trail.~s~~n~Move to the last-known area and command REACQUIRE TRAIL.");K9IncidentLog.Write(_profile.Name,"Track","Trail lost",_dog.Position);return;
@@ -1671,7 +1673,7 @@ namespace AdvancedK9
                 float dx = destination.X - _dog.Position.X, dy = destination.Y - _dog.Position.Y;
                 float distance = (float)Math.Sqrt(dx * dx + dy * dy);
                 var waypoint=destination;
-                if(calloutTrack&&distance>4.5f)
+                if(calloutTrack&&routeIndex==route.Count-1&&distance>4.5f)
                 {
                     float approachDistance=3.8f;
                     waypoint=new Vector3(target.Position.X-dx/distance*approachDistance,target.Position.Y-dy/distance*approachDistance,target.Position.Z);
@@ -1701,6 +1703,23 @@ namespace AdvancedK9
             }
             int elapsed=(int)((Game.GameTime-_activeTrackStarted)/1000);K9DeploymentReport.Write("Player",_profile.Name,"Track","Locate person",_activeScentSource,_warningGiven,_activeTrackDistance,elapsed,0,"Not located","None","Track ended",_dog.Position);
             Follow();
+        }
+
+        private List<Vector3> BuildLongRangeCalloutRoute(Vector3 start,Vector3 destination)
+        {
+            var route=new List<Vector3>();
+            float total=start.DistanceTo(destination);
+            int segments=Math.Max(1,(int)Math.Ceiling(total/90f));
+            Vector3 previous=start;
+            for(int i=1;i<segments;i++)
+            {
+                float t=i/(float)segments;
+                Vector3 sample=new Vector3(start.X+(destination.X-start.X)*t,start.Y+(destination.Y-start.Y)*t,start.Z+(destination.Z-start.Z)*t);
+                Vector3 street=World.GetNextPositionOnStreet(sample);
+                if(street.DistanceTo(previous)>18f&&street.DistanceTo(destination)>25f){route.Add(street);previous=street;}
+            }
+            route.Add(destination);
+            return route;
         }
 
         private List<Vector3> BuildRecordedTrailRoute(Ped target)
