@@ -57,17 +57,22 @@ namespace AdvancedK9.Callouts
         private Vector3 _coverSearchAnchor;
         private bool _calibrationMode;
         private int _forcedCalibrationScene=-1;
-        private static readonly HashSet<int> RemovedRoadsideScenes=new HashSet<int>{1,2,3,4};
+        private static readonly HashSet<int> RemovedRoadsideScenes=new HashSet<int>{2,3,4};
 
         private static readonly Vector3[] RoadsideScenes={
-            new Vector3(-565f,-675f,33f),new Vector3(-1035f,-2735f,20f),new Vector3(-1430f,-590f,30f),
+            new Vector3(-565f,-675f,33f),new Vector3(2561.29f,60.92f,95.78f),new Vector3(-1430f,-590f,30f),
             new Vector3(215f,-920f,30f),new Vector3(830f,-1830f,29f),
             new Vector3(-2250f,4290f,46f),new Vector3(-296f,-2732f,6f),
             new Vector3(1850f,3700f,34f),new Vector3(1080f,-690f,57f),new Vector3(-1500f,-790f,10f),
             new Vector3(116f,-1942f,20f),new Vector3(-153f,6346f,31f),new Vector3(-3150f,1100f,20f)
         };
 
-        private static readonly float[] RoadsideHeadings={270f,150f,90f,160f,180f,145f,145f,30f,90f,140f,50f,45f,350f};
+        private static readonly float[] RoadsideHeadings={270f,338f,90f,160f,180f,145f,145f,30f,90f,140f,50f,45f,350f};
+        private static readonly Vector3[] SceneOneHidingSpots={
+            new Vector3(2163.27f,48.92f,224.33f),
+            new Vector3(2787.70f,1398.68f,24.44f),
+            new Vector3(2728.53f,1533.89f,24.50f)
+        };
 
         private bool PrepareRoadsideScene()
         {
@@ -105,6 +110,12 @@ namespace AdvancedK9.Callouts
             _sceneIndex=best;
             _sceneHeading=RoadsideHeadings[best];
             Vector3 stagedScene=RoadsideScenes[best];
+            if(best==1)
+            {
+                _curbAlignedVehiclePosition=stagedScene;
+                Game.LogTrivial("AdvancedK9 Callouts: Palomino Scene 1 using its manually verified shoulder coordinate and legal heading without curb-node replacement: vehicleCenter="+stagedScene+", heading="+_sceneHeading+".");
+                return Prepare("Traffic stop — driver fled on foot",stagedScene,75f,false);
+            }
             try
             {
                 Vector3 curb;
@@ -220,7 +231,11 @@ namespace AdvancedK9.Callouts
             StartedAt=Game.GameTime;_phaseStarted=StartedAt;_phase=FugitivePhase.EnRoute;_outcome=Random.Next(4);
             _isHidingAnimationPlaying=false;
             SetCustodyObservationEnabled(false);
-            float angle=Random.Next(360);float distance=Random.Next(65,96);Vector3 trailEnd=Scene;
+            bool longRangeScene=_sceneIndex==1;
+            Vector3 selectedLongRangeCover=longRangeScene?SceneOneHidingSpots[Random.Next(SceneOneHidingSpots.Length)]:Vector3.Zero;
+            float angle=Random.Next(360);float distance=Random.Next(65,96);Vector3 trailEnd=longRangeScene?selectedLongRangeCover:Scene;
+            if(longRangeScene)Game.LogTrivial("AdvancedK9 Callouts: Palomino Scene 1 selected verified long-range hiding endpoint "+selectedLongRangeCover+" at "+Scene.DistanceTo(selectedLongRangeCover).ToString("0.0")+" metres from the stopped vehicle.");
+            if(!longRangeScene)
             for(int attempt=0;attempt<10;attempt++)
             {
                 float radians=(float)(angle*System.Math.PI/180.0);
@@ -229,15 +244,16 @@ namespace AdvancedK9.Callouts
                 if(System.Math.Abs(candidate.Z-Scene.Z)<=3f&&interior==0){trailEnd=candidate;break;}
                 angle=(angle+37f)%360f;
             }
-            if(trailEnd.DistanceTo(Scene)<50f)
+            if(!longRangeScene&&trailEnd.DistanceTo(Scene)<50f)
             {
                 float radians=(float)(angle*System.Math.PI/180.0);
                 trailEnd=Scene+new Vector3((float)System.Math.Sin(radians)*75f,(float)System.Math.Cos(radians)*75f,0f);
             }
             float dx=trailEnd.X-Scene.X,dy=trailEnd.Y-Scene.Y;float length=(float)System.Math.Sqrt(dx*dx+dy*dy);
             if(length<.1f){dx=1f;dy=0f;length=1f;}
-            Vector3 coverPosition=trailEnd;bool offRoadCover=false;
+            Vector3 coverPosition=trailEnd;bool offRoadCover=longRangeScene;
             float[] offsets={10f,-10f,14f,-14f,18f,-18f};
+            if(!longRangeScene)
             for(int i=0;i<offsets.Length;i++)
             {
                 Vector3 candidate=new Vector3(trailEnd.X-dy/length*offsets[i],trailEnd.Y+dx/length*offsets[i],trailEnd.Z);
@@ -292,14 +308,57 @@ namespace AdvancedK9.Callouts
             }
             else
             {
-                StartVerifiedSuspectPlacement(acceptanceGeneration);
-                Game.LogTrivial("AdvancedK9 Callouts: suspect creation deferred until streamed solid concealment passes validation; exposed endpoint spawning is disabled.");
+                if(longRangeScene)
+                {
+                    StartSceneOneLongRangeSuspectPlacement(acceptanceGeneration,selectedLongRangeCover);
+                    Game.LogTrivial("AdvancedK9 Callouts: Palomino Scene 1 remote suspect placement started for the selected manually verified endpoint.");
+                }
+                else
+                {
+                    StartVerifiedSuspectPlacement(acceptanceGeneration);
+                    Game.LogTrivial("AdvancedK9 Callouts: suspect creation deferred until streamed solid concealment passes validation; exposed endpoint spawning is disabled.");
+                }
             }
             if(!AcceptanceCheckpoint(acceptanceGeneration))return false;
             DispatchUpdate("CalloutAccepted","Failed traffic stop","Local patrol jurisdiction","Gray Primo stopped at curb with marked cruiser behind","Adult male in work clothes","Away from the driver side of the stopped vehicle","Unknown weapon status","Respond to a failed traffic stop. The driver abandoned the vehicle and fled on foot. Two patrol officers are holding the scene.","WE_HAVE CRIME_RESIST_ARREST IN_OR_ON_POSITION",Scene);
             if(!AcceptanceCheckpoint(acceptanceGeneration))return false;
             RouteToScene("Respond to the failed traffic stop. The driver abandoned the stopped vehicle and fled on foot; officers preserved the driver-seat scent.");
             return AcceptanceWorkIsActive(acceptanceGeneration);
+        }
+
+        private void StartSceneOneLongRangeSuspectPlacement(int acceptanceGeneration,Vector3 verifiedEndpoint)
+        {
+            _suspectSpawnPending=true;
+            GameFiber.StartNew(delegate
+            {
+                try
+                {
+                    if(!AcceptanceWorkIsActive(acceptanceGeneration))return;
+                    NativeFunction.Natives.REQUEST_COLLISION_AT_COORD(verifiedEndpoint.X,verifiedEndpoint.Y,verifiedEndpoint.Z);
+                    GameFiber.Wait(1200);
+                    if(!AcceptanceWorkIsActive(acceptanceGeneration))return;
+                    Subject=SpawnPed("a_m_m_hillbilly_01",verifiedEndpoint,Random.Next(360));
+                    if(Subject==null||!Subject.Exists())
+                    {
+                        Game.LogTrivial("AdvancedK9 Callouts: Palomino Scene 1 long-range suspect creation failed at "+verifiedEndpoint+".");
+                        End();return;
+                    }
+                    Subject.MaxHealth=500;Subject.Health=500;Subject.BlockPermanentEvents=true;Subject.IsPersistent=true;Subject.IsInvincible=true;
+                    Subject.Position=verifiedEndpoint;
+                    Subject.Tasks.ClearImmediately();
+                    Subject.Tasks.PlayAnimation("amb@code_human_cower@male@base","base",1.0f,AnimationFlags.Loop);
+                    NativeFunction.Natives.SET_PED_KEEP_TASK(Subject,true);
+                    _hidingPosition=verifiedEndpoint;_lastSafeSubjectPosition=verifiedEndpoint;
+                    _isHidingAnimationPlaying=true;_naturalCoverReserved=true;_coverConfirmed=true;
+                    Game.LogTrivial("AdvancedK9 Callouts: Palomino Scene 1 suspect locked at manually verified long-range hiding endpoint "+verifiedEndpoint+"; scent registration can begin at the stopped vehicle.");
+                }
+                catch(System.Exception ex)
+                {
+                    Game.LogTrivial("AdvancedK9 Callouts: Palomino Scene 1 long-range placement contained: "+ex);
+                    if(AcceptanceWorkIsActive(acceptanceGeneration))End();
+                }
+                finally{_suspectSpawnPending=false;}
+            },"AdvancedK9 Palomino long-range suspect placement");
         }
 
         private void StartVerifiedSuspectPlacement(int acceptanceGeneration)
@@ -458,12 +517,12 @@ namespace AdvancedK9.Callouts
                 StopBackupOfficerInvestigation();
                 Game.DisplayNotification("~b~On-scene officer:~s~ The suspect fled on foot. I preserved their scent from the driver seat.~n~~y~Deploy Rex beside the abandoned vehicle and command TRACK.");
                 if(OfficerOne!=null&&OfficerOne.Exists())NativeFunction.Natives.TASK_TURN_PED_TO_FACE_ENTITY(OfficerOne,player,5000);
-                AssignCalloutScent(Subject,_hidingPosition,"preserved scent article from abandoned vehicle driver seat; retained for full accepted-callout lifecycle");
+                AssignCalloutScent(Subject,_hidingPosition,SceneScentDetails());
                 DispatchUpdate("OfficerBriefing","Failed traffic stop","Local patrol jurisdiction","Gray Primo; driver-seat scent preserved","Adult male in work clothes","Away from the stopped vehicle","Unknown weapon status","Contact officer briefing: adult male in work clothes, last seen fleeing away from the stopped vehicle. The driver-seat scent article remains preserved.","OFFICERS_REPORT SUSPECT_LAST_SEEN",Scene);
             }
             if(!ApiRequested&&_sceneBriefed)
             {
-                AssignCalloutScent(Subject,_hidingPosition,"preserved scent article from abandoned vehicle driver seat; retained for full accepted-callout lifecycle");
+                AssignCalloutScent(Subject,_hidingPosition,SceneScentDetails());
                 if(ApiRequested){ClearSceneRoute();Game.LogTrivial("AdvancedK9 Callouts: fugitive vehicle scent source registered; awaiting handler command.");}
             }
 
@@ -710,6 +769,13 @@ namespace AdvancedK9.Callouts
             }
             else if(!ApiRequested&&Game.GameTime-StartedAt>900000)Resolve("~r~Fugitive Trail: response expired before scent collection.");
             base.Process();
+        }
+
+        private string SceneScentDetails()
+        {
+            return _sceneIndex==1
+                ?"Scene1LongRange Palomino Freeway preserved driver-seat scent; extended verified trail profile"
+                :"preserved scent article from abandoned vehicle driver seat; retained for full accepted-callout lifecycle";
         }
 
         private void TransitionSuspectAwayFromHiding()
