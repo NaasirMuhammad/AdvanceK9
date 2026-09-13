@@ -1,4 +1,3 @@
-using LSPD_First_Response;
 using LSPD_First_Response.Mod.API;
 using LSPD_First_Response.Mod.Callouts;
 using Rage;
@@ -24,7 +23,6 @@ namespace AdvancedK9.Callouts
         private bool _bankScenarioStarted;
         private Vehicle _getawayVehicle;
         private Ped _hostage;
-        private LHandle _bankPursuit;
         private bool _bankCustodyNotice;
         private bool _hostageReleased;
 
@@ -221,9 +219,9 @@ namespace AdvancedK9.Callouts
             if(!_bankScenarioStarted&&player.DistanceTo(Scene)<85f)
             {
                 _bankScenarioStarted=true;
-                _bankPursuit=Functions.CreatePursuit();
-                Functions.AddPedToPursuit(_bankPursuit,Subject);
-                Functions.SetPursuitIsActiveForPlayer(_bankPursuit,true);
+                var bankPursuit=Functions.CreatePursuit();
+                Functions.AddPedToPursuit(bankPursuit,Subject);
+                Functions.SetPursuitIsActiveForPlayer(bankPursuit,true);
                 Game.DisplayNotification("~r~Bank robbery vehicle located.~s~ Join the pursuit. If the suspect bails out, Rex can transition to the recorded foot trail.");
                 Game.LogTrivial("AdvancedK9 Callouts: bank vehicle-escape scenario entered an LSPDFR pursuit; manager and scene officers remained at the bank.");
             }
