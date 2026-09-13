@@ -219,11 +219,11 @@ namespace AdvancedK9.Callouts
             if(!_bankScenarioStarted&&player.DistanceTo(Scene)<85f)
             {
                 _bankScenarioStarted=true;
-                var bankPursuit=Functions.CreatePursuit();
-                Functions.AddPedToPursuit(bankPursuit,Subject);
-                Functions.SetPursuitIsActiveForPlayer(bankPursuit,true);
+                Subject.BlockPermanentEvents=true;
+                NativeFunction.Natives.SET_PED_KEEP_TASK(Subject,true);
+                NativeFunction.Natives.TASK_VEHICLE_DRIVE_WANDER(Subject,_getawayVehicle,28f,786603);
                 Game.DisplayNotification("~r~Bank robbery vehicle located.~s~ Join the pursuit. If the suspect bails out, Rex can transition to the recorded foot trail.");
-                Game.LogTrivial("AdvancedK9 Callouts: bank vehicle-escape scenario entered an LSPDFR pursuit; manager and scene officers remained at the bank.");
+                Game.LogTrivial("AdvancedK9 Callouts: bank vehicle-escape scenario started native high-speed flight; manager and scene officers remained at the bank.");
             }
             if(SubjectIsInCustody()&&!_bankCustodyNotice){_bankCustodyNotice=true;Game.DisplayHelp("Suspect secured. Clear the bank callout manually when the scene is complete.");}
         }
