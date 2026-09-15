@@ -1,5 +1,49 @@
 # Changelog
 
+## 0.23.3-beta
+
+### Detection and alert presentation
+
+- Preserves every certified odor match found in the same search instead of collapsing the result to one category.
+- Presents narcotics, weapons and explosives together in one completed K9 alert when Rex is certified for each detected odor.
+- Keeps unavailable third-party inventory inconclusive and does not create a false clear result.
+
+### Tactical containment
+
+- Adds persistent Front, Rear, Left, Right, Cover and Custom containment positions.
+- Adds matching menu and voice commands and restores saved nearby positions during later perimeter deployments.
+- Keeps containment non-bite and separate from Apprehend, Recall and Release commands.
+
+### Optional compatibility adapters
+
+- Adds isolated, opt-in adapters for BLR, PD Comp and Damage Tracker Framework.
+- Adds configuration switches for each adapter and keeps their absence non-fatal.
+- Uses only available integration surfaces and does not bundle, alter or redistribute third-party plugin files.
+
+### Shift lifecycle, reports and progression
+
+- Adds guided K9 shift start/end handling tied to the established LSPDFR duty lifecycle.
+- Saves operational summaries and incident activity without enabling the K9, HUD, menus or microphone while off duty.
+- Awards patrol XP only for meaningful searches, tracks, apprehensions, containment and safety outcomes.
+
+### Pursuit and explosive safety
+
+- Improves recovery when a pursuit target is temporarily lost from view or changes vehicle state.
+- Adds configurable explosive-search standoff and safety behavior.
+- Preserves officer, restrained-suspect and handler-safety interlocks during tactical deployments.
+
+### Reliability retained from 0.23.2
+
+- Retains continuous handler-speed following and sprint catch-up without two-step stalls.
+- Retains seated Recall without teleporting Rex to the handler.
+- Retains stable leash movement, vehicle exit, interior navigation, elevator transitions and the corrected AI voice runtime package.
+
+### Release scope
+
+- Contains only the AdvancedK9 core plugin and its LSPDFR compatibility bridge.
+- Does not include `AdvancedK9.Callouts.dll`, callout sources, callout menus, callout test/calibration tools or the shared callout API.
+- Preserves existing user `AdvancedK9.ini` settings by shipping new defaults as `AdvancedK9.default.ini`.
+
 ## 0.23.2-beta
 
 ### Persistent roster and kennels
