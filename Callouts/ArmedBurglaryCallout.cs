@@ -26,6 +26,7 @@ namespace AdvancedK9.Callouts
         private bool _bankCustodyNotice;
         private bool _hostageReleased;
         private bool _establishScenePublished;
+        private uint _bankWeaponHash;
 
         private static readonly Vector3[] BusinessScenes={
             new Vector3(235.11f,216.83f,106.29f),       // Pacific Standard
@@ -94,6 +95,22 @@ namespace AdvancedK9.Callouts
             return true;
         }
 
+        private void ConfigureArmedBankRobber(bool equipNow)
+        {
+            if(Subject==null||!Subject.Exists())return;
+            string[] weapons={"WEAPON_PISTOL","WEAPON_COMBATPISTOL","WEAPON_MICROSMG"};
+            _bankWeaponHash=NativeFunction.Natives.GET_HASH_KEY<uint>(weapons[Random.Next(weapons.Length)]);
+            NativeFunction.Natives.GIVE_WEAPON_TO_PED(Subject,_bankWeaponHash,Random.Next(42,91),false,equipNow);
+            NativeFunction.Natives.SET_PED_DROPS_WEAPONS_WHEN_DEAD(Subject,true);
+            NativeFunction.Natives.SET_PED_COMBAT_ABILITY(Subject,1);
+            NativeFunction.Natives.SET_PED_COMBAT_RANGE(Subject,1);
+            NativeFunction.Natives.SET_PED_COMBAT_MOVEMENT(Subject,2);
+            NativeFunction.Natives.SET_PED_COMBAT_ATTRIBUTES(Subject,5,true);
+            NativeFunction.Natives.SET_PED_COMBAT_ATTRIBUTES(Subject,46,true);
+            if(equipNow)NativeFunction.Natives.SET_CURRENT_PED_WEAPON(Subject,_bankWeaponHash,true);
+            Game.LogTrivial("AdvancedK9 Callouts: bank robber armed with hash "+_bankWeaponHash+", visibleNow="+equipNow+".");
+        }
+
         public override bool OnBeforeCalloutDisplayed()
         {
             try{if(!PrepareBusinessScene())return false;}
@@ -141,7 +158,7 @@ namespace AdvancedK9.Callouts
             }
             Subject=SpawnPed("g_m_y_mexgoon_02",_hidePosition,Random.Next(360));if(Subject==null)return false;
             Subject.MaxHealth=250;Subject.Health=250;
-            NativeFunction.Natives.GIVE_WEAPON_TO_PED(Subject,NativeFunction.Natives.GET_HASH_KEY<uint>("WEAPON_PISTOL"),36,false,false);
+            ConfigureArmedBankRobber(false);
             NativeFunction.Natives.TASK_COWER(Subject,-1);
             if(!AcceptAndRouteToSelectedBank("Officers recovered clothing torn from the fleeing suspect."))return false;
             DispatchUpdate("CalloutAccepted","Bank robbery foot escape","Local patrol jurisdiction","No confirmed getaway vehicle","Armed bank-robbery suspect","Fled on foot from the bank","Possibly armed","Respond to a reported bank robbery. The manager remains at the bank and officers preserved a discarded clothing scent article from a suspect who fled on foot.","WE_HAVE CRIME_BURGLARY IN_OR_ON_POSITION UNITS_RESPOND_CODE_3",Scene);
@@ -157,7 +174,7 @@ namespace AdvancedK9.Callouts
             Subject=SpawnPed("g_m_y_mexgoon_02",road,CruiserHeadings[_sceneIndex]);
             if(_getawayVehicle==null||!_getawayVehicle.Exists()||Subject==null||!Subject.Exists())return false;
             Subject.MaxHealth=250;Subject.Health=250;
-            NativeFunction.Natives.GIVE_WEAPON_TO_PED(Subject,NativeFunction.Natives.GET_HASH_KEY<uint>("WEAPON_PISTOL"),36,false,false);
+            ConfigureArmedBankRobber(false);
             NativeFunction.Natives.SET_PED_INTO_VEHICLE(Subject,_getawayVehicle,-1);
             if(!AcceptAndRouteToSelectedBank("The manager is safe with officers; armed suspects fled in a vehicle moments before arrival."))return false;
             DispatchUpdate("CalloutAccepted","Bank robbery vehicle escape","Local patrol jurisdiction","Dark Buffalo fleeing the bank","Armed bank-robbery suspect","Leaving the bank district by vehicle","Confirmed armed","Bank robbery in progress. The manager remains with officers at the bank while an armed suspect escapes in a dark Buffalo. Prepare for a vehicle pursuit and possible K9 bailout track.","WE_HAVE CRIME_BURGLARY IN_OR_ON_POSITION UNITS_RESPOND_CODE_3",Scene);
@@ -171,7 +188,7 @@ namespace AdvancedK9.Callouts
             _hostage=SpawnPed("a_f_y_business_02",new Vector3(suspectPosition.X+1.2f,suspectPosition.Y,suspectPosition.Z),180f);
             if(Subject==null||!Subject.Exists()||_hostage==null||!_hostage.Exists())return false;
             Subject.MaxHealth=300;Subject.Health=300;
-            NativeFunction.Natives.GIVE_WEAPON_TO_PED(Subject,NativeFunction.Natives.GET_HASH_KEY<uint>("WEAPON_PISTOL"),48,false,true);
+            ConfigureArmedBankRobber(true);
             NativeFunction.Natives.TASK_HANDS_UP(_hostage,-1,Subject,-1,true);
             if(!AcceptAndRouteToSelectedBank(pacificInterior?"An armed suspect is believed to be hiding inside the bank.":"An armed suspect is holding an employee; K9 deployment is optional."))return false;
             DispatchUpdate("CalloutAccepted",pacificInterior?"Pacific Standard interior suspect":"Bank hostage containment","Local patrol jurisdiction","No getaway vehicle located",pacificInterior?"Armed suspect hidden inside Pacific Standard":"Armed suspect with bank employee","Contained at the bank","Confirmed armed",pacificInterior?"Pacific Standard reports an armed robbery suspect still hidden inside. Establish a perimeter and use the K9 only when tactically appropriate.":"Armed bank robbery with an employee being held at the bank. Establish containment; K9 deployment is optional and must not endanger the hostage.","WE_HAVE CRIME_BURGLARY IN_OR_ON_POSITION UNITS_RESPOND_CODE_3",Scene);
@@ -223,6 +240,7 @@ namespace AdvancedK9.Callouts
             {
                 _suspectLocated=true;_locatedAt=Game.GameTime;
                 EndSupportTracking();
+                if(_bankWeaponHash!=0)NativeFunction.Natives.SET_CURRENT_PED_WEAPON(Subject,_bankWeaponHash,true);
                 SubjectBlip=Subject.AttachBlip();SubjectBlip.IsRouteEnabled=true;
                 _verbalGraceUntil=Game.GameTime+12000;
                 ControlApprehensionTraffic(Subject.Position);
