@@ -2,6 +2,7 @@ using LSPD_First_Response.Mod.API;
 using LSPD_First_Response.Mod.Callouts;
 using Rage;
 using Rage.Native;
+using System.Collections.Generic;
 
 namespace AdvancedK9.Callouts
 {
@@ -27,6 +28,12 @@ namespace AdvancedK9.Callouts
         private bool _hostageReleased;
         private bool _establishScenePublished;
         private uint _bankWeaponHash;
+        private readonly List<Ped> _bankAccomplices=new List<Ped>();
+        private LHandle _bankPursuit;
+        private bool _bankPursuitStarted;
+        private bool _bailoutTrackReady;
+        private bool _bankOutcomeReported;
+        private uint _scenarioStartedAt;
 
         private static readonly Vector3[] BusinessScenes={
             new Vector3(235.11f,216.83f,106.29f),       // Pacific Standard
@@ -111,6 +118,57 @@ namespace AdvancedK9.Callouts
             Game.LogTrivial("AdvancedK9 Callouts: bank robber armed with hash "+_bankWeaponHash+", visibleNow="+equipNow+".");
         }
 
+        private void ConfigureArmedAccomplice(Ped robber,bool equipNow)
+        {
+            if(robber==null||!robber.Exists())return;
+            uint weapon=NativeFunction.Natives.GET_HASH_KEY<uint>(Random.Next(3)==0?"WEAPON_MICROSMG":"WEAPON_COMBATPISTOL");
+            NativeFunction.Natives.GIVE_WEAPON_TO_PED(robber,weapon,Random.Next(36,76),false,equipNow);
+            NativeFunction.Natives.SET_PED_DROPS_WEAPONS_WHEN_DEAD(robber,true);
+            NativeFunction.Natives.SET_PED_COMBAT_ABILITY(robber,1);
+            NativeFunction.Natives.SET_PED_COMBAT_RANGE(robber,1);
+            NativeFunction.Natives.SET_PED_COMBAT_MOVEMENT(robber,2);
+            robber.BlockPermanentEvents=true;robber.IsPersistent=true;
+            if(equipNow)NativeFunction.Natives.SET_CURRENT_PED_WEAPON(robber,weapon,true);
+            _bankAccomplices.Add(robber);
+        }
+
+        private void StageBankManager()
+        {
+            if(Reporter==null||!Reporter.Exists())return;
+            Reporter.IsPersistent=true;Reporter.BlockPermanentEvents=true;
+            Vector3 managerPosition=OfficerOne!=null&&OfficerOne.Exists()?OfficerOne.GetOffsetPosition(new Vector3(1.4f,-0.8f,0f)):new Vector3(Scene.X+2f,Scene.Y,Scene.Z);
+            Reporter.Position=managerPosition;
+            Reporter.Heading=OfficerOne!=null&&OfficerOne.Exists()?OfficerOne.Heading:0f;
+            NativeFunction.Natives.TASK_STAND_STILL(Reporter,-1);
+            Game.LogTrivial("AdvancedK9 Callouts: bank manager secured beside the contact officer and retained for the full scene.");
+        }
+
+        private void PublishBankOutcome(string stage,string summary)
+        {
+            if(_bankOutcomeReported)return;
+            _bankOutcomeReported=true;
+            DispatchUpdate(stage,_bankScenario==1?"Bank robbery vehicle escape":_bankScenario==2?"Bank hostage incident":_bankScenario==3?"Pacific Standard interior search":"Bank robbery foot escape","Local patrol jurisdiction",_bankScenario==1?"Dark Buffalo getaway vehicle":"No active getaway vehicle","Armed bank-robbery suspects","Incident scene",ConfirmedSubjectDeath()?"Armed suspect deceased":"Scene stable",BankNames[_sceneIndex]+": "+summary,"",Subject!=null&&Subject.Exists()?Subject.Position:Scene);
+            Game.DisplayNotification("~b~Dispatch:~s~ "+summary);
+            Game.DisplayHelp("The bank scene remains active. Clear the callout manually after evidence, medical, and prisoner arrangements are complete.");
+            Game.LogTrivial("AdvancedK9 Callouts: bank outcome published without dismissing scene personnel: "+summary);
+        }
+
+        private bool AllBankRobbersResolved()
+        {
+            if(Subject!=null&&Subject.Exists()&&!Subject.IsDead&&!SubjectIsInCustody())return false;
+            for(int i=0;i<_bankAccomplices.Count;i++)
+            {
+                Ped robber=_bankAccomplices[i];
+                if(robber!=null&&robber.Exists()&&!robber.IsDead)
+                {
+                    bool arrested=false;
+                    try{arrested=NativeFunction.Natives.IS_PED_CUFFED<bool>(robber)||NativeFunction.Natives.IS_PED_HANDCUFFED<bool>(robber);}catch{}
+                    if(!arrested)return false;
+                }
+            }
+            return true;
+        }
+
         public override bool OnBeforeCalloutDisplayed()
         {
             try{if(!PrepareBusinessScene())return false;}
@@ -132,6 +190,7 @@ namespace AdvancedK9.Callouts
             if(_sceneIndex==0&&Random.Next(4)==0)_bankScenario=3; // Pacific Standard interior search only
             Reporter=SpawnPed("a_m_y_business_03",new Vector3(Scene.X+2f,Scene.Y,Scene.Z),0f);
             if(!StageBankPerimeter())return false;
+            StageBankManager();
             if(_bankScenario==1)return InitializeVehicleEscapeScenario();
             if(_bankScenario==2||_bankScenario==3)return InitializeBankContainmentScenario(_bankScenario==3);
             EvidenceProp=SpawnProp("prop_ld_shirt_01",new Vector3(Scene.X-1.5f,Scene.Y+1f,Scene.Z));
@@ -159,6 +218,12 @@ namespace AdvancedK9.Callouts
             Subject=SpawnPed("g_m_y_mexgoon_02",_hidePosition,Random.Next(360));if(Subject==null)return false;
             Subject.MaxHealth=250;Subject.Health=250;
             ConfigureArmedBankRobber(false);
+            if(Random.Next(100)<45)
+            {
+                Ped accomplice=SpawnPed("g_m_y_mexgoon_01",_hidePosition+new Vector3(1.5f,0.8f,0f),Random.Next(360));
+                ConfigureArmedAccomplice(accomplice,false);
+                if(accomplice!=null&&accomplice.Exists())NativeFunction.Natives.TASK_COWER(accomplice,-1);
+            }
             NativeFunction.Natives.TASK_COWER(Subject,-1);
             if(!AcceptAndRouteToSelectedBank("Officers recovered clothing torn from the fleeing suspect."))return false;
             DispatchUpdate("CalloutAccepted","Bank robbery foot escape","Local patrol jurisdiction","No confirmed getaway vehicle","Armed bank-robbery suspect","Fled on foot from the bank","Possibly armed","Respond to a reported bank robbery. The manager remains at the bank and officers preserved a discarded clothing scent article from a suspect who fled on foot.","WE_HAVE CRIME_BURGLARY IN_OR_ON_POSITION UNITS_RESPOND_CODE_3",Scene);
@@ -176,6 +241,13 @@ namespace AdvancedK9.Callouts
             Subject.MaxHealth=250;Subject.Health=250;
             ConfigureArmedBankRobber(false);
             NativeFunction.Natives.SET_PED_INTO_VEHICLE(Subject,_getawayVehicle,-1);
+            int accompliceCount=Random.Next(1,3);
+            for(int i=0;i<accompliceCount;i++)
+            {
+                Ped accomplice=SpawnPed(i==0?"g_m_y_mexgoon_01":"g_m_y_salvagoon_01",road,CruiserHeadings[_sceneIndex]);
+                ConfigureArmedAccomplice(accomplice,false);
+                if(accomplice!=null&&accomplice.Exists())NativeFunction.Natives.SET_PED_INTO_VEHICLE(accomplice,_getawayVehicle,i);
+            }
             if(!AcceptAndRouteToSelectedBank("The manager is safe with officers; armed suspects fled in a vehicle moments before arrival."))return false;
             DispatchUpdate("CalloutAccepted","Bank robbery vehicle escape","Local patrol jurisdiction","Dark Buffalo fleeing the bank","Armed bank-robbery suspect","Leaving the bank district by vehicle","Confirmed armed","Bank robbery in progress. The manager remains with officers at the bank while an armed suspect escapes in a dark Buffalo. Prepare for a vehicle pursuit and possible K9 bailout track.","WE_HAVE CRIME_BURGLARY IN_OR_ON_POSITION UNITS_RESPOND_CODE_3",Scene);
             return true;
@@ -190,6 +262,13 @@ namespace AdvancedK9.Callouts
             Subject.MaxHealth=300;Subject.Health=300;
             ConfigureArmedBankRobber(true);
             NativeFunction.Natives.TASK_HANDS_UP(_hostage,-1,Subject,-1,true);
+            NativeFunction.Natives.TASK_AIM_GUN_AT_ENTITY(Subject,_hostage,-1,false);
+            if(Random.Next(100)<55)
+            {
+                Ped accomplice=SpawnPed("g_m_y_mexgoon_01",new Vector3(suspectPosition.X-2.2f,suspectPosition.Y+1.2f,suspectPosition.Z),180f);
+                ConfigureArmedAccomplice(accomplice,true);
+                if(accomplice!=null&&accomplice.Exists())NativeFunction.Natives.TASK_GUARD_CURRENT_POSITION(accomplice,12f,12f,true);
+            }
             if(!AcceptAndRouteToSelectedBank(pacificInterior?"An armed suspect is believed to be hiding inside the bank.":"An armed suspect is holding an employee; K9 deployment is optional."))return false;
             DispatchUpdate("CalloutAccepted",pacificInterior?"Pacific Standard interior suspect":"Bank hostage containment","Local patrol jurisdiction","No getaway vehicle located",pacificInterior?"Armed suspect hidden inside Pacific Standard":"Armed suspect with bank employee","Contained at the bank","Confirmed armed",pacificInterior?"Pacific Standard reports an armed robbery suspect still hidden inside. Establish a perimeter and use the K9 only when tactically appropriate.":"Armed bank robbery with an employee being held at the bank. Establish containment; K9 deployment is optional and must not endanger the hostage.","WE_HAVE CRIME_BURGLARY IN_OR_ON_POSITION UNITS_RESPOND_CODE_3",Scene);
             return true;
@@ -241,6 +320,11 @@ namespace AdvancedK9.Callouts
                 _suspectLocated=true;_locatedAt=Game.GameTime;
                 EndSupportTracking();
                 if(_bankWeaponHash!=0)NativeFunction.Natives.SET_CURRENT_PED_WEAPON(Subject,_bankWeaponHash,true);
+                for(int i=0;i<_bankAccomplices.Count;i++)
+                {
+                    Ped robber=_bankAccomplices[i];
+                    if(robber!=null&&robber.Exists()&&!robber.IsDead)NativeFunction.Natives.TASK_COMBAT_PED(robber,player,0,16);
+                }
                 SubjectBlip=Subject.AttachBlip();SubjectBlip.IsRouteEnabled=true;
                 _verbalGraceUntil=Game.GameTime+12000;
                 ControlApprehensionTraffic(Subject.Position);
@@ -272,8 +356,8 @@ namespace AdvancedK9.Callouts
                 if(Game.GameTime>=_nextContainmentUpdate&&!NativeFunction.Natives.IS_PED_CUFFED<bool>(Subject)){_nextContainmentUpdate=Game.GameTime+1800;SupportOfficersContainSubject();}
                 bool injured=Subject.Health<Subject.MaxHealth-5;
                 if((injured||MedicalResponseStarted)&&!MedicalResponseComplete){ProcessPostApprehensionMedical("");}
-                else if(ConfirmedSubjectDeath())Resolve("~o~Armed Burglary concluded: suspect is deceased.");
-                else if(SeriousMedicalTransport&&MedicalResponseComplete)Resolve("~g~Armed Burglary complete: EMS assumed hospital transport under police custody.");
+                else if(ConfirmedSubjectDeath())PublishBankOutcome("SuspectDeceased","Primary suspect is deceased. Hold the bank perimeter for investigation and coroner response.");
+                else if(SeriousMedicalTransport&&MedicalResponseComplete)PublishBankOutcome("MedicalTransport","EMS assumed hospital transport under police custody. Bank personnel remain on scene for investigation.");
                 else if(custodyLease&&CustodyOwnerStable&&(!MedicalResponseStarted||MedicalResponseComplete)&&!_transportStarted)
                 {
                     if(_custodyReadyAt==0)_custodyReadyAt=Game.GameTime;
@@ -283,10 +367,11 @@ namespace AdvancedK9.Callouts
                         Game.DisplayNotification("~b~Dispatch:~s~ "+CustodyOwner+" custody is stable and medically cleared. The owning provider has been asked for transport.");
                     }
                 }
-                else if(_transportStarted&&ProviderTransportLoaded())Resolve("~g~Armed Burglary complete: provider custody and prisoner transport confirmed.");
-                else if(Game.GameTime-_locatedAt>300000)Resolve("~o~Armed Burglary concluded after suspect location.");
+                else if(_transportStarted&&ProviderTransportLoaded())PublishBankOutcome("PrisonerTransport","Provider custody and prisoner transport are confirmed. Complete the bank-scene investigation before clearing.");
+                else if(AllBankRobbersResolved())PublishBankOutcome("AllSuspectsResolved","All known bank-robbery suspects are secured or otherwise resolved.");
+                else if(Game.GameTime-_locatedAt>300000)PublishBankOutcome("ExtendedScene","The armed-suspect scene remains active after an extended containment period.");
             }
-            else if(Game.GameTime-StartedAt>420000)Resolve("~r~Armed Burglary: suspect escaped the containment area.");
+            else if(Game.GameTime-StartedAt>420000)PublishBankOutcome("SuspectEscaped","The foot-trail suspect escaped the containment area. Preserve the bank scene and evidence for follow-up.");
             base.Process();
         }
 
@@ -295,14 +380,44 @@ namespace AdvancedK9.Callouts
             MaintainPoliceEmergencyLights();
             if(!_bankScenarioStarted&&player.DistanceTo(Scene)<85f)
             {
-                _bankScenarioStarted=true;
+                _bankScenarioStarted=true;_scenarioStartedAt=Game.GameTime;
                 Subject.BlockPermanentEvents=true;
                 NativeFunction.Natives.SET_PED_KEEP_TASK(Subject,true);
                 NativeFunction.Natives.TASK_VEHICLE_DRIVE_WANDER(Subject,_getawayVehicle,28f,786603);
+                try
+                {
+                    _bankPursuit=Functions.CreatePursuit();
+                    Functions.AddPedToPursuit(_bankPursuit,Subject);
+                    for(int i=0;i<_bankAccomplices.Count;i++)if(_bankAccomplices[i]!=null&&_bankAccomplices[i].Exists())Functions.AddPedToPursuit(_bankPursuit,_bankAccomplices[i]);
+                    Functions.SetPursuitIsActiveForPlayer(_bankPursuit,true);
+                    _bankPursuitStarted=true;
+                }
+                catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: LSPDFR bank pursuit setup contained; native flight remains active: "+ex.Message);}
                 Game.DisplayNotification("~r~Bank robbery vehicle located.~s~ Join the pursuit. If the suspect bails out, Rex can transition to the recorded foot trail.");
                 Game.LogTrivial("AdvancedK9 Callouts: bank vehicle-escape scenario started native high-speed flight; manager and scene officers remained at the bank.");
             }
-            if(SubjectIsInCustody()&&!_bankCustodyNotice){_bankCustodyNotice=true;Game.DisplayHelp("Suspect secured. Clear the bank callout manually when the scene is complete.");}
+            bool driverOnFoot=_bankScenarioStarted&&_getawayVehicle!=null&&_getawayVehicle.Exists()&&!Subject.IsInVehicle(_getawayVehicle,false);
+            if(driverOnFoot&&!_bailoutTrackReady&&Subject.DistanceTo(_getawayVehicle)>6f&&!SubjectIsInCustody())
+            {
+                _bailoutTrackReady=true;
+                try{if(_bankPursuitStarted&&Functions.IsPursuitStillRunning(_bankPursuit))Functions.ForceEndPursuit(_bankPursuit);}catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: pursuit-to-track handoff contained: "+ex.Message);}
+                EvidenceProp=SpawnProp("prop_cs_shoe_01",_getawayVehicle.Position);
+                Vector3 article=EvidenceProp!=null&&EvidenceProp.Exists()?EvidenceProp.Position:_getawayVehicle.Position;
+                AssignCalloutScent(Subject,article,"shoe recovered beside the abandoned bank getaway vehicle","The driver bailed out and left a shoe beside the getaway vehicle. Bring Rex to it and command COLLECT SCENT or TRACK.");
+                Game.DisplayNotification("~b~Dispatch:~s~ Bank robber bailed out. The abandoned getaway vehicle now contains a viable K9 scent article.");
+                DispatchUpdate("BailoutTrackReady","Bank robbery bailout track","Local patrol jurisdiction","Abandoned dark Buffalo","Armed bank-robbery suspects","Last seen fleeing from the vehicle","Confirmed armed","The getaway driver bailed out. A shoe beside the abandoned vehicle has been preserved for Rex.","",_getawayVehicle.Position);
+            }
+            if(_bailoutTrackReady&&!_suspectLocated&&K9TrackingActive())SupportOfficersFollowK9();
+            if(_bailoutTrackReady&&!_suspectLocated&&System.Math.Min(K9DistanceTo(Subject.Position),player.DistanceTo(Subject))<18f)
+            {
+                _suspectLocated=true;EndSupportTracking();
+                if(_bankWeaponHash!=0)NativeFunction.Natives.SET_CURRENT_PED_WEAPON(Subject,_bankWeaponHash,true);
+                SupportOfficersContainSubject();
+                Game.DisplayNotification("~r~Rex located the armed getaway driver.~s~ Establish containment and issue commands.");
+            }
+            if(SubjectIsInCustody()&&!_bankCustodyNotice){_bankCustodyNotice=true;PublishBankOutcome("SuspectInCustody","The primary getaway suspect is in custody. Confirm every accomplice before clearing the bank scene.");}
+            else if(AllBankRobbersResolved())PublishBankOutcome("AllSuspectsResolved","All getaway suspects are secured or otherwise resolved. The bank scene remains held for investigation.");
+            else if(_bankScenarioStarted&&Game.GameTime-_scenarioStartedAt>480000)PublishBankOutcome("SuspectsEscaped","The getaway suspects escaped after an extended pursuit. Preserve the originating bank scene for investigation.");
         }
 
         private void ProcessBankContainment(Ped player)
@@ -310,7 +425,7 @@ namespace AdvancedK9.Callouts
             MaintainPoliceEmergencyLights();
             if(!_bankScenarioStarted&&player.DistanceTo(Scene)<45f)
             {
-                _bankScenarioStarted=true;
+                _bankScenarioStarted=true;_scenarioStartedAt=Game.GameTime;
                 SubjectBlip=Subject.AttachBlip();SubjectBlip.IsRouteEnabled=true;
                 if(_bankScenario==3)Game.DisplayNotification("~o~Pacific Standard interior search.~s~ The armed suspect remains inside; K9 use is optional.");
                 else Game.DisplayNotification("~r~Bank hostage containment.~s~ Maintain a safe angle. K9 deployment is optional while the employee remains exposed.");
@@ -318,8 +433,20 @@ namespace AdvancedK9.Callouts
             if(_bankScenarioStarted&&!_outcomeTaskIssued&&player.DistanceTo(Subject)<22f)
             {
                 _outcomeTaskIssued=true;
-                if(_outcome<=1)NativeFunction.Natives.TASK_HANDS_UP(Subject,120000,player,-1,true);
-                else NativeFunction.Natives.TASK_COMBAT_PED(Subject,player,0,16);
+                if(_outcome<=1)
+                {
+                    if(_hostage!=null&&_hostage.Exists()){_hostage.Tasks.ClearImmediately();NativeFunction.Natives.TASK_SMART_FLEE_PED(_hostage,Subject,40f,8000,false,false);_hostageReleased=true;}
+                    Subject.Tasks.ClearImmediately();NativeFunction.Natives.TASK_HANDS_UP(Subject,120000,player,-1,true);
+                    for(int i=0;i<_bankAccomplices.Count;i++)if(_bankAccomplices[i]!=null&&_bankAccomplices[i].Exists())NativeFunction.Natives.TASK_HANDS_UP(_bankAccomplices[i],120000,player,-1,true);
+                    Game.DisplayNotification("~g~The robber released the employee and is complying.~s~ Move in for the arrest.");
+                }
+                else
+                {
+                    if(_hostage!=null&&_hostage.Exists()){_hostage.Tasks.ClearImmediately();NativeFunction.Natives.TASK_SMART_FLEE_PED(_hostage,Subject,60f,10000,false,false);_hostageReleased=true;}
+                    Subject.Tasks.ClearImmediately();NativeFunction.Natives.TASK_COMBAT_PED(Subject,player,0,16);
+                    for(int i=0;i<_bankAccomplices.Count;i++)if(_bankAccomplices[i]!=null&&_bankAccomplices[i].Exists())NativeFunction.Natives.TASK_COMBAT_PED(_bankAccomplices[i],player,0,16);
+                    Game.DisplayNotification("~r~The hostage has broken away. Armed robbers are engaging officers.~s~");
+                }
             }
             if(SubjectIsInCustody()&&!_hostageReleased&&_hostage!=null&&_hostage.Exists())
             {
@@ -328,10 +455,16 @@ namespace AdvancedK9.Callouts
                 NativeFunction.Natives.TASK_COWER(_hostage,5000);
                 Game.DisplayNotification("~g~The bank employee is secure.~s~ Clear the callout manually after completing the scene investigation.");
             }
+            if(AllBankRobbersResolved())PublishBankOutcome("AllSuspectsResolved",_hostageReleased?"All armed suspects are resolved and the bank employee is safe.":"All armed suspects are resolved. Officers are securing the bank employee.");
+            else if(ConfirmedSubjectDeath())PublishBankOutcome("SuspectDeceased","The primary bank robber is deceased. Officers are checking the employee and searching for remaining accomplices.");
+            else if(_bankScenarioStarted&&Game.GameTime-_scenarioStartedAt>480000)PublishBankOutcome("ExtendedContainment","The bank remains under extended armed containment. Scene units will remain until manually cleared.");
         }
 
         public override void End()
         {
+            try{if(_bankPursuitStarted&&Functions.IsPursuitStillRunning(_bankPursuit))Functions.ForceEndPursuit(_bankPursuit);}catch{}
+            for(int i=0;i<_bankAccomplices.Count;i++)if(_bankAccomplices[i]!=null&&_bankAccomplices[i].Exists())_bankAccomplices[i].Dismiss();
+            _bankAccomplices.Clear();
             if(_hostage!=null&&_hostage.Exists())_hostage.Dismiss();
             if(_getawayVehicle!=null&&_getawayVehicle.Exists())_getawayVehicle.Dismiss();
             base.End();
