@@ -14,6 +14,7 @@ namespace AdvancedK9
     {
         private readonly ModConfig _config;
         private readonly PolicingRedefinedBridge _pr;
+        private readonly OperationalFrameworkAdapters _operations;
         private readonly DogCamera _camera = new DogCamera();
         private readonly GlassTacticalHud _hud = new GlassTacticalHud();
         private readonly ConcurrentQueue<K9Command> _voiceQueue = new ConcurrentQueue<K9Command>();
@@ -22,7 +23,9 @@ namespace AdvancedK9
         private K9Profile _profile;
         private readonly K9Roster _roster;
         private readonly SearchEvidenceMarkers _evidenceMarkers=new SearchEvidenceMarkers();
+        private readonly ShiftLifecycle _shift=new ShiftLifecycle();
         private readonly ContainmentPositionStore _containmentPositions=new ContainmentPositionStore();
+        private int _containmentPositionIndex;
         private VehicleSeatProfiles _seatProfiles;
         private VoiceCommandService _voice;
         private Ped _dog;
@@ -83,6 +86,8 @@ namespace AdvancedK9
         private Ped _compatibilityPursuitSuspect;
         private Vehicle _pursuitLastVehicle;
         private bool _pursuitTrackStarted;
+        private uint _pursuitLastVisualAt;
+        private bool _pursuitLostVisualTrackStarted;
         private PoolHandle _lastAutomaticPursuitHandle;
         private bool _automaticTrackRequested;
         private bool _trailLost;
@@ -118,6 +123,7 @@ namespace AdvancedK9
         private K9Command _lastPatrolCommand;
         private int _patrolCommandRepeatCount;
         private uint _lastPatrolCommandAt;
+        private readonly Dictionary<string,uint> _lastOperationalXp=new Dictionary<string,uint>(StringComparer.OrdinalIgnoreCase);
         private bool _deployed;
         private bool _downed;
         private bool _carryingDog;
@@ -155,6 +161,7 @@ namespace AdvancedK9
             Localization.SetLanguage(config.MenuLanguage);
             CommandRegistry.Configure(config.CustomCommandPhrases);
             _pr = new PolicingRedefinedBridge(config.CompatibilityMode,config.CompatibilityShareResults,config.CompatibilityUseCdfInventory,config.CompatibilityShareWithNexusMdt);
+            _operations = new OperationalFrameworkAdapters(config.CompatibilityBlr,config.CompatibilityPdComp,config.CompatibilityDamageTracker);
             _roster = new K9Roster(config.DogName);
             _profile = new K9Profile(config,_roster.ActiveId);
             _trust = new TrustProfile(config.StartingTrust,config.ShowActionNotifications,_roster.ActiveId);
@@ -177,6 +184,7 @@ namespace AdvancedK9
                 }
                 if (!_onDuty) continue;
                 _pr.TickDiagnostics();
+                _operations.Tick(Game.LocalPlayer.Character,DogEntityExists()?_dog:null);
                 _voice?.Tick();
                 _menu.Tick();
                 HandleLiveMenuEditors();
@@ -266,6 +274,7 @@ namespace AdvancedK9
         private void ActivateForDuty()
         {
             if (_voice == null) InitializeVoice();
+            _shift.Begin(_profile.Name);
             SpawnStationKennels();
             ActionNotification("~b~Advanced K9 Beta active~s~. Press ~y~"+KeyChord(_config.SpawnKey)+"~s~ to deploy "+_profile.Name+".");
         }
@@ -277,6 +286,7 @@ namespace AdvancedK9
             _voice?.StopListening();
             _voiceActive = false;
             _voiceStatus = "Off duty";
+            _shift.End(_profile.Health,_profile.Stamina,_profile.Food,_profile.Water,!_deployed||_state==K9State.Dismissed);
             if (_dog!=null&&_dog.Exists()) Dismiss(false);
             DeleteStationKennels();
             Game.LogTrivial("AdvancedK9: player is off duty; K9, UI and voice are inactive.");
@@ -320,7 +330,7 @@ namespace AdvancedK9
             new[]{K9Command.Follow,K9Command.Heel,K9Command.Sit,K9Command.LieDown,K9Command.Stay,K9Command.Recall,K9Command.WhistleRecall,K9Command.HandSignal,K9Command.Fetch,K9Command.Pet},
             new[]{K9Command.SearchArea,K9Command.SearchBuilding,K9Command.SearchVehicle,K9Command.SearchNarcotics,K9Command.SearchExplosives,K9Command.SearchWeapons,K9Command.ClearEvidenceMarkers},
             new[]{K9Command.CollectScent,K9Command.Track,K9Command.FindTrail},
-            new[]{K9Command.K9Warning,K9Command.Apprehend,K9Command.HandoffArrest,K9Command.RequestPerimeter,K9Command.HoldPerimeter,K9Command.ContainSuspect,K9Command.RequestTransport,K9Command.RequestMedical,K9Command.RequestBombSquad,K9Command.DoorPop,K9Command.Release,K9Command.Guard,K9Command.Bark},
+            new[]{K9Command.K9Warning,K9Command.Apprehend,K9Command.HandoffArrest,K9Command.RequestPerimeter,K9Command.HoldPerimeter,K9Command.ContainSuspect,K9Command.SaveContainmentPosition,K9Command.SendContainmentPosition,K9Command.NextContainmentPosition,K9Command.ClearContainmentPosition,K9Command.RequestTransport,K9Command.RequestMedical,K9Command.RequestBombSquad,K9Command.DoorPop,K9Command.Release,K9Command.Guard,K9Command.Bark},
             new[]{K9Command.EnterVehicle,K9Command.ExitVehicle,K9Command.ToggleLeash,K9Command.ToggleCamera,K9Command.Restock},
             new[]{K9Command.Feed,K9Command.Drink,K9Command.Rest,K9Command.Inspect,K9Command.FirstAid,K9Command.CarryK9,K9Command.EmergencyLoadK9,K9Command.VeterinaryTransport,K9Command.Rehabilitation,K9Command.VeterinaryCare},
             new[]{K9Command.Training,K9Command.TrainNarcotics,K9Command.TrainExplosives,K9Command.TrainWeapons}};
@@ -582,6 +592,10 @@ namespace AdvancedK9
                     case K9Command.RequestPerimeter: CompatibilityService("Perimeter"); break;
                     case K9Command.HoldPerimeter: HoldPerimeter(); break;
                     case K9Command.ContainSuspect: ContainSuspect(); break;
+                    case K9Command.SaveContainmentPosition: SaveContainmentPosition(); break;
+                    case K9Command.SendContainmentPosition: SendContainmentPosition(false); break;
+                    case K9Command.NextContainmentPosition: SendContainmentPosition(true); break;
+                    case K9Command.ClearContainmentPosition: ClearContainmentPosition(); break;
                     case K9Command.RequestTransport: CompatibilityService("Transport"); break;
                     case K9Command.RequestMedical: CompatibilityService("Medical"); break;
                     case K9Command.RequestBombSquad: CompatibilityService("BombSquad"); break;
@@ -612,6 +626,7 @@ namespace AdvancedK9
                     case K9Command.TrainWeapons: RunAcademySpecialty(DetectionSpecialty.Weapons); break;
                 }
                 TryAwardPatrolCommandXp(command);
+                _shift.Record(command);
             }
             catch (Exception ex)
             {
@@ -622,11 +637,11 @@ namespace AdvancedK9
 
         private bool RequiresTrustCheck(K9Command command)
         {
-            return command==K9Command.Follow||command==K9Command.Heel||command==K9Command.Sit||command==K9Command.LieDown||command==K9Command.Stay||command==K9Command.Recall||command==K9Command.SearchArea||command==K9Command.SearchBuilding||command==K9Command.SearchVehicle||command==K9Command.SearchNarcotics||command==K9Command.SearchExplosives||command==K9Command.SearchWeapons||command==K9Command.Track||command==K9Command.FindTrail||command==K9Command.Fetch||command==K9Command.Apprehend||command==K9Command.HoldPerimeter||command==K9Command.ContainSuspect;
+            return command==K9Command.Follow||command==K9Command.Heel||command==K9Command.Sit||command==K9Command.LieDown||command==K9Command.Stay||command==K9Command.Recall||command==K9Command.SearchArea||command==K9Command.SearchBuilding||command==K9Command.SearchVehicle||command==K9Command.SearchNarcotics||command==K9Command.SearchExplosives||command==K9Command.SearchWeapons||command==K9Command.Track||command==K9Command.FindTrail||command==K9Command.Fetch||command==K9Command.Apprehend||command==K9Command.HoldPerimeter||command==K9Command.ContainSuspect||command==K9Command.SendContainmentPosition||command==K9Command.NextContainmentPosition;
         }
 
         private static bool RequiresLeashRelease(K9Command command){return command==K9Command.Apprehend||command==K9Command.Fetch||command==K9Command.EnterVehicle||command==K9Command.CarryK9||command==K9Command.EmergencyLoadK9||command==K9Command.VeterinaryTransport||command==K9Command.VeterinaryCare;}
-        private static bool IsWorkingLeashCommand(K9Command command){return command==K9Command.SearchArea||command==K9Command.SearchBuilding||command==K9Command.SearchVehicle||command==K9Command.SearchNarcotics||command==K9Command.SearchExplosives||command==K9Command.SearchWeapons||command==K9Command.Track||command==K9Command.FindTrail||command==K9Command.HoldPerimeter||command==K9Command.ContainSuspect;}
+        private static bool IsWorkingLeashCommand(K9Command command){return command==K9Command.SearchArea||command==K9Command.SearchBuilding||command==K9Command.SearchVehicle||command==K9Command.SearchNarcotics||command==K9Command.SearchExplosives||command==K9Command.SearchWeapons||command==K9Command.Track||command==K9Command.FindTrail||command==K9Command.HoldPerimeter||command==K9Command.ContainSuspect||command==K9Command.SendContainmentPosition||command==K9Command.NextContainmentPosition;}
 
         private bool TrustAllowsCommand(K9Command command)
         {
@@ -1002,10 +1017,10 @@ namespace AdvancedK9
             if(suspect==null||!suspect.Exists()||suspect.IsDead)
             {
                 if(_compatibilityPursuitSuspect!=null){if(_scentTarget==_compatibilityPursuitSuspect){_scentTarget=null;_activeScentSample=null;_activeScentSource="None";_trailLost=false;}if(DogExists()&&(_state==K9State.Tracking||_state==K9State.Containing||_state==K9State.Apprehending))Follow();Game.LogTrivial("AdvancedK9 pursuit cleanup: pursuit ended or subject unavailable; track, containment and target references cleared.");}
-                _compatibilityPursuitSuspect=null;_pursuitLastVehicle=null;_pursuitTrackStarted=false;_automaticTrackRequested=false;return;
+                _compatibilityPursuitSuspect=null;_pursuitLastVehicle=null;_pursuitTrackStarted=false;_pursuitLostVisualTrackStarted=false;_pursuitLastVisualAt=0;_automaticTrackRequested=false;return;
             }
-            if(_pr.IsProtectedPed(suspect)){if(_scentTarget==suspect){_scentTarget=null;_activeScentSample=null;}_compatibilityPursuitSuspect=null;_pursuitLastVehicle=null;_pursuitTrackStarted=false;if(DogExists())Follow();Game.LogTrivial("AdvancedK9 pursuit cleanup: suspect arrested/restrained; K9 recalled.");return;}
-            if(_compatibilityPursuitSuspect!=suspect){_compatibilityPursuitSuspect=suspect;_pursuitLastVehicle=suspect.CurrentVehicle;_pursuitTrackStarted=false;Game.LogTrivial("AdvancedK9 pursuit integration: suspect assigned without requiring a PR/STP stop.");}
+            if(IsProtectedOperationalPed(suspect)){if(_scentTarget==suspect){_scentTarget=null;_activeScentSample=null;}_compatibilityPursuitSuspect=null;_pursuitLastVehicle=null;_pursuitTrackStarted=false;_pursuitLostVisualTrackStarted=false;if(DogExists())Follow();Game.LogTrivial("AdvancedK9 pursuit cleanup: suspect arrested/restrained; K9 recalled.");return;}
+            if(_compatibilityPursuitSuspect!=suspect){_compatibilityPursuitSuspect=suspect;_pursuitLastVehicle=suspect.CurrentVehicle;_pursuitTrackStarted=false;_pursuitLostVisualTrackStarted=false;_pursuitLastVisualAt=Game.GameTime;Game.LogTrivial("AdvancedK9 pursuit integration: suspect assigned without requiring a PR/STP stop.");}
             var current=suspect.CurrentVehicle;
             if(current!=null&&current.Exists()){if(_pursuitLastVehicle!=null&&_pursuitLastVehicle.Exists()&&_pursuitLastVehicle.Handle!=current.Handle)Game.LogTrivial("AdvancedK9 pursuit cleanup: suspect changed vehicles; stale vehicle scent reference replaced.");_pursuitLastVehicle=current;}
             else if(_pursuitLastVehicle!=null&&_pursuitLastVehicle.Exists()&&_scentTarget!=suspect)
@@ -1019,6 +1034,17 @@ namespace AdvancedK9
                     Game.DisplayNotification("~o~Automatic pursuit deployment:~s~ "+_profile.Name+" is taking the bailout trail.");
                     GameFiber.StartNew(StartAutomaticPursuitTrack,"AdvancedK9 automatic pursuit track");
                 }
+            }
+            bool hasVisual=false;try{hasVisual=NativeFunction.Natives.HAS_ENTITY_CLEAR_LOS_TO_ENTITY<bool>(Game.LocalPlayer.Character,suspect,17);}catch{}
+            if(hasVisual){_pursuitLastVisualAt=Game.GameTime;_pursuitLostVisualTrackStarted=false;}
+            else if(_config.PursuitAutoTrackLostVisual&&current==null&&DogExists()&&!_downed&&!_pursuitLostVisualTrackStarted&&_pursuitLastVisualAt>0&&Game.GameTime-_pursuitLastVisualAt>=(uint)(_config.PursuitLostVisualSeconds*1000))
+            {
+                bool hidden=false;try{hidden=NativeFunction.Natives.IS_PED_IN_COVER<bool>(suspect,false)||NativeFunction.Natives.IS_PED_STEALTH_MOVEMENT<bool>(suspect);}catch{}
+                _pursuitLostVisualTrackStarted=true;_scentTarget=suspect;_scentCollectedAt=_pursuitLastVisualAt;_scentRainAtCollection=NativeFunction.Natives.GET_RAIN_LEVEL<float>();
+                _activeScentSample=NewScentSample(ScentArticleType.LastKnownLocationPad,hidden?"hidden pursuit suspect":"lost-visual pursuit","last confirmed visual position");_activeScentSource=hidden?"Hidden pursuit subject":"Pursuit lost visual";_trailLost=false;
+                Game.DisplayNotification("~o~K9 PURSUIT LOST VISUAL~s~~n~"+(hidden?"Hidden-subject behavior detected. ":"")+"Last-known scent assigned; "+_profile.Name+" is beginning a recorded trail.");
+                K9IncidentLog.Write(_profile.Name,"Pursuit scent",hidden?"Hidden suspect track assigned":"Lost-visual track assigned",suspect.Position);
+                GameFiber.StartNew(StartAutomaticPursuitTrack,"AdvancedK9 lost-visual pursuit track");
             }
         }
         private Ped CurrentPursuitSuspect(){var handler=Game.LocalPlayer.Character;return (_config.CompatibilityUseActiveTargets?_pr.GetPursuitSuspect(handler):null)??LspdfrBridge.GetPursuitSuspect(handler);}
@@ -1129,7 +1155,7 @@ namespace AdvancedK9
                 Game.DisplayNotification("~y~No nearby pedestrian or vehicle to search.");
                 return;
             }
-            if(_explosiveSearchLockouts.Contains(target.Handle)){Game.DisplayNotification("~r~Explosive safety lockout active.~s~~n~Do not redeploy the K9 near the marked device. Maintain the perimeter and request bomb squad.");return;}
+            if(_config.ExplosiveSearchLockout&&_explosiveSearchLockouts.Contains(target.Handle)){Game.DisplayNotification("~r~Explosive safety lockout active.~s~~n~Do not redeploy the K9 near the marked device. Maintain the perimeter and request bomb squad.");return;}
             _lastSearchAlertPosition=target.Position;_lastSearchAlertZone=target is Vehicle?"vehicle exterior":"subject / search center";
             _state = K9State.Searching;
             _hudSearchLabel=target is Vehicle?"VEHICLE SEARCH":"AREA SEARCH";
@@ -1157,6 +1183,7 @@ namespace AdvancedK9
             if(compatibility!=null&&compatibility.Inconclusive){SetHudAlert("INCONCLUSIVE — INVENTORY UNAVAILABLE");Sit();_hudSearchProgress=100;_hudSearchLabel="";Game.LogTrivial("AdvancedK9 search result: inconclusive on "+TargetLabel(target)+"; no positive or negative K9 indication was recorded.");return;}
             var positive=compatibility!=null?compatibility.Positive:(_pr.IsAvailable?false:_random.NextDouble()<_config.PositiveChance);
             var resultSpecialty=compatibility!=null&&compatibility.Specialty!=DetectionSpecialty.General?compatibility.Specialty:positive&&specialty==DetectionSpecialty.General?CertifiedGeneralSearchSpecialty():specialty;
+            var presentedOdors=compatibility!=null&&compatibility.Odors.Count>0?compatibility.Odors.Distinct().ToList():positive&&resultSpecialty!=DetectionSpecialty.General?new List<DetectionSpecialty>{resultSpecialty}:new List<DetectionSpecialty>();
             if (positive && _random.NextDouble() > _trust.DetectionReliability)
             {
                 Game.DisplayNotification("~o~Uncertain K9 response.~s~ Build trust and repeat the search.");
@@ -1165,19 +1192,32 @@ namespace AdvancedK9
             }
             if (positive)
             {
-                SetHudAlert(SpecialtyLabel(resultSpecialty).ToUpperInvariant());
+                string odorPresentation=string.Join(" + ",presentedOdors.Select(s=>SpecialtyLabel(s).ToUpperInvariant()));
+                SetHudAlert(odorPresentation);
                 Sit();
-                if(resultSpecialty==DetectionSpecialty.Explosives)
+                bool explosivePresent=presentedOdors.Contains(DetectionSpecialty.Explosives);
+                if(explosivePresent)
                 {
-                    _explosiveSearchLockouts.Add(target.Handle);_dog.Tasks.Clear();NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(_dog,Game.LocalPlayer.Character,-.8f,-1.2f,0f,2.4f,-1,1f,true);GameFiber.Wait(1200);Sit();
-                    Game.DisplayNotification("~r~EXPLOSIVE ODOR — SILENT ALERT.~s~~n~K9 recalled to safety. Evidence marked; establish a perimeter and request bomb squad. Search lockout enabled.");
+                    if(_config.ExplosiveSearchLockout)_explosiveSearchLockouts.Add(target.Handle);
+                    _dog.Tasks.Clear();
+                    if(_config.ExplosiveAutoRecall){NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(_dog,Game.LocalPlayer.Character,-.8f,-_config.ExplosiveSafetyDistance,0f,3.2f,-1,1f,true);GameFiber.Wait(1600);}
+                    Sit();
+                    Game.DisplayNotification("~r~MULTI-ODOR ALERT — EXPLOSIVE SAFETY.~s~~n~Detected: "+odorPresentation+"~n~"+(_config.ExplosiveAutoRecall?"K9 recalled "+_config.ExplosiveSafetyDistance.ToString("0")+"m silently. ":"Silent indication held. ")+(_config.ExplosiveSearchLockout?"Search lockout enabled. ":"")+" Establish a perimeter and request bomb squad.");
                 }
-                else Bark(3);
+                else
+                {
+                    Bark(3);
+                    Game.DisplayNotification("~r~K9 POSITIVE ALERT~s~~n~Detected trained odors: "+odorPresentation);
+                }
                 _trust.Change(1, "successful detection");
                 _profile.RecordSearch();
-                _pr.RecordK9Indication(target,true,resultSpecialty,_profile.Name);
-                _evidenceMarkers.Add(_profile.Name,TargetLabel(target),SpecialtyLabel(resultSpecialty),_lastSearchAlertZone,_lastSearchAlertPosition);
-                Game.LogTrivial("AdvancedK9 search result: positive "+SpecialtyLabel(resultSpecialty)+" indication on "+TargetLabel(target)+" at "+_lastSearchAlertZone+"; "+(resultSpecialty==DetectionSpecialty.Explosives?"silent recall and lockout":"three-bark alert")+" authorized.");
+                AwardOperationalXp("Certified odor detection",8,20,1,3);
+                foreach(var detectedOdor in presentedOdors)
+                {
+                    _pr.RecordK9Indication(target,true,detectedOdor,_profile.Name);
+                    _evidenceMarkers.Add(_profile.Name,TargetLabel(target),SpecialtyLabel(detectedOdor),_lastSearchAlertZone,_lastSearchAlertPosition);
+                }
+                Game.LogTrivial("AdvancedK9 search result: simultaneous positive indications ["+string.Join(",",presentedOdors)+"] on "+TargetLabel(target)+" at "+_lastSearchAlertZone+"; "+(explosivePresent?"silent recall and lockout":"three-bark alert")+" authorized.");
             }
             else
             {
@@ -1250,7 +1290,7 @@ namespace AdvancedK9
         }
         private void CompleteBuildingAlert(Ped target)
         {
-            _dog.Tasks.Clear();Bark(2);Sit();_pr.RecordLocatedSuspect(target);K9IncidentLog.Write(_profile.Name,"Building search","Visible subject located; alert and hold",target.Position);K9DeploymentReport.Write("Player",_profile.Name,"Building search","Handler-led dynamic structure clearance","None",false,0f,0,0,"Located","None","Alert bark and hold",target.Position);Game.DisplayNotification("~g~Building search: subject located.~s~~n~K9 is sitting and holding; Apprehend requires a separate aimed command.");
+            _dog.Tasks.Clear();Bark(2);Sit();AwardOperationalXp("Building subject locate",8,18,1,2);_pr.RecordLocatedSuspect(target);K9IncidentLog.Write(_profile.Name,"Building search","Visible subject located; alert and hold",target.Position);K9DeploymentReport.Write("Player",_profile.Name,"Building search","Handler-led dynamic structure clearance","None",false,0f,0,0,"Located","None","Alert bark and hold",target.Position);Game.DisplayNotification("~g~Building search: subject located.~s~~n~K9 is sitting and holding; Apprehend requires a separate aimed command.");
         }
 
         private void K9Warning()
@@ -1266,9 +1306,11 @@ namespace AdvancedK9
             K9IncidentLog.Write(_profile.Name,"K9 warning",outcome,target.Position);
         }
 
+        private bool IsProtectedOperationalPed(Ped ped)=>_pr.IsProtectedPed(ped)||_operations.IsProtected(ped);
+
         private Ped CompatibilitySubject()
         {
-            var handler=Game.LocalPlayer.Character;return GetValidAimedSuspect(false)??(_config.CompatibilityUseActiveTargets?_pr.GetActivePed(handler,250f):null)??CurrentPursuitSuspect()??(_scentTarget!=null&&_scentTarget.Exists()?_scentTarget:null);
+            var handler=Game.LocalPlayer.Character;return GetValidAimedSuspect(false)??(_config.CompatibilityUseActiveTargets?_pr.GetActivePed(handler,250f)??_operations.GetActivePed():null)??CurrentPursuitSuspect()??(_scentTarget!=null&&_scentTarget.Exists()?_scentTarget:null);
         }
         private void CompatibilityArrestHandoff()
         {
@@ -1295,16 +1337,54 @@ namespace AdvancedK9
             if(!DogExists())return;
             var target=CompatibilitySubject();
             if(target==null||!target.Exists()||target.IsDead){Game.DisplayNotification("~y~No valid suspect identified for containment.~s~~n~Aim at the suspect or use the active pursuit target.");return;}
-            if(_pr.IsProtectedPed(target)){Game.DisplayNotification("~y~That suspect is already restrained or surrendering.~s~ K9 containment is unnecessary.");return;}
+            if(IsProtectedOperationalPed(target)){Game.DisplayNotification("~y~That suspect is already restrained or surrendering.~s~ K9 containment is unnecessary.");return;}
             _containTarget=target;_perimeterCenter=target.Position;_perimeterRadius=_leashRope>=0?4f:5f;_perimeterPoint=0;_nextPerimeterMove=0;_state=K9State.Containing;
             Game.DisplayNotification("~o~K9 containment active.~s~~n~"+_profile.Name+" will block and alert without biting. APPREHEND remains a separate aimed command.");
             K9IncidentLog.Write(_profile.Name,"Containment","Suspect containment started",target.Position);
         }
 
+        private void SaveContainmentPosition()
+        {
+            if(!DogExists())return;
+            Vector3 position=Game.LocalPlayer.Character.Position;float radius=_leashRope>=0?5.5f:8f;
+            var saved=_containmentPositions.SaveOrUpdate(position,radius);
+            _containmentPositionIndex=Math.Max(0,_containmentPositions.Positions.ToList().IndexOf(saved));
+            Game.DisplayNotification("~g~Containment position saved.~s~~n~"+saved.Name+" • "+radius.ToString("0.0")+"m ring. Up to 24 positions persist between shifts.");
+            K9IncidentLog.Write(_profile.Name,"Containment","Saved "+saved.Name,position);
+        }
+
+        private void SendContainmentPosition(bool advance)
+        {
+            if(!DogExists())return;
+            var positions=_containmentPositions.Positions;
+            if(positions.Count==0){Game.DisplayNotification("~y~No saved containment positions.~s~~n~Stand at a perimeter point and use Save Containment Position.");return;}
+            if(advance)_containmentPositionIndex=(_containmentPositionIndex+1)%positions.Count;
+            else
+            {
+                var nearest=_containmentPositions.Nearest(Game.LocalPlayer.Character.Position,250f);
+                int nearestIndex=nearest==null?-1:positions.ToList().IndexOf(nearest);
+                if(nearestIndex>=0)_containmentPositionIndex=nearestIndex;
+                else if(_containmentPositionIndex>=positions.Count)_containmentPositionIndex=0;
+            }
+            var saved=positions[_containmentPositionIndex];
+            _containTarget=null;_perimeterCenter=saved.Position;_perimeterRadius=saved.Radius;_perimeterPoint=0;_nextPerimeterMove=0;_state=K9State.Containing;
+            Game.DisplayNotification("~b~K9 sent to "+saved.Name+".~s~~n~Position "+(_containmentPositionIndex+1)+"/"+positions.Count+" • "+saved.Radius.ToString("0.0")+"m ring"+(_leashRope>=0?" • working leash retained":""));
+            K9IncidentLog.Write(_profile.Name,"Containment","Deployed to saved "+saved.Name,saved.Position);
+        }
+
+        private void ClearContainmentPosition()
+        {
+            Vector3 position=Game.LocalPlayer.Character.Position;
+            if(!_containmentPositions.RemoveNearest(position,25f)){Game.DisplayNotification("~y~No saved containment position within 25 meters.");return;}
+            if(_containmentPositionIndex>=_containmentPositions.Positions.Count)_containmentPositionIndex=0;
+            Game.DisplayNotification("~g~Nearest saved containment position removed.");
+            K9IncidentLog.Write(_profile.Name,"Containment","Nearest saved position removed",position);
+        }
+
         private void MaintainContainment()
         {
             if(_state!=K9State.Containing||!DogExists())return;
-            if(_containTarget!=null&&(!_containTarget.Exists()||_containTarget.IsDead||_pr.IsProtectedPed(_containTarget))){Sit();_containTarget=null;Game.DisplayNotification("~g~K9 containment complete.~s~ Suspect is no longer an active threat.");return;}
+            if(_containTarget!=null&&(!_containTarget.Exists()||_containTarget.IsDead||IsProtectedOperationalPed(_containTarget))){Sit();_containTarget=null;Game.DisplayNotification("~g~K9 containment complete.~s~ Suspect is no longer an active threat.");return;}
             if(_containTarget!=null)_perimeterCenter=_containTarget.Position;
             if(Game.GameTime<_nextPerimeterMove)return;
             _nextPerimeterMove=Game.GameTime+3500;
@@ -1384,6 +1464,7 @@ namespace AdvancedK9
                     Game.DisplayNotification("~g~Track complete — person located.~s~~n~K9 is sitting and holding. Aim at the suspect and command APPREHEND only if deployment is required.");K9IncidentLog.Write(_profile.Name,"Track","Subject located; alert bark and hold only",target.Position);
                     _pr.RecordLocatedSuspect(target);
                     _trust.Change(2, "successful track");
+                    AwardOperationalXp("Completed scent track",12,25,1,3);
                     int seconds=(int)((Game.GameTime-_activeTrackStarted)/1000);K9DeploymentReport.Write("Player",_profile.Name,"Track","Locate person",_activeScentSource,_warningGiven,_activeTrackDistance,seconds,0,"Located","None","Alert bark and hold",target.Position);
                     return;
                 }
@@ -1529,7 +1610,7 @@ namespace AdvancedK9
             _voiceAimedTarget=null;
             if(target==null){Game.DisplayNotification("~y~No valid target identified.~s~~n~Aim your taser or firearm directly at a non-officer, then issue APPREHEND. No ped stop is required.");return;}
             if(_warnedTarget==target&&_warningSurrendered){Game.DisplayNotification("~r~K9 safety interlock: the warned suspect surrendered.~s~~n~Move in for arrest; apprehension was not deployed.");return;}
-            if(_config.CompatibilityProtectManagedPeds&&_pr.IsProtectedPed(target)){Game.DisplayNotification("~r~K9 safety interlock: restrained or surrendered suspect rejected.~s~~n~PR/STP stop status is not required for deployment, but protected peds cannot be bitten.");return;}
+            if(_config.CompatibilityProtectManagedPeds&&IsProtectedOperationalPed(target)){Game.DisplayNotification("~r~K9 safety interlock: restrained or surrendered suspect rejected.~s~~n~PR/STP stop status is not required for deployment, but protected peds cannot be bitten.");return;}
             if(_state==K9State.InVehicle)DoorPop(false);
             _state = K9State.Apprehending;
             _dog.Tasks.Clear();
@@ -1547,6 +1628,7 @@ namespace AdvancedK9
                     Game.DisplayNotification("~g~Suspect neutralized without lethal force.~s~ Move in for arrest.");
                     _pr.RecordApprehension(target);
                     _trust.Change(1, "controlled apprehension");
+                    AwardOperationalXp("Controlled apprehension",15,30,1,3);
                     int biteSeconds=(int)((Game.GameTime-_biteStarted)/1000);K9DeploymentReport.Write("Player",_profile.Name,"Apprehension",reaction,_activeScentSource,_warningGiven,_activeTrackDistance,_activeTrackStarted==0?0:(int)((Game.GameTime-_activeTrackStarted)/1000),biteSeconds,"Controlled surrender",_profile.Injury,"Suspect ready for PR/STP arrest",target.Position);
                     Follow();
                     return;
@@ -1758,6 +1840,19 @@ namespace AdvancedK9
             NativeFunction.Natives.SET_PED_CONFIG_FLAG(_dog,294,true);
             NativeFunction.Natives.SET_PED_CAN_PLAY_GESTURE_ANIMS(_dog,false);
             Game.LogTrivial("AdvancedK9 gunfire immunity configured: permanent events blocked, aimed-group response blocked, shocking events disabled, human gesture animations disabled.");
+        }
+
+        private void AwardOperationalXp(string activity,int minimumXp,int maximumXp,int minimumConfidence,int maximumConfidence)
+        {
+            uint previous;uint now=Game.GameTime;
+            if(_lastOperationalXp.TryGetValue(activity,out previous)&&now-previous<60000){Game.LogTrivial("AdvancedK9 operational XP duplicate suppressed: "+activity+".");return;}
+            _lastOperationalXp[activity]=now;
+            int xp=_random.Next(Math.Max(0,minimumXp),Math.Max(minimumXp,maximumXp)+1),confidence=_random.Next(Math.Max(0,minimumConfidence),Math.Max(minimumConfidence,maximumConfidence)+1);
+            int priorLevel=_profile.TrainingLevel,priorProgress=_profile.TrainingLevelProgress,priorConfidence=_profile.Confidence;
+            bool completed=_profile.ApplyPatrolProgress(xp,confidence);
+            int gained=Math.Max(0,_profile.Confidence-priorConfidence);
+            Game.DisplayNotification("~b~OPERATIONAL K9 XP~s~~n~"+activity+": ~g~+"+xp+" XP~s~ • Confidence ~g~+"+gained+"~s~~n~Level "+priorLevel+" • "+priorProgress+" → "+_profile.TrainingLevelProgress+" / "+_profile.CurrentTrainingRequirement);
+            Game.LogTrivial("AdvancedK9 operational XP: activity="+activity+", xp="+xp+", confidence="+gained+", completed="+completed+".");
         }
 
         private void TryAwardPatrolCommandXp(K9Command command)
