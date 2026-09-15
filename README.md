@@ -1,6 +1,6 @@
-# Advanced K9 v0.23.2-beta for LSPDFR
+# Advanced K9 v0.23.3-beta for LSPDFR
 
-AdvancedK9 v0.23.2-beta is a persistent LSPDFR/RAGE Plugin Hook police-dog partner with push-to-talk voice control, per-dog progression, user-positioned exterior station kennels and a compact Glass Tactical HUD with silent negative vehicle searches and attached result alerts. All published builds are beta builds while gameplay and model compatibility continue to be tested.
+AdvancedK9 v0.23.3-beta is a persistent LSPDFR/RAGE Plugin Hook police-dog partner with push-to-talk voice control, per-dog progression, user-positioned exterior station kennels and a compact Glass Tactical HUD. This core release contains no AdvancedK9 callout expansion or callout menu. All published builds remain beta builds while gameplay and model compatibility continue to be tested.
 
 ## Glass Tactical HUD
 
@@ -14,10 +14,16 @@ AdvancedK9 runs as an RPH plugin and starts its controller directly. It avoids a
 
 Use the compiled release ZIP, not the source ZIP. Close GTA V, then drag everything in the ZIP into the folder containing `GTA5.exe`; this installs `LemonUI.RagePluginHook.dll` in the GTA V root and merges the `Plugins` folder. In RAGE Plugin Hook settings, enable **Load all plugins on startup**. Start Story Mode, load LSPDFR, and go on duty.
 
-The compiled release includes AdvancedK9, its configuration, and the MIT-licensed LemonUI RAGE Plugin Hook runtime. It does not redistribute NAudio support assemblies, Microsoft.Win32.Registry, System.Security assemblies, ScriptHookV, GTA V, RAGE Plugin Hook, LSPDFR, Policing Redefined, Common Data Framework, or third-party dog models.
+The compiled release includes AdvancedK9, its configuration, the MIT-licensed LemonUI RAGE Plugin Hook runtime, and the required NAudio voice runtime assemblies. It does not redistribute Microsoft.Win32.Registry, System.Security assemblies, ScriptHookV, GTA V, RAGE Plugin Hook, LSPDFR, Policing Redefined, Common Data Framework, NexusMDT, NPCI, Stop The Ped, or third-party dog models.
 
 ## Features
 
+- Simultaneous certified narcotics, weapons and explosives odor presentation in one completed K9 alert
+- Persistent Front, Rear, Left, Right, Cover and Custom containment positions with voice-command support
+- Optional, isolated BLR, PD Comp and Damage Tracker compatibility adapters controlled through configuration
+- Guided on-duty/off-duty K9 shift lifecycle with saved operational summaries and incident reporting
+- Operational XP rewards for meaningful searches, tracks, apprehensions, containment and safety outcomes
+- Lost-visual pursuit recovery and configurable explosive-search safety controls
 - Persistent kennel roster for up to eight K9 partners, each with separate appearance, certifications, health, rehabilitation, care, trust, confidence, training, equipment, statistics, status, and kennel assignment
 - Exact positive-alert evidence markers with named search zones, world coordinates, and persistent CSV records
 - Vehicle-model-aware search routes built from real door, wheel, bumper, trunk, cargo, and seat-area bones with motorcycle, standard, utility, and long-body fallbacks
@@ -297,3 +303,17 @@ Vehicle searches visit all four exterior corners before the result is determined
 - `K9Profile.cs` — persistent breed, coat, vest and name profile
 - `DogCamera.cs` — scripted K9 camera
 - `AcademySession.cs` — guided training evaluation
+
+
+## Ownership and permitted use
+
+AdvancedK9 is owned and authored by **mtennekten**. It is provided for personal,
+non-commercial gameplay only. Do not redistribute, alter, mirror, rehost, bundle,
+sell, or upload the mod or any part of it elsewhere without mtennekten's express
+prior written permission. Linking to the official release page is permitted.
+
+Users may edit their personal `AdvancedK9.ini` and normal runtime-generated
+profile/configuration data. Third-party software, trademarks, models, textures,
+and other assets remain the property of their respective owners.
+
+See `LICENSE` and `THIRD_PARTY_NOTICES.md` for the complete terms and notices.
