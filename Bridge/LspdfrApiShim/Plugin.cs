@@ -14,7 +14,14 @@ namespace LSPD_First_Response.Mod.API
     {
         public static void RegisterCallout(Type calloutType){}
         public static void PlayScannerAudioUsingPosition(string audio,Vector3 position){}
+        public static LHandle CreatePursuit(){return new LHandle();}
+        public static void AddPedToPursuit(LHandle pursuit,Ped ped){}
+        public static void SetPursuitIsActiveForPlayer(LHandle pursuit,bool active){}
+        public static bool IsPursuitStillRunning(LHandle pursuit){return false;}
+        public static void ForceEndPursuit(LHandle pursuit){}
     }
+
+    public struct LHandle { }
 }
 
 namespace LSPD_First_Response.Mod.Callouts
