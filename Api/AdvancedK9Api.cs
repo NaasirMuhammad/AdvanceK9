@@ -57,6 +57,8 @@ namespace AdvancedK9.API
         public static readonly string RequestPath=Path.Combine(DirectoryPath,"AdvancedK9Api.request");
         public static readonly string ResultPath=Path.Combine(DirectoryPath,"AdvancedK9Api.result");
         public static readonly string CalloutRequestPath=Path.Combine(DirectoryPath,"AdvancedK9Callout.request");
+        public static readonly string FugitiveCalibrationPath=Path.Combine(DirectoryPath,"FugitiveSceneCalibration.request");
+        public static readonly string FugitiveFullTestPath=Path.Combine(DirectoryPath,"FugitiveSceneFullTest.request");
 
         public static bool TryGetSnapshot(out K9ApiSnapshot snapshot)
         {
@@ -103,6 +105,48 @@ namespace AdvancedK9.API
         public static void RequestCallout(string calloutName)
         {
             WriteValues(CalloutRequestPath,new[]{Pair("RequestedUtcTicks",DateTime.UtcNow.Ticks),Pair("CalloutName",calloutName??"")});
+        }
+
+        public static void RequestFugitiveSceneCalibration(int sceneIndex)
+        {
+            try{if(File.Exists(FugitiveFullTestPath))File.Delete(FugitiveFullTestPath);}catch{}
+            WriteValues(FugitiveCalibrationPath,new[]{Pair("RequestedUtcTicks",DateTime.UtcNow.Ticks),Pair("SceneIndex",sceneIndex)});
+        }
+
+        public static bool TryTakeFugitiveSceneCalibration(out int sceneIndex)
+        {
+            sceneIndex=-1;
+            try
+            {
+                if(!File.Exists(FugitiveCalibrationPath))return false;
+                var values=ReadValues(FugitiveCalibrationPath);
+                File.Delete(FugitiveCalibrationPath);
+                long requested=ReadLong(values,"RequestedUtcTicks");
+                sceneIndex=ReadInt(values,"SceneIndex");
+                return requested>0&&DateTime.UtcNow.Ticks-requested<TimeSpan.FromMinutes(2).Ticks;
+            }
+            catch{return false;}
+        }
+
+        public static void RequestFugitiveSceneFullTest(int sceneIndex)
+        {
+            try{if(File.Exists(FugitiveCalibrationPath))File.Delete(FugitiveCalibrationPath);}catch{}
+            WriteValues(FugitiveFullTestPath,new[]{Pair("RequestedUtcTicks",DateTime.UtcNow.Ticks),Pair("SceneIndex",sceneIndex)});
+        }
+
+        public static bool TryTakeFugitiveSceneFullTest(out int sceneIndex)
+        {
+            sceneIndex=-1;
+            try
+            {
+                if(!File.Exists(FugitiveFullTestPath))return false;
+                var values=ReadValues(FugitiveFullTestPath);
+                File.Delete(FugitiveFullTestPath);
+                long requested=ReadLong(values,"RequestedUtcTicks");
+                sceneIndex=ReadInt(values,"SceneIndex");
+                return requested>0&&DateTime.UtcNow.Ticks-requested<TimeSpan.FromMinutes(2).Ticks;
+            }
+            catch{return false;}
         }
 
         public static bool TryTakeCalloutRequest(out string calloutName)
@@ -199,5 +243,6 @@ namespace AdvancedK9.API
                 AdvancedK9Api.Pair("Detail",detail??"")
             });
         }
+
     }
 }
