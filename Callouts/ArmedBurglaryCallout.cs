@@ -12,8 +12,6 @@ namespace AdvancedK9.Callouts
         private int _outcome;
         private bool _sceneBriefed;
         private bool _suspectLocated;
-        private bool _transportStarted;
-        private uint _custodyReadyAt;
         private uint _locatedAt;
         private uint _nextContainmentUpdate;
         private Vector3 _hidePosition;
@@ -511,16 +509,11 @@ namespace AdvancedK9.Callouts
                 if((injured||MedicalResponseStarted)&&!MedicalResponseComplete){ProcessPostApprehensionMedical("");}
                 else if(ConfirmedSubjectDeath())PublishBankOutcome("SuspectDeceased","Primary suspect is deceased. Hold the bank perimeter for investigation and coroner response.");
                 else if(SeriousMedicalTransport&&MedicalResponseComplete)PublishBankOutcome("MedicalTransport","EMS assumed hospital transport under police custody. Bank personnel remain on scene for investigation.");
-                else if(custodyLease&&CustodyOwnerStable&&(!MedicalResponseStarted||MedicalResponseComplete)&&!_transportStarted)
+                else if(custodyLease&&CustodyOwnerStable&&(!MedicalResponseStarted||MedicalResponseComplete)&&!_bankCustodyNotice)
                 {
-                    if(_custodyReadyAt==0)_custodyReadyAt=Game.GameTime;
-                    if(Game.GameTime-_custodyReadyAt>=1500)
-                    {
-                        _transportStarted=RequestCustodyOwnerTransport();
-                        Game.DisplayNotification("~b~Dispatch:~s~ "+CustodyOwner+" custody is stable and medically cleared. The owning provider has been asked for transport.");
-                    }
+                    _bankCustodyNotice=true;
+                    Game.DisplayNotification("~b~Custody stable:~s~ Request prisoner transport manually when ready. Bank personnel and perimeter units remain until you clear the callout.");
                 }
-                else if(_transportStarted&&ProviderTransportLoaded())PublishBankOutcome("PrisonerTransport","Provider custody and prisoner transport are confirmed. Complete the bank-scene investigation before clearing.");
                 else if(AllBankRobbersResolved())PublishBankOutcome("AllSuspectsResolved","All known bank-robbery suspects are secured or otherwise resolved.");
                 else if(Game.GameTime-_locatedAt>300000)PublishBankOutcome("ExtendedScene","The armed-suspect scene remains active after an extended containment period.");
             }
