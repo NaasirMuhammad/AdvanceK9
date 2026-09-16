@@ -879,7 +879,7 @@ namespace AdvancedK9.Callouts
             ReleaseSupportForCustody();
         }
 
-        protected void ReleaseSupportForCustody()
+        protected virtual void ReleaseSupportForCustody()
         {
             if(_supportCustodyGuardAssigned)return;
             _supportCustodyGuardAssigned=true;_supportTrackingEnded=true;_backupInvestigationActive=false;
@@ -929,9 +929,27 @@ namespace AdvancedK9.Callouts
                     if(Finished||!arrestOfficer.Exists()||!suspect.Exists()||PedIsRestrained(suspect))return;
                     NativeFunction.Natives.TASK_ARREST_PED(arrestOfficer,suspect);
                     NativeFunction.Natives.SET_PED_KEEP_TASK(arrestOfficer,true);
-                    var setArrested=typeof(Functions).GetMethod("SetPedAsArrested",System.Reflection.BindingFlags.Public|System.Reflection.BindingFlags.Static,null,new[]{typeof(Ped),typeof(bool)},null);
-                    if(setArrested!=null)setArrested.Invoke(null,new object[]{suspect,true});
-                    Game.LogTrivial("AdvancedK9 Callouts: scene officer started the native LSPDFR arrest handoff while the cover officer maintained containment.");
+                    // Do not flag the ped arrested on the same frame as TASK_ARREST_PED.
+                    // LSPDFR otherwise skips the visible cuffing task and can attach the
+                    // prisoner to the player instead of the arresting scene officer.
+                    uint cuffDeadline=Game.GameTime+12000;
+                    while(!Finished&&arrestOfficer.Exists()&&suspect.Exists()&&!PedIsRestrained(suspect)&&Game.GameTime<cuffDeadline)GameFiber.Wait(200);
+                    bool visiblyRestrained=PedIsRestrained(suspect);
+                    if(!visiblyRestrained&&arrestOfficer.Exists()&&suspect.Exists())
+                    {
+                        NativeFunction.Natives.TASK_ARREST_PED(arrestOfficer,suspect);
+                        uint retryDeadline=Game.GameTime+7000;
+                        while(!Finished&&suspect.Exists()&&!PedIsRestrained(suspect)&&Game.GameTime<retryDeadline)GameFiber.Wait(200);
+                        visiblyRestrained=PedIsRestrained(suspect);
+                    }
+                    if(visiblyRestrained&&suspect.Exists())
+                    {
+                        NativeFunction.Natives.TASK_STAND_STILL(suspect,-1);
+                        if(arrestOfficer.Exists())NativeFunction.Natives.TASK_GUARD_CURRENT_POSITION(arrestOfficer,8f,8f,true);
+                        if(lethalCover!=null&&lethalCover.Exists())NativeFunction.Natives.TASK_AIM_GUN_AT_ENTITY(lethalCover,suspect,-1,false);
+                        if(suspect==Subject)ReleaseSupportForCustody();
+                    }
+                    Game.LogTrivial("AdvancedK9 Callouts: scene officer native arrest sequence completed; visibleRestraint="+visiblyRestrained+". Prisoner follow-to-player behavior was not assigned.");
                 }
                 catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: native LSPDFR officer arrest contained: "+ex.Message);}
             },"AdvancedK9 native LSPDFR officer arrest");
