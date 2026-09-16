@@ -13,10 +13,22 @@ namespace AdvancedK9.Callouts
         private bool _subjectLocated;
         private Vector3 _plannedSubjectPosition;
 
-        private Vector3 NearestPedestrianScene()
+        private Vector3 NearestWildernessScene()
         {
-            Vector3[] scenes={new Vector3(215f,-920f,30f),new Vector3(1080f,-690f,57f),new Vector3(-1250f,-1500f,4f),new Vector3(116f,-1942f,20f),new Vector3(-1500f,-790f,10f),new Vector3(1850f,3700f,34f),new Vector3(1700f,4800f,42f),new Vector3(-105f,6465f,31f),new Vector3(-3150f,1100f,20f)};
-            Vector3[] subjects={new Vector3(320f,-950f,29f),new Vector3(1170f,-760f,57f),new Vector3(-1360f,-1560f,4f),new Vector3(210f,-2020f,18f),new Vector3(-1580f,-900f,10f),new Vector3(1960f,3770f,32f),new Vector3(1810f,4890f,42f),new Vector3(-210f,6515f,29f),new Vector3(-3230f,1190f,20f)};
+            Vector3[] scenes={
+                new Vector3(-741.49f,5594.84f,41.65f),
+                new Vector3(-537.31f,5376.12f,70.44f),
+                new Vector3(-1044.00f,4912.00f,206.00f),
+                new Vector3(-207.00f,5148.00f,148.00f),
+                new Vector3(501.77f,5604.74f,797.91f)
+            };
+            Vector3[] subjects={
+                new Vector3(-847.00f,5528.00f,34.60f),
+                new Vector3(-704.00f,5278.00f,74.10f),
+                new Vector3(-1248.00f,4858.00f,223.00f),
+                new Vector3(-91.00f,5264.00f,161.00f),
+                new Vector3(390.00f,5652.00f,785.00f)
+            };
             Vector3 player=Game.LocalPlayer.Character.Position;int best=0;float distance=player.DistanceTo(scenes[0]);
             for(int i=1;i<scenes.Length;i++){float candidate=player.DistanceTo(scenes[i]);if(candidate<distance){best=i;distance=candidate;}}
             _plannedSubjectPosition=subjects[best];return scenes[best];
@@ -24,7 +36,7 @@ namespace AdvancedK9.Callouts
 
         public override bool OnBeforeCalloutDisplayed()
         {
-            try{return Prepare("Missing vulnerable teen — K9 requested",NearestPedestrianScene(),90f,false);}
+            try{return Prepare("Missing vulnerable teen in Mount Chiliad / Paleto Forest — K9 requested",NearestWildernessScene(),90f,false);}
             catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: Missing Teen scene preparation failed safely: "+ex);return false;}
         }
 
@@ -37,13 +49,19 @@ namespace AdvancedK9.Callouts
                 ParentTwo=SpawnPed("a_m_y_business_02",new Vector3(Scene.X+1.5f,Scene.Y,Scene.Z),0f);
                 StagePoliceScene();
                 EvidenceProp=SpawnProp("prop_ld_shirt_01",new Vector3(Scene.X,Scene.Y+1.2f,Scene.Z));
-                CoverProp=SpawnProp(Random.Next(2)==0?"prop_bush_med_03":"prop_dumpster_01a",new Vector3(_plannedSubjectPosition.X+2f,_plannedSubjectPosition.Y,_plannedSubjectPosition.Z));
+                Vector3 safeTeenPosition;
+                if(TryResolveSafePedPosition(_plannedSubjectPosition,out safeTeenPosition))_plannedSubjectPosition=safeTeenPosition;
+                CoverProp=SpawnProp("prop_bush_med_03",new Vector3(_plannedSubjectPosition.X+2f,_plannedSubjectPosition.Y,_plannedSubjectPosition.Z));
                 Subject=SpawnPed("a_f_y_hipster_02",_plannedSubjectPosition,Random.Next(360));
                 if(Reporter==null||!Reporter.Exists()||Subject==null||!Subject.Exists()){End();return false;}
                 SubjectBlip=Subject.AttachBlip();SubjectBlip.IsRouteEnabled=false;SubjectBlip.Alpha=0;
-                NativeFunction.Natives.TASK_STAND_STILL(Subject,-1);
+                Subject.BlockPermanentEvents=true;Subject.IsPersistent=true;
+                Subject.Tasks.ClearImmediately();
+                Subject.Tasks.PlayAnimation("amb@code_human_cower@male@base","base",1.0f,AnimationFlags.Loop);
+                NativeFunction.Natives.SET_PED_KEEP_TASK(Subject,true);
+                Game.LogTrivial("AdvancedK9 Callouts: missing teen spawned once in persistent crouched concealment at "+_plannedSubjectPosition+" in the Mount Chiliad / Paleto Forest search region.");
                 Functions.PlayScannerAudioUsingPosition("CITIZENS_REPORT IN_OR_ON_POSITION",Scene);
-                RouteToScene("Respond to the parents and officers at the teen's last-known pedestrian location.");
+                RouteToScene("Respond to the parents and officers at the teen's last-known wilderness trail location.");
                 return base.OnCalloutAccepted();
             }
             catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: Missing Teen acceptance failed safely: "+ex);End();return false;}
