@@ -46,6 +46,10 @@ namespace AdvancedK9.Callouts
         private int _negotiationRound;
         private uint _nextNegotiationAt;
         private bool _negotiationKeyHeld;
+        private bool _negotiationChoiceHeld;
+        private int _negotiationScore;
+        private bool _escapeTermsAccepted;
+        private bool _negotiationForcedEntry;
         private bool _bankPerimeterStaged;
         private bool _managerIsHostage;
         private bool _bankEntryTeamActive;
@@ -786,18 +790,12 @@ namespace AdvancedK9.Callouts
                     Game.DisplayHelp("Hold the perimeter. Press ~y~Y~s~ to open bank-robbery negotiations.");
                     if(keyDown&&!_negotiationKeyHeld)
                     {
-                        _negotiationStarted=true;_negotiationRound=0;_nextNegotiationAt=Game.GameTime+2500;
-                        Game.DisplayNotification("~b~Negotiator:~s~ Phone contact established. Nobody moves; we are working toward a safe release.");
+                        _negotiationStarted=true;_negotiationRound=0;_negotiationScore=2-_outcome;_escapeTermsAccepted=false;_negotiationForcedEntry=false;_nextNegotiationAt=Game.GameTime+1200;
+                        Game.DisplayNotification("~b~You:~s~ Phone contact established. You are now handling negotiations.");
                         DispatchUpdate("NegotiationsStarted","Bank hostage negotiations","Local patrol jurisdiction","Suspect vehicles staged outside","Armed robbers holding an employee","Inside "+BankNames[_sceneIndex],"Negotiations active","Phone contact established. Patrol is maintaining containment while the negotiator seeks a peaceful surrender.","",Scene);
                     }
                 }
-                if(_negotiationStarted&&Game.GameTime>=_nextNegotiationAt)
-                {
-                    _negotiationRound++;_nextNegotiationAt=Game.GameTime+5000;
-                    if(_negotiationRound==1)Game.DisplayNotification("~b~Negotiator:~s~ The robber wants a clear route and a vehicle. Keeping him talking.");
-                    else if(_negotiationRound==2)Game.DisplayNotification("~b~Negotiator:~s~ We have demanded proof of life and the employee's immediate release.");
-                    else ResolveBankNegotiation(player);
-                }
+                if(_negotiationStarted)ProcessPlayerNegotiation(player);
                 if(player.DistanceTo(Subject)<8f&&!_negotiationStarted)
                 {
                     Game.DisplayNotification("~r~Premature entry:~s~ negotiations have collapsed.");
@@ -817,10 +815,52 @@ namespace AdvancedK9.Callouts
             else if(_bankScenarioStarted&&Game.GameTime-_scenarioStartedAt>480000)PublishBankOutcome("ExtendedContainment","The bank remains under extended armed containment. Scene units will remain until manually cleared.");
         }
 
+        private void ProcessPlayerNegotiation(Ped player)
+        {
+            bool choice1=Game.IsKeyDown(System.Windows.Forms.Keys.D1);
+            bool choice2=Game.IsKeyDown(System.Windows.Forms.Keys.D2);
+            bool choice3=Game.IsKeyDown(System.Windows.Forms.Keys.D3);
+            bool anyChoice=choice1||choice2||choice3;
+            if(Game.GameTime<_nextNegotiationAt){_negotiationChoiceHeld=anyChoice;return;}
+            if(_negotiationRound==0)Game.DisplayHelp("~b~You are negotiating:~s~ [1] Demand proof of life  [2] Ask what they want  [3] Threaten immediate entry");
+            else if(_negotiationRound==1)Game.DisplayHelp("~b~You are negotiating:~s~ [1] Offer fair treatment  [2] Accept a clear route and vehicle for the hostage  [3] Reject all demands");
+            else Game.DisplayHelp("~b~You are negotiating:~s~ [1] Order the hostage released first  [2] Demand everyone surrender now  [3] End the call and authorize entry");
+            if(!anyChoice){_negotiationChoiceHeld=false;return;}
+            if(_negotiationChoiceHeld)return;
+            _negotiationChoiceHeld=true;_nextNegotiationAt=Game.GameTime+900;
+            if(_negotiationRound==0)
+            {
+                if(choice1){_negotiationScore+=2;Game.DisplayNotification("~b~You:~s~ I need proof the hostage is alive.~n~~r~Robber:~s~ They are alive. Nobody comes through that door.");}
+                else if(choice2){_negotiationScore+=1;Game.DisplayNotification("~b~You:~s~ Tell me what you need to end this safely.~n~~r~Robber:~s~ A clear route and a vehicle. Then the hostage walks.");}
+                else {_negotiationScore-=3;Game.DisplayNotification("~b~You:~s~ Release them now or we are coming in.~n~~r~Robber:~s~ Back off. That is your only warning.");}
+            }
+            else if(_negotiationRound==1)
+            {
+                if(choice1){_negotiationScore+=2;Game.DisplayNotification("~b~You:~s~ Release the hostage and I will make sure everyone is treated fairly.~n~~r~Robber:~s~ I am listening.");}
+                else if(choice2){_negotiationScore+=1;_escapeTermsAccepted=true;Game.DisplayNotification("~b~You:~s~ Release the hostage and you get the clear route and vehicle.~n~~r~Robber:~s~ Agreed. The hostage comes out first.");}
+                else {_negotiationScore-=2;Game.DisplayNotification("~b~You:~s~ No vehicle and no clear route. Surrender now.~n~~r~Robber:~s~ Then we have a problem.");}
+            }
+            else
+            {
+                if(choice1){_negotiationScore+=2;Game.DisplayNotification("~b~You:~s~ Send the hostage out now. Then we complete the agreement.~n~~r~Robber:~s~ They are coming out.");}
+                else if(choice2){_negotiationScore+=1;Game.DisplayNotification("~b~You:~s~ This ends safely only if everyone surrenders.~n~~r~Robber:~s~ Give us a moment.");}
+                else {_negotiationScore-=4;_negotiationForcedEntry=true;Game.DisplayNotification("~b~You:~s~ The call is over. Entry team, stand by.~n~~r~Robber:~s~ Then come and get us.");}
+            }
+            _negotiationRound++;
+            if(_negotiationRound>=3)ResolveBankNegotiation(player);
+        }
+
         private void ResolveBankNegotiation(Ped player)
         {
             _outcomeTaskIssued=true;
-            if(_outcome==0)
+            if(_escapeTermsAccepted&&!_negotiationForcedEntry&&_negotiationScore>-4)
+            {
+                ReleaseHostageToPerimeter();
+                Game.DisplayNotification("~o~Your terms are in effect.~s~ The hostage is clear. The robbers are attempting to reach the getaway vehicles you agreed to release them toward.");
+                BeginBankVehicleEscape();
+                DispatchUpdate("NegotiatedEscape","Bank hostage negotiations","Local patrol jurisdiction","Staged getaway vehicles active","Armed robbers attempting escape","Leaving the bank","Hostage released","The player negotiated the hostage's release in exchange for a clear route and vehicle. Suspects are attempting escape.","",Scene);
+            }
+            else if(_negotiationScore>=3)
             {
                 ReleaseHostageToPerimeter();
                 DisarmSurrenderingRobber(Subject);
@@ -829,12 +869,6 @@ namespace AdvancedK9.Callouts
                 ActivateBankEntryTeam();
                 Game.DisplayNotification("~g~Negotiation successful.~s~ The hostage is coming out. Four existing perimeter officers are holding cover and will arrest both suspects when you reach them.");
                 DispatchUpdate("PeacefulResolution","Bank hostage negotiations","Local patrol jurisdiction","Getaway vehicles unused","Robbers surrendering","Inside the bank","Hostage released","Negotiations achieved a peaceful release. The suspects are surrendering and staged getaway vehicles were not used.","",Scene);
-            }
-            else if(_outcome<=3)
-            {
-                ReleaseHostageToPerimeter();
-                Game.DisplayNotification("~o~Terms accepted.~s~ The employee is clear. The robbers are now attempting to use the escape route and staged getaway cars they demanded.");
-                BeginBankVehicleEscape();
             }
             else BeginHostileBankResponse(player);
         }
