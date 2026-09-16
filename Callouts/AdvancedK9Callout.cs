@@ -71,6 +71,9 @@ namespace AdvancedK9.Callouts
         private string _medicalStage="not-requested";
         private string _transportStage="not-requested";
         private bool _suspectLocationPublished;
+        private bool _sharedBackupArrestAttempted;
+        private bool _sharedControlDispatchSent;
+        private bool _sharedManualTransportNoticeSent;
         private static bool _nexusAudioSurfacesLogged;
         protected bool MedicalResponseStarted{get{return _medicalResponseStarted;}}
         protected bool MedicalResponseComplete;
@@ -79,7 +82,12 @@ namespace AdvancedK9.Callouts
         protected bool CustodyLocked{get{return _custodyLeaseActive;}}
         protected bool CustodyOwnerStable{get{return _custodyLeaseActive&&Game.GameTime>=_custodyOwnerSettleUntil&&!string.Equals(_custodyOwner,"Determining provider",StringComparison.OrdinalIgnoreCase);}}
         protected bool ArrestProviderOwnsSubject{get{return _suspectLifecycle>=SuspectLifecycle.ArrestInProgress;}}
+        // Suspect callouts inherit the proven Fugitive Trail lifecycle by default.
+        // Non-criminal search/recovery callouts can opt out without duplicating the
+        // scene-persistence, emergency-light, traffic, route, or cleanup systems.
+        protected virtual bool UsesSuspectLifecycle{get{return true;}}
         protected void SetCustodyObservationEnabled(bool enabled){_custodyObservationEnabled=enabled;}
+        protected bool SharedSuspectTaskingBlocked{get{return UsesSuspectLifecycle&&SuspectControlLocked;}}
         protected bool SuspectControlLocked
         {
             get
@@ -282,7 +290,9 @@ namespace AdvancedK9.Callouts
             Game.LogTrivial("AdvancedK9 Callouts: police scene verification for "+GetType().Name+
                 ": cruiser="+vehicleReady+", officer1="+(OfficerOne!=null&&OfficerOne.Exists())+
                 ", officer2="+(OfficerTwo!=null&&OfficerTwo.Exists())+".");
-            return vehicleReady&&officersReady;
+            if(!vehicleReady||!officersReady)return false;
+            Vector3 securityPosition=PoliceVehicle.GetOffsetPosition(new Vector3(0f,-9f,0f));
+            return StageDedicatedSceneSecurity(securityPosition,sceneHeading);
         }
 
         protected bool StagePoliceScene(Vector3 cruiserPosition,float heading,bool exactVehiclePlacement=false)
@@ -302,7 +312,9 @@ namespace AdvancedK9.Callouts
             AssignSceneSecurityRoles(heading);
             bool ready=PoliceVehicle!=null&&PoliceVehicle.Exists()&&OfficerOne!=null&&OfficerOne.Exists()&&OfficerTwo!=null&&OfficerTwo.Exists();
             Game.LogTrivial("AdvancedK9 Callouts: verified business-scene staging for "+GetType().Name+": cruiser="+(PoliceVehicle!=null&&PoliceVehicle.Exists())+", officers="+ready+".");
-            return ready;
+            if(!ready)return false;
+            Vector3 securityPosition=PoliceVehicle.GetOffsetPosition(new Vector3(0f,-9f,0f));
+            return StageDedicatedSceneSecurity(securityPosition,heading);
         }
 
         protected bool StageDedicatedSceneSecurity(Vector3 cruiserPosition,float heading)
@@ -882,6 +894,38 @@ namespace AdvancedK9.Callouts
             Game.LogTrivial("AdvancedK9 Callouts: custody/arrest interception cleared backup combat tasks once; weapon and movement reassignment is disabled.");
         }
 
+        protected void BeginNativeLspdfrOfficerArrest()
+        {
+            if(_sharedBackupArrestAttempted||Subject==null||!Subject.Exists()||ArrestProviderOwnsSubject||SubjectIsInCustody()||!SubjectIsComplying())return;
+            Ped arrestOfficer=OfficerOne;Ped lethalCover=OfficerTwo;Ped suspect=Subject;
+            if(arrestOfficer==null||!arrestOfficer.Exists())return;
+            _sharedBackupArrestAttempted=true;
+            GameFiber.StartNew(delegate
+            {
+                try
+                {
+                    if(Finished||!arrestOfficer.Exists()||!suspect.Exists())return;
+                    uint taser=NativeFunction.Natives.GET_HASH_KEY<uint>("WEAPON_STUNGUN");
+                    NativeFunction.Natives.SET_CURRENT_PED_WEAPON(arrestOfficer,taser,true);
+                    if(lethalCover!=null&&lethalCover.Exists())NativeFunction.Natives.TASK_AIM_GUN_AT_ENTITY(lethalCover,suspect,-1,false);
+                    NativeFunction.Natives.TASK_GO_TO_ENTITY(arrestOfficer,suspect,-1,2.2f,2.8f,0f,0);
+                    uint deadline=Game.GameTime+10000;
+                    while(!Finished&&arrestOfficer.Exists()&&suspect.Exists()&&arrestOfficer.DistanceTo(suspect)>2.8f&&Game.GameTime<deadline)
+                    {
+                        if(ArrestProviderOwnsSubject||SubjectIsInCustody()){ReleaseSupportForCustody();return;}
+                        GameFiber.Wait(200);
+                    }
+                    if(Finished||!arrestOfficer.Exists()||!suspect.Exists()||ArrestProviderOwnsSubject||SubjectIsInCustody())return;
+                    NativeFunction.Natives.TASK_ARREST_PED(arrestOfficer,suspect);
+                    NativeFunction.Natives.SET_PED_KEEP_TASK(arrestOfficer,true);
+                    var setArrested=typeof(Functions).GetMethod("SetPedAsArrested",System.Reflection.BindingFlags.Public|System.Reflection.BindingFlags.Static,null,new[]{typeof(Ped),typeof(bool)},null);
+                    if(setArrested!=null)setArrested.Invoke(null,new object[]{suspect,true});
+                    Game.LogTrivial("AdvancedK9 Callouts: scene officer started the native LSPDFR arrest handoff while the cover officer maintained containment.");
+                }
+                catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: native LSPDFR officer arrest contained: "+ex.Message);}
+            },"AdvancedK9 native LSPDFR officer arrest");
+        }
+
         protected bool ValidateTrafficStopFormation(Vehicle stoppedVehicle,Vehicle cruiser,float expectedHeading)
         {
             if(stoppedVehicle==null||!stoppedVehicle.Exists()||cruiser==null||!cruiser.Exists())return false;
@@ -1055,7 +1099,7 @@ namespace AdvancedK9.Callouts
             return true;
         }
 
-        protected void BeginAutomaticTransport(string completionMessage)
+        private void BeginAutomaticTransport(string completionMessage)
         {
             if(Subject==null||!Subject.Exists())return;
             Vector3 spawn=World.GetNextPositionOnStreet(Subject.GetOffsetPosition(new Vector3(0f,-48f,0f)));
@@ -1119,7 +1163,7 @@ namespace AdvancedK9.Callouts
             },"AdvancedK9 automatic prisoner transport");
         }
 
-        protected bool RequestCustodyOwnerTransport()
+        private bool RequestCustodyOwnerTransport()
         {
             if(Subject==null||!Subject.Exists()||!CustodyOwnerStable)return false;
             WriteCalloutBridgeRequest("RequestTransport");_transportStage="requested";_suspectLifecycle=SuspectLifecycle.AwaitingTransport;
@@ -1127,7 +1171,7 @@ namespace AdvancedK9.Callouts
             return true;
         }
 
-        protected bool ProviderTransportLoaded()
+        private bool ProviderTransportLoaded()
         {
             ReadCalloutBridgeState();if(Subject==null||!Subject.Exists())return false;bool loaded=NativeFunction.Natives.IS_PED_IN_ANY_VEHICLE<bool>(Subject,false)||_transportStage=="loaded";if(loaded)_suspectLifecycle=SuspectLifecycle.Transporting;return loaded;
         }
@@ -1286,6 +1330,53 @@ namespace AdvancedK9.Callouts
         protected void Resolve(string message)
         {
             if(Finished)return;Finished=true;Game.DisplayNotification(message);End();
+        }
+
+        public override void Process()
+        {
+            if(Finished){base.Process();return;}
+            MaintainSpawnedPoliceAssets();
+            MaintainPoliceEmergencyLights();
+            Ped player=Game.LocalPlayer.Character;
+            if(player!=null&&player.Exists()&&player.DistanceTo(Scene)<80f)ControlLiveTraffic(Scene,24f);
+
+            if(UsesSuspectLifecycle&&Subject!=null&&Subject.Exists())
+            {
+                ObserveSuspectLifecycle();
+                bool custody=UpdateCustodyLease();
+                bool complying=SubjectIsComplying();
+                bool controlled=custody||ArrestProviderOwnsSubject||complying;
+                if(controlled)
+                {
+                    CalloutPosition=Subject.Position;
+                    MaintainSupportContainment(custody||ArrestProviderOwnsSubject||SubjectIsInCustody());
+                    if(complying&&!custody&&!ArrestProviderOwnsSubject)BeginNativeLspdfrOfficerArrest();
+                    K9ApiSnapshot snapshot;
+                    if(!_k9DisengageIssued&&AdvancedK9Api.TryGetSnapshot(out snapshot)&&
+                       (string.Equals(snapshot.State,"Apprehending",StringComparison.OrdinalIgnoreCase)||string.Equals(snapshot.State,"HoldingSuspect",StringComparison.OrdinalIgnoreCase)))
+                    {
+                        _k9DisengageIssued=true;
+                        AdvancedK9Api.SendCommand("Release",ContextId,HandleOf(Subject),"Ped",Subject.Position.X,Subject.Position.Y,Subject.Position.Z,"shared callout compliance and custody safety release");
+                        Game.LogTrivial("AdvancedK9 Callouts: shared lifecycle requested K9 release before LSPDFR arrest and medical handling.");
+                    }
+                    if(!_sharedControlDispatchSent)
+                    {
+                        _sharedControlDispatchSent=true;
+                        DispatchUpdate(Subject.Health<Subject.MaxHealth-5?"K9Apprehension":"SuspectSurrender",_incidentVariant,_incidentJurisdiction,_incidentVehicle,_incidentSuspect,"Live apprehension location",Subject.Health<Subject.MaxHealth-5?"K9 bite injury":"Controlled suspect",Subject.Health<Subject.MaxHealth-5?"The K9 took the suspect down. The suspect is injured and EMS will respond after Rex releases the hold.":"The suspect is complying. Scene officers are beginning the native LSPDFR arrest.","",Subject.Position);
+                    }
+                }
+                else if(_suspectLocationPublished&&!ConfirmedSubjectDeath())MaintainSupportContainment(false);
+
+                bool injured=!ConfirmedSubjectDeath()&&Subject.Health<Subject.MaxHealth-5;
+                if((injured||MedicalResponseStarted)&&!MedicalResponseComplete&&(controlled||Subject.IsRagdoll))ProcessPostApprehensionMedical("");
+                if(custody&&CustodyOwnerStable&&!_sharedManualTransportNoticeSent)
+                {
+                    _sharedManualTransportNoticeSent=true;
+                    Game.DisplayNotification("~b~Custody confirmed:~s~ "+CustodyOwner+" owns the suspect. Request prisoner transport manually when ready; the scene remains active.");
+                    Game.LogTrivial("AdvancedK9 Callouts: shared lifecycle retained the scene and disabled automatic prisoner transport.");
+                }
+            }
+            base.Process();
         }
 
         private void BeginPoliceSceneDeparture()
