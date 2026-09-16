@@ -196,14 +196,14 @@ namespace AdvancedK9.Callouts
             if(_sceneIndex==1)
             {
                 // Legion Square is intentionally hand staged to match the approved
-                // six-car reference: three frontage units, two opposing lane
-                // blockers, and one command/negotiation unit behind containment.
+                // five-car reference: three frontage units and two opposing lane
+                // blockers. Do not add the sixth unit facing toward Elgin Avenue
+                // in front of the negotiation position.
                 positions.Add(new Vector3(137.2f,-1031.1f,29.20f));headings.Add(250f);
                 positions.Add(new Vector3(148.6f,-1031.1f,29.20f));headings.Add(250f);
                 positions.Add(new Vector3(160.0f,-1031.1f,29.20f));headings.Add(250f);
                 positions.Add(new Vector3(130.5f,-1023.7f,29.20f));headings.Add(160f);
                 positions.Add(new Vector3(169.2f,-1023.7f,29.20f));headings.Add(340f);
-                positions.Add(new Vector3(160.8f,-1045.8f,29.20f));headings.Add(70f);
                 return;
             }
             Vector3 forward=HeadingVector(CruiserHeadings[_sceneIndex]);Vector3 right=new Vector3(forward.Y,-forward.X,0f);
@@ -284,7 +284,7 @@ namespace AdvancedK9.Callouts
             if(!StagePoliceScene(CruiserScenes[_sceneIndex],CruiserHeadings[_sceneIndex],true))return false;
             Vector3 forward=HeadingVector(CruiserHeadings[_sceneIndex]);
             Vector3 right=new Vector3(forward.Y,-forward.X,0f);
-            int requiredVehicles=_sceneIndex==0?8:_sceneIndex==1?6:4;
+            int requiredVehicles=_sceneIndex==0?8:_sceneIndex==1?5:4;
             int requiredOfficers=_sceneIndex==0?20:8;
             float heading=CruiserHeadings[_sceneIndex];
             List<Vector3> positions;List<float> headings;GetBankPerimeterLayout(out positions,out headings);
@@ -343,7 +343,7 @@ namespace AdvancedK9.Callouts
             }
             MaintainSpawnedPoliceAssets();
             _bankPerimeterStaged=true;
-            Game.LogTrivial("AdvancedK9 Callouts: bank perimeter staged at "+BankNames[_sceneIndex]+" with "+requiredVehicles+" marked cruisers and "+requiredOfficers+" armed ground personnel behind vehicle cover"+(_sceneIndex==0?" (all Pacific approaches closed; 16 patrol officers, four-officer SWAT team with BearCat, and two-officer Air One orbit).":_sceneIndex==1?" (approved Legion Square six-car layout).":" (two roadblock pairs close both incoming lanes)."));
+            Game.LogTrivial("AdvancedK9 Callouts: bank perimeter staged at "+BankNames[_sceneIndex]+" with "+requiredVehicles+" marked cruisers and "+requiredOfficers+" armed ground personnel behind vehicle cover"+(_sceneIndex==0?" (all Pacific approaches closed; 16 patrol officers, four-officer SWAT team with BearCat, and two-officer Air One orbit).":_sceneIndex==1?" (approved Legion Square five-car layout; no cruiser facing Elgin Avenue at negotiations).":" (two roadblock pairs close both incoming lanes)."));
             return true;
         }
 
