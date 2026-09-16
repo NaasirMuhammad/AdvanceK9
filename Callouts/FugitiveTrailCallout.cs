@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using AdvancedK9.API;
 using LSPD_First_Response.Mod.API;
 using LSPD_First_Response.Mod.Callouts;
 using Rage;
@@ -16,8 +17,6 @@ namespace AdvancedK9.Callouts
         private int _outcome;
         private bool _sceneBriefed;
         private bool _suspectLocated;
-        private bool _transportStarted;
-        private uint _providerTransportRequestedAt;
         private uint _locatedAt;
         private uint _nextCoverSearch;
         private bool _coverConfirmed;
@@ -28,7 +27,7 @@ namespace AdvancedK9.Callouts
         private bool _deathReported;
         private Vector3 _hidingPosition;
         private uint _nextHideTask;
-        private static int _lastRoadsideScene=-1;
+        private static readonly Queue<int> RecentRoadsideScenes=new Queue<int>();
         private static readonly HashSet<int> FailedRoadsideScenes=new HashSet<int>();
         private int _sceneIndex=-1;
         private int _selectionAttempts;
@@ -47,80 +46,107 @@ namespace AdvancedK9.Callouts
         private uint _coverSearchStarted;
         private bool _activeEscapeFallback;
         private bool _controlDispatchSent;
+        private bool _manualTransportNoticeSent;
+        private Vector3 _curbAlignedVehiclePosition;
+        private bool _isHidingAnimationPlaying;
+        private bool _backupArrestAttempted;
+        private bool _coverMoveAssigned;
+        private bool _suspectWeaponAssigned;
+        private Vector3 _assignedCoverPosition;
+        private bool _acceptanceSetupPending;
+        private bool _suspectSpawnPending;
+        private Vector3 _coverSearchAnchor;
+        private bool _calibrationMode;
+        private int _forcedCalibrationScene=-1;
+        private int _forcedFullTestScene=-1;
+        private static readonly HashSet<int> RemovedRoadsideScenes=new HashSet<int>();
 
         private static readonly Vector3[] RoadsideScenes={
-            new Vector3(-565f,-675f,33f),new Vector3(-1310f,-1261f,4f),new Vector3(-1430f,-590f,30f),
-            new Vector3(1110f,-1730f,35f),new Vector3(830f,-1830f,29f),
-            new Vector3(1000f,-2535f,28f),new Vector3(-296f,-2732f,6f),
-            new Vector3(1690f,3591f,35f),new Vector3(1865f,3684f,34f),new Vector3(1180f,2690f,38f),
-            new Vector3(-445f,6037f,31f),new Vector3(-153f,6346f,31f),new Vector3(-2535f,2341f,33f)
+            new Vector3(-571.74f,-668.11f,33.00f),new Vector3(2561.29f,60.92f,95.78f),new Vector3(-1443.41f,-586.42f,30.62f),
+            new Vector3(233.44f,-857.19f,29.78f),new Vector3(831.28f,-1849.10f,29.01f),
+            new Vector3(-2247.44f,4293.70f,47.17f),new Vector3(-328.30f,-2690.60f,6.03f),
+            new Vector3(1783.67f,3786.55f,33.74f),new Vector3(1082.64f,-764.72f,57.62f),new Vector3(-1508.12f,-712.16f,27.26f),
+            new Vector3(79.62f,-1912.30f,21.05f),new Vector3(-148.41f,6339.45f,31.50f),new Vector3(-3127.22f,1087.45f,20.48f)
         };
 
-        private static readonly float[] RoadsideHeadings={270f,110f,90f,180f,180f,85f,145f,210f,30f,180f,135f,45f,95f};
+        private static readonly float[] RoadsideHeadings={268.0f,338.0f,125.2f,245.2f,344.7f,149.5f,308.7f,121.2f,270.3f,227.6f,46.7f,45.6f,169.5f};
+        private static readonly Vector3[][] VerifiedHidingSpots={
+            new[]{new Vector3(-578.91f,-672.78f,12.03f),new Vector3(-681.96f,-634.82f,25.30f),new Vector3(-896.63f,-601.10f,29.17f)},
+            new[]{new Vector3(2163.27f,48.92f,224.33f),new Vector3(2787.70f,1398.68f,24.44f),new Vector3(2728.53f,1533.89f,24.50f)},
+            new[]{new Vector3(-1560.59f,-456.22f,47.37f),new Vector3(-1459.23f,-400.47f,43.20f),new Vector3(-1295.37f,-558.90f,31.71f)},
+            new[]{new Vector3(195.08f,-620.78f,47.87f),new Vector3(304.03f,-671.78f,48.13f),new Vector3(535.13f,-782.31f,16.23f)},
+            new[]{new Vector3(893.84f,-2005.26f,30.63f),new Vector3(831.60f,-2196.84f,30.26f),new Vector3(798.12f,-1954.96f,22.12f)},
+            new[]{new Vector3(-2363.31f,4273.96f,12.41f),new Vector3(-1858.15f,4567.25f,5.67f),new Vector3(-1845.14f,4455.21f,38.26f)},
+            new[]{new Vector3(-447.75f,-2649.39f,8.76f),new Vector3(-79.33f,-2725.50f,8.74f),new Vector3(-44.02f,-2685.35f,6.00f)},
+            new[]{new Vector3(1594.63f,3595.50f,38.77f),new Vector3(1395.72f,3607.67f,38.94f),new Vector3(1446.02f,3749.24f,31.93f)},
+            new[]{new Vector3(805.20f,-496.10f,30.63f),new Vector3(1393.12f,-584.59f,74.44f),new Vector3(1470.73f,-640.97f,106.97f)},
+            new[]{new Vector3(-1406.67f,-630.63f,28.67f),new Vector3(-1323.33f,-774.96f,20.11f),new Vector3(-1289.69f,-820.09f,14.57f)},
+            new[]{new Vector3(42.58f,-1947.76f,20.86f),new Vector3(15.57f,-1918.31f,21.96f),new Vector3(-47.65f,-1859.51f,25.87f)},
+            new[]{new Vector3(-95.36f,6243.61f,31.09f),new Vector3(-179.15f,6167.25f,31.17f),new Vector3(-173.00f,6035.12f,33.02f)},
+            new[]{new Vector3(-2894.59f,1417.88f,77.38f),new Vector3(-3421.47f,973.47f,11.90f),new Vector3(-3165.85f,867.25f,12.62f)}
+        };
 
         private bool PrepareRoadsideScene()
         {
             if(++_selectionAttempts>RoadsideScenes.Length)return false;
             var player=Game.LocalPlayer.Character;
             var eligible=new List<int>();
+            int forcedScene=_calibrationMode?_forcedCalibrationScene:_forcedFullTestScene;
+            if(forcedScene>=0&&forcedScene<RoadsideScenes.Length)
+            {
+                eligible.Add(forcedScene);
+            }
+            else
             for(int i=0;i<RoadsideScenes.Length;i++)
             {
-                if(i==_lastRoadsideScene||FailedRoadsideScenes.Contains(i))continue;
-                if(i==3||i==7||i==8||i==9||i==12)continue;
+                if(RemovedRoadsideScenes.Contains(i)||RecentRoadsideScenes.Contains(i)||FailedRoadsideScenes.Contains(i))continue;
                 float distance=player.DistanceTo(RoadsideScenes[i]);
                 if(distance<180f||distance>2200f)continue;
-                int interior=NativeFunction.Natives.GET_INTERIOR_AT_COORDS<int>(RoadsideScenes[i].X,RoadsideScenes[i].Y,RoadsideScenes[i].Z);
-                if(interior!=0)continue;
-                Vector3 street=World.GetNextPositionOnStreet(RoadsideScenes[i]);
-                if(street.DistanceTo(RoadsideScenes[i])>18f||System.Math.Abs(street.Z-RoadsideScenes[i].Z)>3f)continue;
                 eligible.Add(i);
             }
             if(eligible.Count==0)
             {
                 FailedRoadsideScenes.Clear();
-                for(int i=0;i<RoadsideScenes.Length;i++)if(i!=3&&i!=7&&i!=8&&i!=9&&i!=12&&i!=_lastRoadsideScene)eligible.Add(i);
+                for(int i=0;i<RoadsideScenes.Length;i++)if(!RemovedRoadsideScenes.Contains(i)&&!RecentRoadsideScenes.Contains(i))eligible.Add(i);
             }
             if(eligible.Count==0)return false;
             int best=eligible[Random.Next(eligible.Count)];
-            _lastRoadsideScene=best;
+            if(!_calibrationMode&&_forcedFullTestScene<0)
+            {
+                RecentRoadsideScenes.Enqueue(best);
+                while(RecentRoadsideScenes.Count>3)RecentRoadsideScenes.Dequeue();
+            }
             _sceneIndex=best;
             _sceneHeading=RoadsideHeadings[best];
             Vector3 stagedScene=RoadsideScenes[best];
-            try
-            {
-                Vector3 curb;
-                if(NativeFunction.Natives.GET_ROAD_BOUNDARY_USING_HEADING<bool>(stagedScene.X,stagedScene.Y,stagedScene.Z,_sceneHeading,out curb)&&curb.DistanceTo(stagedScene)<24f)
-                {
-                    stagedScene=curb;
-                    Vector3 verifiedRoad=World.GetNextPositionOnStreet(stagedScene);
-                    if(verifiedRoad.DistanceTo(stagedScene)>8f||!NativeFunction.Natives.IS_POINT_ON_ROAD<bool>(verifiedRoad.X,verifiedRoad.Y,verifiedRoad.Z,0))
-                    {
-                        FailedRoadsideScenes.Add(best);
-                        Game.LogTrivial("AdvancedK9 Callouts: scene "+best+" curb resolved into a driveway, parking apron, or private lot and was rejected.");
-                        return PrepareRoadsideScene();
-                    }
-                    Game.LogTrivial("AdvancedK9 Callouts: curb boundary resolved for scene "+best+" at "+stagedScene+" heading "+_sceneHeading+".");
-                }
-                else
-                {
-                    FailedRoadsideScenes.Add(best);
-                    Game.LogTrivial("AdvancedK9 Callouts: scene "+best+" rejected because GTA could not resolve a curb boundary; selecting another scene internally.");
-                    return PrepareRoadsideScene();
-                }
-            }
-            catch(System.Exception ex)
-            {
-                FailedRoadsideScenes.Add(best);
-                Game.LogTrivial("AdvancedK9 Callouts: scene "+best+" curb calculation failed and was blacklisted: "+ex.Message);
-                return PrepareRoadsideScene();
-            }
+            _curbAlignedVehiclePosition=stagedScene;
+            Game.LogTrivial("AdvancedK9 Callouts: scene "+best+" using manually verified vehicle coordinate and legal heading without native curb recalculation: vehicleCenter="+stagedScene+", heading="+_sceneHeading+".");
             return Prepare("Traffic stop — driver fled on foot",stagedScene,75f,false);
+        }
+
+        private bool PrepareRawCalibrationScene(int sceneIndex,Vector3 storedPosition,string reason)
+        {
+            _curbAlignedVehiclePosition=storedPosition;
+            Game.LogTrivial("AdvancedK9 CALIBRATION: scene "+sceneIndex+" "+reason+"; raw stored coordinate retained for visual inspection.");
+            return Prepare("Traffic stop scene calibration "+sceneIndex,storedPosition,75f,false);
         }
 
         public override bool OnBeforeCalloutDisplayed()
         {
             try
             {
+                int forcedScene;
+                if(AdvancedK9Api.TryTakeFugitiveSceneCalibration(out forcedScene)&&forcedScene>=0&&forcedScene<RoadsideScenes.Length)
+                {
+                    _calibrationMode=true;
+                    _forcedCalibrationScene=forcedScene;
+                    Game.LogTrivial("AdvancedK9 CALIBRATION: forcing Fugitive Trail code scene "+forcedScene+" for this launch only.");
+                }
+                else if(AdvancedK9Api.TryTakeFugitiveSceneFullTest(out forcedScene)&&forcedScene>=0&&forcedScene<RoadsideScenes.Length)
+                {
+                    _forcedFullTestScene=forcedScene;
+                    Game.LogTrivial("AdvancedK9 FULL TEST: forcing complete Fugitive Trail code scene "+forcedScene+" with all suspect and K9 behavior enabled for this launch only.");
+                }
                 if(!PrepareRoadsideScene())return false;
             }
             catch(System.Exception ex)
@@ -134,114 +160,224 @@ namespace AdvancedK9.Callouts
 
         public override bool OnCalloutAccepted()
         {
-            StartedAt=Game.GameTime;_phaseStarted=StartedAt;_phase=FugitivePhase.EnRoute;_outcome=Random.Next(4);
-            float angle=Random.Next(360);float distance=Random.Next(65,96);Vector3 trailEnd=Scene;
-            for(int attempt=0;attempt<10;attempt++)
-            {
-                float radians=(float)(angle*System.Math.PI/180.0);
-                Vector3 candidate=World.GetNextPositionOnStreet(Scene+new Vector3((float)System.Math.Sin(radians)*distance,(float)System.Math.Cos(radians)*distance,0f));
-                int interior=NativeFunction.Natives.GET_INTERIOR_AT_COORDS<int>(candidate.X,candidate.Y,candidate.Z);
-                if(System.Math.Abs(candidate.Z-Scene.Z)<=3f&&interior==0){trailEnd=candidate;break;}
-                angle=(angle+37f)%360f;
-            }
-            if(trailEnd.DistanceTo(Scene)<50f)
-            {
-                float radians=(float)(angle*System.Math.PI/180.0);
-                trailEnd=Scene+new Vector3((float)System.Math.Sin(radians)*75f,(float)System.Math.Cos(radians)*75f,0f);
-            }
-            float dx=trailEnd.X-Scene.X,dy=trailEnd.Y-Scene.Y;float length=(float)System.Math.Sqrt(dx*dx+dy*dy);
-            if(length<.1f){dx=1f;dy=0f;length=1f;}
-            Vector3 coverPosition=trailEnd;bool offRoadCover=false;
-            float[] offsets={10f,-10f,14f,-14f,18f,-18f};
-            for(int i=0;i<offsets.Length;i++)
-            {
-                Vector3 candidate=new Vector3(trailEnd.X-dy/length*offsets[i],trailEnd.Y+dx/length*offsets[i],trailEnd.Z);
-                int interior=NativeFunction.Natives.GET_INTERIOR_AT_COORDS<int>(candidate.X,candidate.Y,candidate.Z);
-                bool onRoad=NativeFunction.Natives.IS_POINT_ON_ROAD<bool>(candidate.X,candidate.Y,candidate.Z,0);
-                if(interior==0&&!onRoad){coverPosition=candidate;offRoadCover=true;break;}
-            }
-            if(!offRoadCover)
-            {
-                coverPosition=trailEnd;
-                Game.LogTrivial("AdvancedK9 Callouts: distant off-road cover could not be verified; retaining the valid street endpoint until live cover streams.");
-            }
-            Vector3 hidingPosition;
-            if(!TryFindExistingCover(coverPosition,out hidingPosition))
-            {
-                // Distant world props are not streamed before the player reaches the callout.
-                hidingPosition=coverPosition;
-                _coverConfirmed=false;
-                Game.LogTrivial("AdvancedK9 Callouts: distant cover is not streamed yet; reserving an off-road endpoint and requiring live cover resolution on approach.");
-            }
-            else
-            {
-                _naturalCoverReserved=true;
-                _coverConfirmed=false;
-                Game.LogTrivial("AdvancedK9 Callouts: existing environmental cover reserved near the pedestrian trail end.");
-            }
-            _hidingPosition=hidingPosition;
+            int acceptanceGeneration=BeginAcceptanceWork();
+            if(acceptanceGeneration<0)return false;
+            if(!base.OnCalloutAccepted())return false;
 
-            SceneVehicle=SpawnVehicle("primo",Scene,_sceneHeading);
-            if(SceneVehicle==null||!SceneVehicle.Exists())return RejectCurrentScene("suspect vehicle spawn failed");
-            SceneVehicle.IsPersistent=true;SceneVehicle.Heading=_sceneHeading;NativeFunction.Natives.SET_VEHICLE_ON_GROUND_PROPERLY(SceneVehicle);
-            if(!StagePoliceScene())return RejectCurrentScene("police scene staging failed");
-            if(PoliceVehicle!=null&&PoliceVehicle.Exists()){PoliceVehicle.Heading=_sceneHeading;NativeFunction.Natives.SET_VEHICLE_ON_GROUND_PROPERLY(PoliceVehicle);}
-            if(!ValidateTrafficStopFormation(SceneVehicle,PoliceVehicle,_sceneHeading))
-            {
-                // Native road classification is inconsistent at curb/shoulder seams.
-                // The callout is already accepted, so repair the deterministic formation
-                // instead of tearing down a valid incident after the player accepts it.
-                PoliceVehicle.Position=SceneVehicle.GetOffsetPosition(new Vector3(0f,-9f,0f));
-                PoliceVehicle.Heading=SceneVehicle.Heading;
-                NativeFunction.Natives.SET_VEHICLE_ON_GROUND_PROPERLY(PoliceVehicle);
-                Game.LogTrivial("AdvancedK9 Callouts: post-acceptance traffic-stop audit requested a formation repair; cruiser was realigned behind the stopped vehicle and the callout continued.");
-            }
-            ConfigureTrafficStopScene();
-            ControlSceneTraffic();
-            Game.LogTrivial("AdvancedK9 Callouts: accepted roadside scene spawned after successful trail validation.");
-
-            Vector3 escapeStart=trailEnd;
-            Subject=SpawnPed("a_m_m_hillbilly_01",escapeStart,Random.Next(360));if(Subject==null)return RejectCurrentScene("subject spawn failed");
-            Subject.MaxHealth=500;Subject.Health=500;Subject.BlockPermanentEvents=true;Subject.IsPersistent=true;
-            NativeFunction.Natives.TASK_FOLLOW_NAV_MESH_TO_COORD(Subject,hidingPosition.X,hidingPosition.Y,hidingPosition.Z,5.2f,22000,2f,0,0f);
-            var escapingSubject=Subject;var finalCover=hidingPosition;
+            _acceptanceSetupPending=true;
             GameFiber.StartNew(delegate
             {
                 try
                 {
-                    uint escapeStarted=Game.GameTime,nextRetry=0;
-                    while(!Finished&&escapingSubject!=null&&escapingSubject.Exists()&&escapingSubject.DistanceTo(finalCover)>5f&&Game.GameTime-escapeStarted<90000)
+                    if(!AcceptanceWorkIsActive(acceptanceGeneration))return;
+                    if(!InitializeAcceptedCallout(acceptanceGeneration)&&AcceptanceWorkIsActive(acceptanceGeneration))
                     {
-                        if(Game.GameTime>=nextRetry)
-                        {
-                            nextRetry=Game.GameTime+4500;
-                            NativeFunction.Natives.TASK_FOLLOW_NAV_MESH_TO_COORD(escapingSubject,finalCover.X,finalCover.Y,finalCover.Z,5.4f,12000,2f,0,0f);
-                        }
-                        if(Game.GameTime-escapeStarted>14000&&Game.LocalPlayer.Character.DistanceTo(escapingSubject)>85f)
-                        {
-                            Vector3 safeFinal;
-                            if(TryResolveSafePedPosition(finalCover,out safeFinal))escapingSubject.Position=safeFinal;
-                            break;
-                        }
-                        GameFiber.Wait(250);
-                    }
-                    if(!Finished&&escapingSubject!=null&&escapingSubject.Exists()&&escapingSubject.DistanceTo(finalCover)<=7f)
-                    {
-                        Vector3 safeFinal;
-                        if(TryResolveSafePedPosition(finalCover,out safeFinal))escapingSubject.Position=safeFinal;
-                        NativeFunction.Natives.TASK_SEEK_COVER_FROM_POS(escapingSubject,Scene.X,Scene.Y,Scene.Z,-1,false);
-                        GameFiber.Wait(1200);
-                        if(escapingSubject.Exists())NativeFunction.Natives.TASK_STAY_IN_COVER(escapingSubject);
+                        Game.LogTrivial("AdvancedK9 Callouts: accepted Fugitive Trail setup failed safely; ending the callout without leaving delayed work active.");
+                        End();
                     }
                 }
-                catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: fugitive escape staging contained: "+ex.Message);}
-            },"AdvancedK9 fugitive escape to cover");
-            _lastSafeSubjectPosition=escapeStart;
-            _nextCoverSearch=Game.GameTime+3000;
-            Game.LogTrivial("AdvancedK9 Callouts: fugitive trail constrained to a local outdoor 65-95 metre pedestrian search; live concealment will be confirmed after streaming.");
-            DispatchUpdate("CalloutAccepted","Failed traffic stop","Local patrol jurisdiction","Gray Primo stopped at curb with marked cruiser behind","Adult male in work clothes","Away from the driver side of the stopped vehicle","Unknown weapon status","Respond to a failed traffic stop. The driver abandoned the vehicle and fled on foot. Two patrol officers are holding the scene.","WE_HAVE CRIME_RESIST_ARREST IN_OR_ON_POSITION",Scene);
+                catch(System.Exception ex)
+                {
+                    Game.LogTrivial("AdvancedK9 Callouts: accepted Fugitive Trail setup exception contained: "+ex);
+                    if(AcceptanceWorkIsActive(acceptanceGeneration))End();
+                }
+                finally
+                {
+                    _acceptanceSetupPending=false;
+                }
+            },"AdvancedK9 guarded Fugitive Trail acceptance");
+            return true;
+        }
+
+        private bool InitializeAcceptedCallout(int acceptanceGeneration)
+        {
+            if(!AcceptanceCheckpoint(acceptanceGeneration))return false;
+            StartedAt=Game.GameTime;_phaseStarted=StartedAt;_phase=FugitivePhase.EnRoute;_outcome=Random.Next(6);
+            _isHidingAnimationPlaying=false;_suspectWeaponAssigned=false;
+            SetCustodyObservationEnabled(false);
+            Vector3 selectedVerifiedCover=VerifiedHidingSpots[_sceneIndex][Random.Next(VerifiedHidingSpots[_sceneIndex].Length)];
+            _coverSearchAnchor=selectedVerifiedCover;
+            _hidingPosition=Vector3.Zero;
+            _coverConfirmed=false;
+            _naturalCoverReserved=false;
+            Game.LogTrivial("AdvancedK9 Callouts: scene "+_sceneIndex+" selected manually verified hiding endpoint "+selectedVerifiedCover+" at "+Scene.DistanceTo(selectedVerifiedCover).ToString("0.0")+" metres from the stopped vehicle.");
+
+            SceneVehicle=SpawnVehicle("primo",_curbAlignedVehiclePosition,_sceneHeading,true);
+            if(!AcceptanceCheckpoint(acceptanceGeneration))return false;
+            if(SceneVehicle==null||!SceneVehicle.Exists())return RejectCurrentScene("suspect vehicle spawn failed");
+            SceneVehicle.IsPersistent=true;
+            SceneVehicle.Position=_curbAlignedVehiclePosition;
+            SceneVehicle.Heading=_sceneHeading;
+            NativeFunction.Natives.SET_VEHICLE_ON_GROUND_PROPERLY(SceneVehicle);
+            GameFiber.Yield();
+            if(!AcceptanceCheckpoint(acceptanceGeneration))return false;
+            float vehicleRadians=(float)(_sceneHeading*System.Math.PI/180.0);
+            Vector3 roadForward=new Vector3(-(float)System.Math.Sin(vehicleRadians),(float)System.Math.Cos(vehicleRadians),0f);
+            Vector3 cruiserPosition=SceneVehicle.Position-roadForward*9f;
+            if(!StagePoliceScene(cruiserPosition,_sceneHeading,true))return RejectCurrentScene("police scene staging failed");
+            if(!AcceptanceCheckpoint(acceptanceGeneration))return false;
+            if(PoliceVehicle==null||!PoliceVehicle.Exists())return RejectCurrentScene("police cruiser unavailable after staging");
+            PoliceVehicle.Position=cruiserPosition;
+            PoliceVehicle.Heading=_sceneHeading;
+            PoliceVehicle.IsPersistent=true;
+            NativeFunction.Natives.SET_VEHICLE_ON_GROUND_PROPERLY(PoliceVehicle);
+            GameFiber.Yield();
+            if(!AcceptanceCheckpoint(acceptanceGeneration))return false;
+            Vector3 securityCruiserPosition=SceneVehicle.Position-roadForward*18f;
+            if(!StageDedicatedSceneSecurity(securityCruiserPosition,_sceneHeading))return RejectCurrentScene("dedicated scene-security unit failed to stage");
+            GameFiber.Yield();
+            if(!AcceptanceCheckpoint(acceptanceGeneration))return false;
+            if(!ValidateManualTrafficStopFormation(SceneVehicle,PoliceVehicle,_sceneHeading)&&!_calibrationMode)return RejectCurrentScene("manual traffic-stop formation failed validation");
+            Game.LogTrivial("AdvancedK9 Callouts: final curb formation locked: suspect="+SceneVehicle.Position+", tracking cruiser="+PoliceVehicle.Position+", security cruiser="+securityCruiserPosition+", heading="+_sceneHeading+", primary gap="+SceneVehicle.DistanceTo(PoliceVehicle)+".");
+            ConfigureTrafficStopScene();
+            ControlSceneTraffic();
+            StartBackupOfficerInvestigationLoops();
+            if(!AcceptanceCheckpoint(acceptanceGeneration))return false;
+            Game.LogTrivial("AdvancedK9 Callouts: accepted roadside scene spawned after successful trail validation.");
+
+            if(_calibrationMode)
+            {
+                _suspectSpawnPending=false;
+                Game.DisplayNotification("~y~Fugitive Trail calibration mode~s~~n~Forced code scene "+_sceneIndex+". Suspect/cover logic is paused so the scene will not cancel. Use ~b~Log current player coordinates~s~ at the desired curb and hiding points.");
+                Game.LogTrivial("AdvancedK9 CALIBRATION: scene "+_sceneIndex+" active with suspect spawning disabled; vehicle center="+SceneVehicle.Position+", cruiser="+PoliceVehicle.Position+", heading="+_sceneHeading+".");
+            }
+            else
+            {
+                StartManualSuspectPlacement(acceptanceGeneration,selectedVerifiedCover);
+                Game.LogTrivial("AdvancedK9 Callouts: scene "+_sceneIndex+" suspect placement started for its selected manually verified endpoint; one-time crouched hiding is required.");
+            }
+            if(!AcceptanceCheckpoint(acceptanceGeneration))return false;
+            DispatchUpdate("CalloutAccepted","Failed traffic stop","Local patrol jurisdiction","Gray Primo stopped at curb with two marked units behind","Adult male in work clothes","Away from the driver side of the stopped vehicle","Unknown weapon status","Respond to a failed traffic stop. The driver abandoned the vehicle and fled on foot. Three patrol officers are holding the scene; two will accompany the K9 team and one will maintain scene security.","WE_HAVE CRIME_RESIST_ARREST IN_OR_ON_POSITION",Scene);
+            if(!AcceptanceCheckpoint(acceptanceGeneration))return false;
             RouteToScene("Respond to the failed traffic stop. The driver abandoned the stopped vehicle and fled on foot; officers preserved the driver-seat scent.");
-            return base.OnCalloutAccepted();
+            return AcceptanceWorkIsActive(acceptanceGeneration);
+        }
+
+        private bool ValidateManualTrafficStopFormation(Vehicle stoppedVehicle,Vehicle cruiser,float expectedHeading)
+        {
+            if(stoppedVehicle==null||!stoppedVehicle.Exists()||cruiser==null||!cruiser.Exists())return false;
+            float vehicleDelta=System.Math.Abs(stoppedVehicle.Heading-expectedHeading);if(vehicleDelta>180f)vehicleDelta=360f-vehicleDelta;
+            float cruiserDelta=System.Math.Abs(cruiser.Heading-expectedHeading);if(cruiserDelta>180f)cruiserDelta=360f-cruiserDelta;
+            float gap=stoppedVehicle.DistanceTo(cruiser);
+            Vector3 expectedCruiser=stoppedVehicle.GetOffsetPosition(new Vector3(0f,-9f,0f));
+            float placementError=cruiser.DistanceTo(expectedCruiser);
+            bool valid=vehicleDelta<=5f&&cruiserDelta<=5f&&gap>=7.5f&&gap<=10.5f&&placementError<=1.5f;
+            Game.LogTrivial("AdvancedK9 Callouts: manual traffic-stop audit scene="+_sceneIndex+", heading="+expectedHeading+", vehicleDelta="+vehicleDelta+", cruiserDelta="+cruiserDelta+", gap="+gap+", rearPlacementError="+placementError+", valid="+valid+".");
+            return valid;
+        }
+
+        private void StartManualSuspectPlacement(int acceptanceGeneration,Vector3 verifiedEndpoint)
+        {
+            _suspectSpawnPending=true;
+            GameFiber.StartNew(delegate
+            {
+                try
+                {
+                    if(!AcceptanceWorkIsActive(acceptanceGeneration))return;
+                    NativeFunction.Natives.REQUEST_COLLISION_AT_COORD(verifiedEndpoint.X,verifiedEndpoint.Y,verifiedEndpoint.Z);
+                    GameFiber.Wait(1200);
+                    if(!AcceptanceWorkIsActive(acceptanceGeneration))return;
+                    Subject=SpawnPed("a_m_m_hillbilly_01",verifiedEndpoint,Random.Next(360));
+                    if(Subject==null||!Subject.Exists())
+                    {
+                        Game.LogTrivial("AdvancedK9 Callouts: scene "+_sceneIndex+" suspect creation failed at manually verified endpoint "+verifiedEndpoint+".");
+                        End();return;
+                    }
+                    Subject.MaxHealth=500;Subject.Health=500;Subject.BlockPermanentEvents=true;Subject.IsPersistent=true;Subject.IsInvincible=true;
+                    Subject.Position=verifiedEndpoint;
+                    Subject.Tasks.ClearImmediately();
+                    Subject.Tasks.PlayAnimation("amb@code_human_cower@male@base","base",1.0f,AnimationFlags.Loop);
+                    NativeFunction.Natives.SET_PED_KEEP_TASK(Subject,true);
+                    _hidingPosition=verifiedEndpoint;_lastSafeSubjectPosition=verifiedEndpoint;
+                    _isHidingAnimationPlaying=true;_naturalCoverReserved=true;_coverConfirmed=true;
+                    Game.LogTrivial("AdvancedK9 Callouts: scene "+_sceneIndex+" suspect locked into one-time persistent crouching at manually verified hiding endpoint "+verifiedEndpoint+"; scent registration can begin at the stopped vehicle.");
+                }
+                catch(System.Exception ex)
+                {
+                    Game.LogTrivial("AdvancedK9 Callouts: scene "+_sceneIndex+" manual hiding placement contained: "+ex);
+                    if(AcceptanceWorkIsActive(acceptanceGeneration))End();
+                }
+                finally{_suspectSpawnPending=false;}
+            },"AdvancedK9 manual crouched suspect placement");
+        }
+
+        private void StartVerifiedSuspectPlacement(int acceptanceGeneration)
+        {
+            _suspectSpawnPending=true;
+            GameFiber.StartNew(delegate
+            {
+                try
+                {
+                    while(AcceptanceWorkIsActive(acceptanceGeneration)&&Game.LocalPlayer.Character.DistanceTo(_coverSearchAnchor)>220f)GameFiber.Wait(250);
+                    if(!AcceptanceWorkIsActive(acceptanceGeneration))return;
+                    NativeFunction.Natives.REQUEST_COLLISION_AT_COORD(_coverSearchAnchor.X,_coverSearchAnchor.Y,_coverSearchAnchor.Z);
+                    GameFiber.Wait(1500);
+                    uint deadline=Game.GameTime+15000;
+                    Vector3 verifiedCover=Vector3.Zero;
+                    bool found=false;
+                    while(AcceptanceWorkIsActive(acceptanceGeneration)&&Game.GameTime<deadline)
+                    {
+                        Vector3 candidate;
+                        Vector3 safeCandidate=Vector3.Zero;
+                        if((TryFindExistingCover(_coverSearchAnchor,out candidate)||TryFindWorldGeometryCover(_coverSearchAnchor,out candidate))&&
+                           TryResolveSafePedPosition(candidate,out safeCandidate)&&
+                           !NativeFunction.Natives.IS_POINT_ON_ROAD<bool>(safeCandidate.X,safeCandidate.Y,safeCandidate.Z,0))
+                        {
+                            verifiedCover=safeCandidate;found=true;break;
+                        }
+                        NativeFunction.Natives.REQUEST_COLLISION_AT_COORD(_coverSearchAnchor.X,_coverSearchAnchor.Y,_coverSearchAnchor.Z);
+                        GameFiber.Wait(750);
+                    }
+                    if(!AcceptanceWorkIsActive(acceptanceGeneration))return;
+                    if(!found)
+                    {
+                        FailedRoadsideScenes.Add(_sceneIndex);
+                        Game.DisplayNotification("~r~AdvancedK9 callout canceled:~s~ this location could not provide concealed suspect placement.");
+                        Game.LogTrivial("AdvancedK9 Callouts: scene "+_sceneIndex+" rejected after bounded cover validation; no suspect was spawned in the open.");
+                        End();
+                        return;
+                    }
+                    _hidingPosition=verifiedCover;
+                    Subject=SpawnPed("a_m_m_hillbilly_01",verifiedCover,Random.Next(360));
+                    if(Subject==null||!Subject.Exists())
+                    {
+                        Game.LogTrivial("AdvancedK9 Callouts: verified cover was found but suspect construction failed; ending safely.");
+                        End();
+                        return;
+                    }
+                    Subject.MaxHealth=500;Subject.Health=500;Subject.BlockPermanentEvents=true;Subject.IsPersistent=true;
+                    Subject.Position=verifiedCover;
+                    Subject.Tasks.ClearImmediately();
+                    Subject.Tasks.PlayAnimation("amb@code_human_cower@male@base","base",1.0f,AnimationFlags.Loop);
+                    NativeFunction.Natives.SET_PED_KEEP_TASK(Subject,true);
+                    _isHidingAnimationPlaying=true;
+                    _naturalCoverReserved=true;
+                    _coverConfirmed=true;
+                    _lastSafeSubjectPosition=verifiedCover;
+                    Game.LogTrivial("AdvancedK9 Callouts: verified suspect placement complete; cover, scent endpoint, API target, and K9 destination share "+verifiedCover+".");
+                }
+                catch(System.Exception ex)
+                {
+                    Game.LogTrivial("AdvancedK9 Callouts: streamed suspect cover placement contained: "+ex);
+                    if(AcceptanceWorkIsActive(acceptanceGeneration))End();
+                }
+                finally{_suspectSpawnPending=false;}
+            },"AdvancedK9 verified suspect cover placement");
+        }
+
+        private bool AcceptanceCheckpoint(int generation)
+        {
+            if(AcceptanceWorkIsActive(generation))return true;
+            StopBackupOfficerInvestigation();
+            if(Subject!=null&&Subject.Exists())Subject.Dismiss();Subject=null;
+            if(OfficerOne!=null&&OfficerOne.Exists())OfficerOne.Dismiss();OfficerOne=null;
+            if(OfficerTwo!=null&&OfficerTwo.Exists())OfficerTwo.Dismiss();OfficerTwo=null;
+            if(OfficerThree!=null&&OfficerThree.Exists())OfficerThree.Dismiss();OfficerThree=null;
+            if(PoliceVehicle!=null&&PoliceVehicle.Exists())PoliceVehicle.Dismiss();PoliceVehicle=null;
+            if(PoliceVehicleTwo!=null&&PoliceVehicleTwo.Exists())PoliceVehicleTwo.Dismiss();PoliceVehicleTwo=null;
+            if(SceneVehicle!=null&&SceneVehicle.Exists())SceneVehicle.Dismiss();SceneVehicle=null;
+            Game.LogTrivial("AdvancedK9 Callouts: canceled delayed Fugitive Trail setup after LSPDFR ended the callout.");
+            return false;
         }
 
         private bool RejectCurrentScene(string reason)
@@ -282,8 +418,31 @@ namespace AdvancedK9.Callouts
 
         public override void Process()
         {
+            MaintainSpawnedPoliceAssets();
+            if(_acceptanceSetupPending)return;
+            if(_calibrationMode)
+            {
+                var calibrationPlayer=Game.LocalPlayer.Character;
+                if(calibrationPlayer!=null&&calibrationPlayer.Exists()&&calibrationPlayer.DistanceTo(Scene)<80f)ControlLiveTraffic(Scene,24f);
+                MaintainPoliceEmergencyLights();
+                return;
+            }
+            if(_suspectSpawnPending)
+            {
+                var waitingPlayer=Game.LocalPlayer.Character;
+                if(waitingPlayer!=null&&waitingPlayer.Exists())
+                {
+                    if(waitingPlayer.DistanceTo(Scene)<80f)ControlLiveTraffic(Scene,24f);
+                    MaintainPoliceEmergencyLights();
+                    if(!_approachDispatchSent&&waitingPlayer.DistanceTo(Scene)<120f)
+                    {
+                        _approachDispatchSent=true;
+                        DispatchUpdate("ApproachingScene","Failed traffic stop","Local patrol jurisdiction","Gray Primo stopped at curb with marked cruiser behind","Adult male in work clothes","Away from the driver side","Unknown weapon status","On-scene units report an adult male fled from the traffic stop. The search endpoint is being validated before K9 deployment.","UNITS_RESPOND_CODE_2",Scene);
+                    }
+                }
+                return;
+            }
             if(Finished||Subject==null||!Subject.Exists()){if(!Finished)Resolve("~r~Fugitive Trail ended: suspect unavailable.");return;}
-            ObserveSuspectLifecycle();
             var player=Game.LocalPlayer.Character;
             if(player.DistanceTo(Scene)<80f)ControlLiveTraffic(Scene,24f);
             if(_suspectLocated&&player.DistanceTo(Subject)<65f)ControlLiveTraffic(Subject.Position,22f);
@@ -298,14 +457,15 @@ namespace AdvancedK9.Callouts
             if(!_sceneBriefed&&player.DistanceTo(Scene)<28f)
             {
                 _sceneBriefed=true;_phase=FugitivePhase.AwaitingScent;_phaseStarted=Game.GameTime;
+                StopBackupOfficerInvestigation();
                 Game.DisplayNotification("~b~On-scene officer:~s~ The suspect fled on foot. I preserved their scent from the driver seat.~n~~y~Deploy Rex beside the abandoned vehicle and command TRACK.");
                 if(OfficerOne!=null&&OfficerOne.Exists())NativeFunction.Natives.TASK_TURN_PED_TO_FACE_ENTITY(OfficerOne,player,5000);
-                AssignCalloutScent(Subject,_hidingPosition,"preserved scent article from abandoned vehicle driver seat; retained for full accepted-callout lifecycle");
+                AssignCalloutScent(Subject,_hidingPosition,SceneScentDetails());
                 DispatchUpdate("OfficerBriefing","Failed traffic stop","Local patrol jurisdiction","Gray Primo; driver-seat scent preserved","Adult male in work clothes","Away from the stopped vehicle","Unknown weapon status","Contact officer briefing: adult male in work clothes, last seen fleeing away from the stopped vehicle. The driver-seat scent article remains preserved.","OFFICERS_REPORT SUSPECT_LAST_SEEN",Scene);
             }
             if(!ApiRequested&&_sceneBriefed)
             {
-                AssignCalloutScent(Subject,_hidingPosition,"preserved scent article from abandoned vehicle driver seat; retained for full accepted-callout lifecycle");
+                AssignCalloutScent(Subject,_hidingPosition,SceneScentDetails());
                 if(ApiRequested){ClearSceneRoute();Game.LogTrivial("AdvancedK9 Callouts: fugitive vehicle scent source registered; awaiting handler command.");}
             }
 
@@ -318,12 +478,11 @@ namespace AdvancedK9.Callouts
             if(_phase==FugitivePhase.Tracking&&!_suspectLocated&&!_supportCommitted&&K9TrackingActive())
             {
                 _supportCommitted=true;
-                Game.DisplayNotification("~b~On-scene officers:~s~ We are moving behind the K9 team.");
                 Game.LogTrivial("AdvancedK9 Callouts: support movement armed by handler departure from scent scene.");
             }
             if(_phase==FugitivePhase.Tracking&&_supportCommitted&&!_suspectLocated)SupportOfficersFollowK9();
 
-            if(!_suspectLocated&&!_coverConfirmed&&player.DistanceTo(_hidingPosition)<180f&&Game.GameTime>=_nextCoverSearch)
+            if(!_suspectLocated&&!_coverConfirmed&&!_activeEscapeFallback&&player.DistanceTo(_hidingPosition)<180f&&Game.GameTime>=_nextCoverSearch)
             {
                 if(_coverSearchStarted==0)_coverSearchStarted=Game.GameTime;
                 _nextCoverSearch=Game.GameTime+4000;
@@ -332,8 +491,12 @@ namespace AdvancedK9.Callouts
                 if(TryFindExistingCover(_hidingPosition,out liveCover)&&TryResolveSafePedPosition(liveCover,out safeLiveCover))
                 {
                     _hidingPosition=safeLiveCover;_naturalCoverReserved=true;_coverConfirmed=false;
-                    NativeFunction.Natives.TASK_FOLLOW_NAV_MESH_TO_COORD(Subject,safeLiveCover.X,safeLiveCover.Y,safeLiveCover.Z,4.8f,18000,1.5f,0,0f);
-                    Game.LogTrivial("AdvancedK9 Callouts: streamed environmental cover confirmed and fugitive hiding task refreshed.");
+                    if(!_coverMoveAssigned||_assignedCoverPosition.DistanceTo(safeLiveCover)>3f)
+                    {
+                        _coverMoveAssigned=true;_assignedCoverPosition=safeLiveCover;
+                        NativeFunction.Natives.TASK_FOLLOW_NAV_MESH_TO_COORD(Subject,safeLiveCover.X,safeLiveCover.Y,safeLiveCover.Z,4.8f,18000,1.5f,0,0f);
+                        Game.LogTrivial("AdvancedK9 Callouts: one-time movement assigned toward newly verified solid cover.");
+                    }
                 }
                 else
                 {
@@ -353,7 +516,7 @@ namespace AdvancedK9.Callouts
                 }
                 if(!_coverConfirmed&&_coverSearchStarted!=0&&Game.GameTime-_coverSearchStarted>=25000)
                 {
-                    _activeEscapeFallback=true;_coverConfirmed=true;
+                    _activeEscapeFallback=true;
                     _fleeActive=true;_lastSafeSubjectPosition=Subject.Position;
                     NativeFunction.Natives.TASK_SMART_FLEE_PED(Subject,player,105f,45000,false,false);
                     Game.LogTrivial("AdvancedK9 Callouts: bounded cover search exhausted; suspect assigned a genuine active-flee task instead of a stationary exposed endpoint.");
@@ -368,8 +531,15 @@ namespace AdvancedK9.Callouts
                 if(offRoad&&_naturalCoverReserved)
                 {
                     _coverConfirmed=true;
-                    NativeFunction.Natives.TASK_COWER(Subject,5000);
-                    Game.LogTrivial("AdvancedK9 Callouts: fugitive reached verified physical cover; Rex may now complete the scent alert.");
+                    if(!_isHidingAnimationPlaying)
+                    {
+                        _isHidingAnimationPlaying=true;
+                        Subject.BlockPermanentEvents=true;
+                        Subject.Tasks.ClearImmediately();
+                        Subject.Tasks.PlayAnimation("amb@code_human_cower@male@base","base",1.0f,AnimationFlags.Loop);
+                        NativeFunction.Natives.SET_PED_KEEP_TASK(Subject,true);
+                        Game.LogTrivial("AdvancedK9 Callouts: fugitive reached verified physical cover; persistent cower stance locked until the K9 alert transition.");
+                    }
                 }
                 else
                 {
@@ -379,34 +549,49 @@ namespace AdvancedK9.Callouts
             }
 
             float rexDistance=K9DistanceTo(Subject.Position);
-            if(ApiRequested&&!_suspectLocated&&!_rexReachedSubject&&_coverConfirmed&&rexDistance<3f)
+            if(ApiRequested&&!_suspectLocated&&!_rexReachedSubject&&rexDistance<=4.75f)
             {
                 _rexReachedSubject=true;_rexReachedAt=Game.GameTime;
-                Game.LogTrivial("AdvancedK9 Callouts: Rex physically reached FugitiveTrail subject; preserving the suspect's cover/flee task until the alert transition.");
+                Game.LogTrivial("AdvancedK9 Callouts: Rex entered the 4.75 metre containment handoff radius without contacting the subject.");
             }
-            bool subjectOffRoad=!NativeFunction.Natives.IS_POINT_ON_ROAD<bool>(Subject.Position.X,Subject.Position.Y,Subject.Position.Z,0);
-            if(_rexReachedSubject&&!_suspectLocated&&!subjectOffRoad&&Game.GameTime>=_nextCoverSeekTask){_nextCoverSeekTask=Game.GameTime+2500;Vector3 safeEdge;if(TryResolveSafePedPosition(Subject.GetOffsetPosition(new Vector3(8f,0f,0f)),out safeEdge))NativeFunction.Natives.TASK_FOLLOW_NAV_MESH_TO_COORD(Subject,safeEdge.X,safeEdge.Y,safeEdge.Z,3.5f,6000,1.5f,0,0f);}
-            if(_rexReachedSubject&&!_suspectLocated&&subjectOffRoad&&Game.GameTime-_rexReachedAt>=500)
+            if(_rexReachedSubject&&!_suspectLocated)
             {
                 _suspectLocated=true;_locatedAt=Game.GameTime;_phase=FugitivePhase.Located;_phaseStarted=Game.GameTime;
+                CalloutPosition=Subject.Position;
+                SetCustodyObservationEnabled(true);
                 EndSupportTracking();
                 SubjectBlip=Subject.AttachBlip();SubjectBlip.IsRouteEnabled=true;Subject.IsInvincible=false;
                 _verbalGraceUntil=Game.GameTime+(_activeEscapeFallback?8000u:45000u);
                 ControlApprehensionTraffic(Subject.Position);
                 SupportOfficersContainSubject();
-                Game.DisplayNotification("~o~Rex alerted on the hidden fugitive.~s~ Tracking is complete. Give verbal commands through NPCI; the suspect may surrender, flee, or resist.");
-                if(!_locatedDispatchSent){_locatedDispatchSent=true;DispatchUpdate("SuspectLocated","Fugitive foot trail","Local patrol jurisdiction","Abandoned gray Primo","Adult male in work clothes","Live K9 alert location","Unknown weapon status","K9 has located the fugitive. Units are establishing armed containment at the live location.","SUSPECT_LOCATED UNITS_RESPOND_CODE_3",Subject.Position);}
+                bool armedVisible=BeginArmedResistanceIfConfigured(player);
+                Game.DisplayNotification(armedVisible?"~r~Rex located an armed fugitive.~s~~n~A weapon is visible. Hold containment and assess compliance before deploying Rex.":"~o~Rex alerted on the hidden fugitive.~s~ Tracking is complete. Give verbal commands through NPCI; the suspect may surrender or flee.");
+                if(!_locatedDispatchSent){_locatedDispatchSent=true;DispatchUpdate("SuspectLocated","Fugitive foot trail","Local patrol jurisdiction","Abandoned gray Primo","Adult male in work clothes","Live K9 alert location",armedVisible?(_outcome==4?"Visible knife":"Visible handgun"):"No weapon observed","K9 has located the fugitive. Units are establishing armed containment at the live location.","SUSPECT_LOCATED UNITS_RESPOND_CODE_3",Subject.Position);}
                 Game.LogTrivial("AdvancedK9 Callouts: alert-first FugitiveTrail transition completed after Rex reached the stationary hidden subject.");
             }
 
             if(_suspectLocated)
             {
+                // Keep Nexus/CalloutInterface's active incident anchor at the live
+                // suspect location so voice-requested EMS or coroner units do not
+                // route back to the abandoned traffic-stop vehicles.
+                if(Subject!=null&&Subject.Exists())CalloutPosition=Subject.Position;
                 ObserveCooperativeControl("verbal challenge");
                 bool controlLocked=SuspectControlLocked;
-                MaintainSupportContainment(CustodyLocked||SubjectIsInCustody());
+                MaintainSupportContainment(CustodyLocked||ArrestProviderOwnsSubject||SubjectIsInCustody());
                 if(controlLocked)
                 {
+                    bool complying=SubjectIsComplying();
+                    if(complying&&!ArrestProviderOwnsSubject&&!SubjectIsInCustody())BeginBackupOfficerArrestAttempt();
+                    TransitionSuspectAwayFromHiding();
                     _fleeActive=false;_outcomeTaskIssued=true;
+                    K9ApiSnapshot liveK9;
+                    if(!_k9DisengageIssued&&AdvancedK9Api.TryGetSnapshot(out liveK9)&&(liveK9.State=="Apprehending"||liveK9.State=="HoldingSuspect"))
+                    {
+                        _k9DisengageIssued=true;
+                        AdvancedK9Api.SendCommand("Release",ContextId,HandleOf(Subject),"Ped",Subject.Position.X,Subject.Position.Y,Subject.Position.Z,"callout compliance/custody safety release");
+                        Game.LogTrivial("AdvancedK9 Callouts: compliance/custody detected; K9 release requested exactly once (release transitions the dog to medical standby).");
+                    }
                     if(!_controlDispatchSent&&!ArrestProviderOwnsSubject)
                     {
                         _controlDispatchSent=true;
@@ -418,12 +603,19 @@ namespace AdvancedK9.Callouts
                 if(!_outcomeTaskIssued&&SubjectIsComplying())
                 {
                     _outcomeTaskIssued=true;_fleeActive=false;
+                    TransitionSuspectAwayFromHiding();
+                    BeginBackupOfficerArrestAttempt();
                     Game.DisplayNotification("~g~Suspect is complying with verbal commands.~s~ Move in and complete the LSPDFR arrest.");
                 }
                 else if(!_outcomeTaskIssued&&!controlLocked&&Game.GameTime>=_verbalGraceUntil)
                 {
                     _outcomeTaskIssued=true;
-                    if(_outcome==0&&!ArrestProviderOwnsSubject)NativeFunction.Natives.TASK_HANDS_UP(Subject,120000,player,-1,true);
+                    TransitionSuspectAwayFromHiding();
+                    if((_outcome==0||_outcome==5)&&!ArrestProviderOwnsSubject)
+                    {
+                        if(_outcome==5)NativeFunction.Natives.SET_CURRENT_PED_WEAPON(Subject,NativeFunction.Natives.GET_HASH_KEY<uint>("WEAPON_UNARMED"),true);
+                        NativeFunction.Natives.TASK_HANDS_UP(Subject,120000,player,-1,true);
+                    }
                     else
                     {
                         _fleeActive=true;_lastSafeSubjectPosition=Subject.Position;
@@ -438,6 +630,7 @@ namespace AdvancedK9.Callouts
                     if(!inWater&&escapeDistance<125f)_lastSafeSubjectPosition=Subject.Position;
                     if(inWater)
                     {
+                        TransitionSuspectAwayFromHiding();
                         Subject.Position=_lastSafeSubjectPosition;
                         Subject.Tasks.ClearImmediately();
                         if(!ArrestProviderOwnsSubject)NativeFunction.Natives.TASK_HANDS_UP(Subject,120000,player,-1,true);
@@ -447,6 +640,7 @@ namespace AdvancedK9.Callouts
                     }
                     else if(escapeDistance>=125f)
                     {
+                        TransitionSuspectAwayFromHiding();
                         Subject.Tasks.Clear();
                         if(!ArrestProviderOwnsSubject)NativeFunction.Natives.TASK_HANDS_UP(Subject,120000,player,-1,true);
                         _fleeActive=false;
@@ -512,28 +706,123 @@ namespace AdvancedK9.Callouts
                         Game.DisplayNotification("~b~Custody confirmed:~s~ "+CustodyOwner+" owns the suspect. AdvancedK9 has suspended escape and suspect tasking.");
                         DispatchUpdate("CustodyConfirmed","Fugitive foot trail","Local patrol jurisdiction","Prisoner transport required","Adult male in custody","Live arrest location","Medically stable or treatment pending",CustodyOwner+" has custody. Maintain the scene until medical clearance and prisoner transport are confirmed.","",Subject.Position);
                         Game.LogTrivial("AdvancedK9 Callouts: FugitiveTrail phase -> Custody; owner="+CustodyOwner+" and all AdvancedK9 suspect task/health writes are blocked.");
-                        if(!MedicalResponseStarted||MedicalResponseComplete){_transportStarted=RequestCustodyOwnerTransport();_providerTransportRequestedAt=Game.GameTime;if(_transportStarted)_phase=FugitivePhase.Transport;}
+                        if(!_manualTransportNoticeSent)
+                        {
+                            _manualTransportNoticeSent=true;
+                            Game.DisplayNotification("~b~Custody confirmed:~s~ Request prisoner transport manually when you are ready to clear the scene.");
+                            Game.LogTrivial("AdvancedK9 Callouts: automatic prisoner transport is disabled; awaiting player/provider transport request.");
+                        }
                     }
-                    if(_custodyConfirmed&&ProviderTransportLoaded()&&Game.GameTime-_phaseStarted>3000)
-                    {
-                        _phase=FugitivePhase.Complete;Resolve("~g~Fugitive Trail complete: external-provider custody and prisoner transport confirmed.");
-                    }
-                    else if(_custodyConfirmed&&_transportStarted&&_providerTransportRequestedAt>0&&Game.GameTime-_providerTransportRequestedAt>35000u)
-                    {
-                        _providerTransportRequestedAt=0;_phase=FugitivePhase.Transport;_phaseStarted=Game.GameTime;
-                        Game.LogTrivial("AdvancedK9 Callouts: provider transport did not load the prisoner inside the monitored window; dedicated fallback transport started.");
-                        BeginAutomaticTransport("~g~Fugitive Trail complete: prisoner transferred to the on-scene patrol transport unit.");
-                    }
+                    // Custody and transport no longer end this callout automatically.
+                    // All three officers and both scene cruisers remain owned and
+                    // persistent until the player explicitly clears the callout.
                 }
-                else if(SeriousMedicalTransport&&MedicalResponseComplete)
-                {
-                    _phase=FugitivePhase.Complete;
-                    Resolve("~g~Fugitive Trail complete: EMS transported the seriously injured suspect under LSPDFR custody.");
-                }
-                else if(Game.GameTime-_locatedAt>600000)Resolve("~o~Fugitive Trail concluded after suspect location.");
             }
-            else if(!ApiRequested&&Game.GameTime-StartedAt>900000)Resolve("~r~Fugitive Trail: response expired before scent collection.");
             base.Process();
+        }
+
+        private string SceneScentDetails()
+        {
+            return _sceneIndex==1
+                ?"Scene1LongRange Palomino Freeway preserved driver-seat scent; extended verified trail profile"
+                :"preserved scent article from abandoned vehicle driver seat; retained for full accepted-callout lifecycle";
+        }
+
+        private bool BeginArmedResistanceIfConfigured(Ped player)
+        {
+            if(_suspectWeaponAssigned||_outcome<2||Subject==null||!Subject.Exists()||player==null||!player.Exists()||ArrestProviderOwnsSubject||SubjectIsInCustody())return _suspectWeaponAssigned;
+            _suspectWeaponAssigned=true;_fleeActive=false;
+            TransitionSuspectAwayFromHiding();
+            bool knife=_outcome==4;
+            uint weapon=NativeFunction.Natives.GET_HASH_KEY<uint>(knife?"WEAPON_KNIFE":"WEAPON_COMBATPISTOL");
+            NativeFunction.Natives.GIVE_WEAPON_TO_PED(Subject,weapon,knife?1:72,false,true);
+            NativeFunction.Natives.SET_CURRENT_PED_WEAPON(Subject,weapon,true);
+            NativeFunction.Natives.SET_PED_COMBAT_ATTRIBUTES(Subject,0,true);
+            NativeFunction.Natives.SET_PED_COMBAT_ATTRIBUTES(Subject,5,true);
+            NativeFunction.Natives.SET_PED_COMBAT_ABILITY(Subject,1);
+            NativeFunction.Natives.SET_PED_COMBAT_RANGE(Subject,knife?0:2);
+            if(_outcome==3||_outcome==4)
+            {
+                _outcomeTaskIssued=true;
+                NativeFunction.Natives.SET_PED_KEEP_TASK(Subject,true);
+                NativeFunction.Natives.TASK_COMBAT_PED(Subject,player,0,16);
+                Game.LogTrivial("AdvancedK9 Callouts: active armed-resistance outcome entered once with a visible "+(knife?"knife":"combat pistol")+".");
+            }
+            else
+            {
+                _outcomeTaskIssued=false;
+                NativeFunction.Natives.TASK_TURN_PED_TO_FACE_ENTITY(Subject,player,1500);
+                Game.LogTrivial("AdvancedK9 Callouts: visible-weapon containment outcome entered without forcing immediate lethal combat; compliance window remains active.");
+            }
+            return true;
+        }
+
+        private void TransitionSuspectAwayFromHiding()
+        {
+            if(!_isHidingAnimationPlaying)return;
+            _isHidingAnimationPlaying=false;
+            if(Subject==null||!Subject.Exists())return;
+            NativeFunction.Natives.SET_PED_KEEP_TASK(Subject,false);
+            Subject.Tasks.ClearImmediately();
+            Game.LogTrivial("AdvancedK9 Callouts: suspect task persistence released and hiding animation cleared safely.");
+        }
+
+        private void BeginBackupOfficerArrestAttempt()
+        {
+            if(_backupArrestAttempted||ArrestProviderOwnsSubject||SubjectIsInCustody()||OfficerOne==null||!OfficerOne.Exists())return;
+            _backupArrestAttempted=true;
+            var arrestOfficer=OfficerOne;var suspect=Subject;
+            GameFiber.StartNew(delegate
+            {
+                try
+                {
+                    if(arrestOfficer==null||!arrestOfficer.Exists()||suspect==null||!suspect.Exists())return;
+                    arrestOfficer.BlockPermanentEvents=true;
+                    uint taser=NativeFunction.Natives.GET_HASH_KEY<uint>("WEAPON_STUNGUN");
+                    NativeFunction.Natives.SET_CURRENT_PED_WEAPON(arrestOfficer,taser,true);
+                    if(OfficerTwo!=null&&OfficerTwo.Exists())NativeFunction.Natives.TASK_AIM_GUN_AT_ENTITY(OfficerTwo,suspect,-1,false);
+                    NativeFunction.Natives.TASK_GO_TO_ENTITY(arrestOfficer,suspect,-1,2.2f,2.8f,0f,0);
+                    uint approachDeadline=Game.GameTime+10000;
+                    while(!Finished&&arrestOfficer.Exists()&&suspect.Exists()&&arrestOfficer.DistanceTo(suspect)>2.8f&&Game.GameTime<approachDeadline)
+                    {
+                        if(ArrestProviderOwnsSubject||SubjectIsInCustody()){ReleaseSupportForCustody();return;}
+                        GameFiber.Wait(200);
+                    }
+                    if(!Finished&&arrestOfficer.Exists()&&suspect.Exists()&&!ArrestProviderOwnsSubject&&!SubjectIsInCustody())
+                    {
+                        NativeFunction.Natives.TASK_ARREST_PED(arrestOfficer,suspect);
+                        NativeFunction.Natives.SET_PED_KEEP_TASK(arrestOfficer,true);
+                        HandSuspectToLspdfr(suspect);
+                        Game.LogTrivial("AdvancedK9 Callouts: less-lethal backup officer began the arrest attempt after confirmed suspect compliance.");
+                    }
+                }
+                catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: backup arrest attempt contained: "+ex.Message);}
+            },"AdvancedK9 backup arrest attempt");
+        }
+
+        private void HandSuspectToLspdfr(Ped target)
+        {
+            if(target==null||!target.Exists())return;
+            TransitionSuspectAwayFromHiding();
+            _fleeActive=false;_outcomeTaskIssued=true;
+            try
+            {
+                var method=typeof(Functions).GetMethod("SetPedAsArrested",System.Reflection.BindingFlags.Public|System.Reflection.BindingFlags.Static,null,new[]{typeof(Ped),typeof(bool)},null);
+                if(method==null)
+                {
+                    Game.LogTrivial("AdvancedK9 Callouts: LSPDFR SetPedAsArrested(Ped, bool) was unavailable; native arrest attempt remains active without forcing an unsupported ownership call.");
+                    return;
+                }
+                method.Invoke(null,new object[]{target,true});
+                Game.LogTrivial("AdvancedK9 Callouts: suspect handed to the verified LSPDFR arrest surface; AdvancedK9 suspect task ownership suspended.");
+            }
+            catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: LSPDFR custody handoff contained: "+ex.Message);}
+        }
+
+        public override void End()
+        {
+            TransitionSuspectAwayFromHiding();
+            base.End();
         }
     }
 }
