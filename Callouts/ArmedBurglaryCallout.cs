@@ -40,6 +40,8 @@ namespace AdvancedK9.Callouts
         private readonly List<Ped> _bankPerimeterOfficers=new List<Ped>();
         private readonly List<Vehicle> _bankGetawayVehicles=new List<Vehicle>();
         private Vehicle _swatBearcat;
+        private Vehicle _airOne;
+        private readonly List<Ped> _airOneOfficers=new List<Ped>();
         private bool _negotiationStarted;
         private int _negotiationRound;
         private uint _nextNegotiationAt;
@@ -216,17 +218,17 @@ namespace AdvancedK9.Callouts
             if(!StagePoliceScene(CruiserScenes[_sceneIndex],CruiserHeadings[_sceneIndex],true))return false;
             Vector3 forward=HeadingVector(CruiserHeadings[_sceneIndex]);
             Vector3 right=new Vector3(forward.Y,-forward.X,0f);
-            int requiredVehicles=_sceneIndex==0?6:4;
-            int requiredOfficers=_sceneIndex==0?12:8;
+            int requiredVehicles=_sceneIndex==0?8:4;
+            int requiredOfficers=_sceneIndex==0?20:8;
             Vector3 anchor=CruiserScenes[_sceneIndex];float heading=CruiserHeadings[_sceneIndex];
-            Vector3[] positions={anchor+right*3.2f,anchor-right*3.2f,anchor-forward*13f+right*3.2f,anchor-forward*13f-right*3.2f};
-            float[] headings={heading+90f,heading+90f,heading,heading};
+            Vector3[] positions={anchor+right*3.2f,anchor-right*3.2f,anchor-forward*13f+right*3.2f,anchor-forward*13f-right*3.2f,
+                anchor+forward*14f+right*3.2f,anchor+forward*14f-right*3.2f,anchor+right*15f+forward*3.2f,anchor+right*15f-forward*3.2f};
+            float[] headings={heading+90f,heading+90f,heading,heading,heading,heading,heading+90f,heading+90f};
             PoliceVehicle.Position=positions[0];PoliceVehicle.Heading=headings[0];NativeFunction.Natives.SET_VEHICLE_ON_GROUND_PROPERLY(PoliceVehicle);
             PoliceVehicleTwo.Position=positions[1];PoliceVehicleTwo.Heading=headings[1];NativeFunction.Natives.SET_VEHICLE_ON_GROUND_PROPERLY(PoliceVehicleTwo);
             for(int i=2;i<requiredVehicles;i++)
             {
-                Vector3 position=i<4?positions[i]:anchor-forward*(23f+(i-4)*8f)+right*(i%2==0?6f:-6f);
-                float vehicleHeading=i<4?headings[i]:heading+90f;
+                Vector3 position=positions[i];float vehicleHeading=headings[i];
                 if(SpawnBankPoliceVehicle(position,vehicleHeading)==null)return false;
             }
             List<Vehicle> perimeterVehicles=AllBankPoliceVehicles();
@@ -241,7 +243,7 @@ namespace AdvancedK9.Callouts
             }
             for(int i=3;i<requiredOfficers;i++)
             {
-                bool swat=_sceneIndex==0&&i>=8;
+                bool swat=_sceneIndex==0&&i>=16;
                 Vehicle cover=perimeterVehicles[(i/2)%perimeterVehicles.Count];Vector3 position=BankCoverPosition(cover,i%2==0?-0.75f:0.75f);
                 if(SpawnBankOfficer(position,heading,swat)==null)return false;
             }
@@ -251,10 +253,27 @@ namespace AdvancedK9.Callouts
                 if(_swatBearcat==null||!_swatBearcat.Exists())_swatBearcat=SpawnVehicle("fbi2",CruiserScenes[_sceneIndex]-forward*25f+right*11f,CruiserHeadings[_sceneIndex],true);
                 if(_swatBearcat==null||!_swatBearcat.Exists())return false;
                 _swatBearcat.IsPersistent=true;NativeFunction.Natives.SET_VEHICLE_LIGHTS(_swatBearcat,2);
+                float[] swatLateral={-2.1f,-0.7f,0.7f,2.1f};
+                for(int i=0;i<4;i++)
+                {
+                    int index=_bankPerimeterOfficers.Count-4+i;if(index<0||index>=_bankPerimeterOfficers.Count)continue;
+                    Ped swat=_bankPerimeterOfficers[index];if(swat==null||!swat.Exists())continue;
+                    swat.Position=BankCoverPosition(_swatBearcat,swatLateral[i]);swat.Heading=heading;
+                    NativeFunction.Natives.TASK_STAND_GUARD(swat,swat.Position.X,swat.Position.Y,swat.Position.Z,heading,"WORLD_HUMAN_GUARD_STAND");
+                }
+                _airOne=SpawnVehicle("polmav",new Vector3(Scene.X,Scene.Y,Scene.Z+68f),heading,true);
+                if(_airOne==null||!_airOne.Exists())return false;
+                _airOne.IsPersistent=true;NativeFunction.Natives.SET_HELI_BLADES_FULL_SPEED(_airOne);
+                Ped pilot=SpawnPed("s_m_y_pilot_01",_airOne.Position,heading);Ped observer=SpawnPed("s_m_y_swat_01",_airOne.Position,heading);
+                if(pilot==null||!pilot.Exists()||observer==null||!observer.Exists())return false;
+                _airOneOfficers.Add(pilot);_airOneOfficers.Add(observer);
+                NativeFunction.Natives.SET_PED_INTO_VEHICLE(pilot,_airOne,-1);NativeFunction.Natives.SET_PED_INTO_VEHICLE(observer,_airOne,0);
+                NativeFunction.Natives.GIVE_WEAPON_TO_PED(observer,NativeFunction.Natives.GET_HASH_KEY<uint>("WEAPON_CARBINERIFLE"),180,false,true);
+                NativeFunction.Natives.TASK_HELI_MISSION(pilot,_airOne,0,0,Scene.X,Scene.Y,Scene.Z,9,24f,65f,-1f,90,45,18f,0);
             }
             MaintainSpawnedPoliceAssets();
             _bankPerimeterStaged=true;
-            Game.LogTrivial("AdvancedK9 Callouts: bank perimeter staged at "+BankNames[_sceneIndex]+" with "+requiredVehicles+" marked cruisers in two perpendicular lane-blocking pairs and "+requiredOfficers+" armed officers behind vehicle cover"+(_sceneIndex==0?", including SWAT and a BearCat.":"."));
+            Game.LogTrivial("AdvancedK9 Callouts: bank perimeter staged at "+BankNames[_sceneIndex]+" with "+requiredVehicles+" marked cruisers in perpendicular lane-blocking pairs and "+requiredOfficers+" armed ground personnel behind vehicle cover"+(_sceneIndex==0?" (all Pacific approaches closed; 16 patrol officers, four-officer SWAT team with BearCat, and two-officer Air One orbit).":"."));
             return true;
         }
 
@@ -545,7 +564,7 @@ namespace AdvancedK9.Callouts
         {
             if(_bankScenario==1)return "The manager is secure with patrol. An armed suspect fled in a dark Buffalo. The vehicle was last seen leaving the bank district; prepare for a vehicle pursuit and possible K9 bailout track.";
             if(_bankScenario==2)return _managerIsHostage?"Armed robbers are holding the bank manager at gunpoint inside. Eight armed officers are behind vehicle cover. Start negotiations before the four-officer entry team commits.":"Armed robbers are holding an employee at gunpoint inside. The manager is safe behind the command-post vehicle and provided the briefing. Eight armed officers are holding covered positions.";
-            if(_bankScenario==3)return "Armed suspects and a hostage remain inside Pacific Standard. Twelve officers, including SWAT, have the exits covered. Start negotiations before the four-officer entry team or K9 commits.";
+            if(_bankScenario==3)return "Armed suspects and a hostage remain inside Pacific Standard. Eight cruisers block every incoming traffic lane; sixteen patrol officers, four SWAT officers with a BearCat, and two Air One officers have containment. Start negotiations before entry.";
             return "The manager is secure with patrol. An armed suspect fled on foot. Officers preserved a torn shirt as the scent article; two officers can accompany the K9 team while the third maintains bank security.";
         }
 
@@ -803,6 +822,9 @@ namespace AdvancedK9.Callouts
             for(int i=0;i<_bankGetawayVehicles.Count;i++)if(_bankGetawayVehicles[i]!=null&&_bankGetawayVehicles[i].Exists())_bankGetawayVehicles[i].Dismiss();
             _bankGetawayVehicles.Clear();
             if(_swatBearcat!=null&&_swatBearcat.Exists())_swatBearcat.Dismiss();
+            for(int i=0;i<_airOneOfficers.Count;i++)if(_airOneOfficers[i]!=null&&_airOneOfficers[i].Exists())_airOneOfficers[i].Dismiss();
+            _airOneOfficers.Clear();
+            if(_airOne!=null&&_airOne.Exists())_airOne.Dismiss();
             if(_hostage!=null&&_hostage.Exists())_hostage.Dismiss();
             if(_getawayVehicle!=null&&_getawayVehicle.Exists())_getawayVehicle.Dismiss();
             base.End();
