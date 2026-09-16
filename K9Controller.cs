@@ -1981,6 +1981,14 @@ namespace AdvancedK9
                     _dog.Tasks.ClearImmediately();
                     if (target.Health < _config.NonLethalHealthFloor) target.Health = _config.NonLethalHealthFloor;
                     NativeFunction.Natives.SET_PED_CAN_RAGDOLL(target,true);
+                    uint heldWeapon=NativeFunction.Natives.GET_SELECTED_PED_WEAPON<uint>(target);
+                    uint unarmed=NativeFunction.Natives.GET_HASH_KEY<uint>("WEAPON_UNARMED");
+                    if(heldWeapon!=0&&heldWeapon!=unarmed)
+                    {
+                        Vector3 drop=target.Position;
+                        NativeFunction.Natives.SET_PED_DROPS_INVENTORY_WEAPON(target,heldWeapon,drop.X,drop.Y,drop.Z+.15f,0);
+                    }
+                    NativeFunction.Natives.SET_CURRENT_PED_WEAPON(target,unarmed,true);
                     NativeFunction.Natives.SET_PED_TO_RAGDOLL(target,8000,10000,0,false,false,false);
                     _controlledBiteTarget=target;
                     _controlledBiteHoldUntil=Game.GameTime+120000;
@@ -2577,6 +2585,11 @@ namespace AdvancedK9
         private void DrawHud()
         {
             if(Game.GameTime<_nextHudUpdate)return;_nextHudUpdate=Game.GameTime+50;
+            if(!_onDuty||!_deployed||!DogEntityExists()||_state==K9State.Dismissed)
+            {
+                _hud.Update(new GlassTacticalHud.Snapshot{Visible=false});
+                return;
+            }
             bool inactive=!_deployed||_state==K9State.Dismissed||_state==K9State.InVehicle;
             bool collapsed=_profile.HudMode==1&&_profile.HudAutoCollapse&&inactive&&!_hudPreviewSearch&&!_hudPreviewAlert;
             bool hudSearching=_hudPreviewSearch||_searchInProgress||_state==K9State.Searching;
