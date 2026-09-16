@@ -11,7 +11,9 @@ namespace AdvancedK9.Callouts
         private int _outcome;
         private bool _sceneBriefed;
         private bool _subjectLocated;
+        private bool _recoveryPublished;
         private Vector3 _plannedSubjectPosition;
+        protected override bool UsesSuspectLifecycle{get{return false;}}
 
         private Vector3 NearestWildernessScene()
         {
@@ -47,7 +49,7 @@ namespace AdvancedK9.Callouts
                 StartedAt=Game.GameTime;_outcome=Random.Next(3);
                 Reporter=SpawnPed("a_f_y_business_02",new Vector3(Scene.X-1.5f,Scene.Y,Scene.Z),0f);
                 ParentTwo=SpawnPed("a_m_y_business_02",new Vector3(Scene.X+1.5f,Scene.Y,Scene.Z),0f);
-                StagePoliceScene();
+                if(!StagePoliceScene()){End();return false;}
                 EvidenceProp=SpawnProp("prop_ld_shirt_01",new Vector3(Scene.X,Scene.Y+1.2f,Scene.Z));
                 Vector3 safeTeenPosition;
                 if(TryResolveSafePedPosition(_plannedSubjectPosition,out safeTeenPosition))_plannedSubjectPosition=safeTeenPosition;
@@ -60,8 +62,8 @@ namespace AdvancedK9.Callouts
                 Subject.Tasks.PlayAnimation("amb@code_human_cower@male@base","base",1.0f,AnimationFlags.Loop);
                 NativeFunction.Natives.SET_PED_KEEP_TASK(Subject,true);
                 Game.LogTrivial("AdvancedK9 Callouts: missing teen spawned once in persistent crouched concealment at "+_plannedSubjectPosition+" in the Mount Chiliad / Paleto Forest search region.");
-                Functions.PlayScannerAudioUsingPosition("CITIZENS_REPORT IN_OR_ON_POSITION",Scene);
                 RouteToScene("Respond to the parents and officers at the teen's last-known wilderness trail location.");
+                DispatchUpdate("CalloutAccepted","Missing vulnerable teen","Local patrol jurisdiction","Two marked scene-security cruisers","Missing teenage female","Last-known wilderness trail","Vulnerable missing person","Parents and three patrol officers are waiting at the teen's last-known location. A clothing scent article is preserved for Rex.","CITIZENS_REPORT IN_OR_ON_POSITION",Scene);
                 return base.OnCalloutAccepted();
             }
             catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: Missing Teen acceptance failed safely: "+ex);End();return false;}
@@ -86,9 +88,19 @@ namespace AdvancedK9.Callouts
                     _subjectLocated=true;SubjectBlip.Alpha=1;SubjectBlip.IsRouteEnabled=true;
                     string result=_outcome==0?"~g~Rex located the missing teen safely behind cover.":_outcome==1?"~g~Rex located the frightened teen hiding nearby.":"~o~Rex located the teen with a minor injury; request medical assistance.";
                     Game.DisplayNotification(result);Game.LogTrivial("AdvancedK9 Callouts: Rex located Missing Teen subject; marker revealed.");
+                    DispatchUpdate("SubjectLocated","Missing vulnerable teen","Local patrol jurisdiction","Two marked scene-security cruisers","Missing teenage female located","Live K9 alert location",_outcome==2?"Minor injury":"Safe recovery","Rex located the missing teen. Patrol is maintaining the recovery scene until the handler clears the callout.","SUSPECT_LOCATED",Subject.Position);
                 }
-                if(_subjectLocated&&player.DistanceTo(Subject)<5f)Resolve("~g~Missing Vulnerable Teen callout complete: teen reunited with family.");
-                else if(Game.GameTime-StartedAt>480000)Resolve("~r~Missing Teen: trail went cold before recovery.");
+                if(_subjectLocated&&player.DistanceTo(Subject)<5f&&!_recoveryPublished)
+                {
+                    _recoveryPublished=true;
+                    Subject.Tasks.ClearImmediately();NativeFunction.Natives.TASK_COWER(Subject,5000);
+                    Game.DisplayNotification("~g~Missing teen recovered.~s~ Parents and officers remain on scene. Clear the callout manually after medical or reunification arrangements.");
+                }
+                else if(!_subjectLocated&&Game.GameTime-StartedAt>480000&&!_recoveryPublished)
+                {
+                    _recoveryPublished=true;
+                    Game.DisplayNotification("~r~The trail has gone cold.~s~ The search scene remains active until you clear the callout manually.");
+                }
                 base.Process();
             }
             catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: Missing Teen process error contained: "+ex);Resolve("~r~Missing Teen ended safely after an internal scene error.");}
