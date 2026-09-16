@@ -46,10 +46,8 @@ namespace AdvancedK9.Callouts
         private uint _coverSearchStarted;
         private bool _activeEscapeFallback;
         private bool _controlDispatchSent;
-        private bool _manualTransportNoticeSent;
         private Vector3 _curbAlignedVehiclePosition;
         private bool _isHidingAnimationPlaying;
-        private bool _backupArrestAttempted;
         private bool _coverMoveAssigned;
         private bool _suspectWeaponAssigned;
         private Vector3 _assignedCoverPosition;
@@ -582,7 +580,6 @@ namespace AdvancedK9.Callouts
                 if(controlLocked)
                 {
                     bool complying=SubjectIsComplying();
-                    if(complying&&!ArrestProviderOwnsSubject&&!SubjectIsInCustody())BeginBackupOfficerArrestAttempt();
                     TransitionSuspectAwayFromHiding();
                     _fleeActive=false;_outcomeTaskIssued=true;
                     K9ApiSnapshot liveK9;
@@ -604,7 +601,6 @@ namespace AdvancedK9.Callouts
                 {
                     _outcomeTaskIssued=true;_fleeActive=false;
                     TransitionSuspectAwayFromHiding();
-                    BeginBackupOfficerArrestAttempt();
                     Game.DisplayNotification("~g~Suspect is complying with verbal commands.~s~ Move in and complete the LSPDFR arrest.");
                 }
                 else if(!_outcomeTaskIssued&&!controlLocked&&Game.GameTime>=_verbalGraceUntil)
@@ -706,12 +702,6 @@ namespace AdvancedK9.Callouts
                         Game.DisplayNotification("~b~Custody confirmed:~s~ "+CustodyOwner+" owns the suspect. AdvancedK9 has suspended escape and suspect tasking.");
                         DispatchUpdate("CustodyConfirmed","Fugitive foot trail","Local patrol jurisdiction","Prisoner transport required","Adult male in custody","Live arrest location","Medically stable or treatment pending",CustodyOwner+" has custody. Maintain the scene until medical clearance and prisoner transport are confirmed.","",Subject.Position);
                         Game.LogTrivial("AdvancedK9 Callouts: FugitiveTrail phase -> Custody; owner="+CustodyOwner+" and all AdvancedK9 suspect task/health writes are blocked.");
-                        if(!_manualTransportNoticeSent)
-                        {
-                            _manualTransportNoticeSent=true;
-                            Game.DisplayNotification("~b~Custody confirmed:~s~ Request prisoner transport manually when you are ready to clear the scene.");
-                            Game.LogTrivial("AdvancedK9 Callouts: automatic prisoner transport is disabled; awaiting player/provider transport request.");
-                        }
                     }
                     // Custody and transport no longer end this callout automatically.
                     // All three officers and both scene cruisers remain owned and
@@ -765,58 +755,6 @@ namespace AdvancedK9.Callouts
             NativeFunction.Natives.SET_PED_KEEP_TASK(Subject,false);
             Subject.Tasks.ClearImmediately();
             Game.LogTrivial("AdvancedK9 Callouts: suspect task persistence released and hiding animation cleared safely.");
-        }
-
-        private void BeginBackupOfficerArrestAttempt()
-        {
-            if(_backupArrestAttempted||ArrestProviderOwnsSubject||SubjectIsInCustody()||OfficerOne==null||!OfficerOne.Exists())return;
-            _backupArrestAttempted=true;
-            var arrestOfficer=OfficerOne;var suspect=Subject;
-            GameFiber.StartNew(delegate
-            {
-                try
-                {
-                    if(arrestOfficer==null||!arrestOfficer.Exists()||suspect==null||!suspect.Exists())return;
-                    arrestOfficer.BlockPermanentEvents=true;
-                    uint taser=NativeFunction.Natives.GET_HASH_KEY<uint>("WEAPON_STUNGUN");
-                    NativeFunction.Natives.SET_CURRENT_PED_WEAPON(arrestOfficer,taser,true);
-                    if(OfficerTwo!=null&&OfficerTwo.Exists())NativeFunction.Natives.TASK_AIM_GUN_AT_ENTITY(OfficerTwo,suspect,-1,false);
-                    NativeFunction.Natives.TASK_GO_TO_ENTITY(arrestOfficer,suspect,-1,2.2f,2.8f,0f,0);
-                    uint approachDeadline=Game.GameTime+10000;
-                    while(!Finished&&arrestOfficer.Exists()&&suspect.Exists()&&arrestOfficer.DistanceTo(suspect)>2.8f&&Game.GameTime<approachDeadline)
-                    {
-                        if(ArrestProviderOwnsSubject||SubjectIsInCustody()){ReleaseSupportForCustody();return;}
-                        GameFiber.Wait(200);
-                    }
-                    if(!Finished&&arrestOfficer.Exists()&&suspect.Exists()&&!ArrestProviderOwnsSubject&&!SubjectIsInCustody())
-                    {
-                        NativeFunction.Natives.TASK_ARREST_PED(arrestOfficer,suspect);
-                        NativeFunction.Natives.SET_PED_KEEP_TASK(arrestOfficer,true);
-                        HandSuspectToLspdfr(suspect);
-                        Game.LogTrivial("AdvancedK9 Callouts: less-lethal backup officer began the arrest attempt after confirmed suspect compliance.");
-                    }
-                }
-                catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: backup arrest attempt contained: "+ex.Message);}
-            },"AdvancedK9 backup arrest attempt");
-        }
-
-        private void HandSuspectToLspdfr(Ped target)
-        {
-            if(target==null||!target.Exists())return;
-            TransitionSuspectAwayFromHiding();
-            _fleeActive=false;_outcomeTaskIssued=true;
-            try
-            {
-                var method=typeof(Functions).GetMethod("SetPedAsArrested",System.Reflection.BindingFlags.Public|System.Reflection.BindingFlags.Static,null,new[]{typeof(Ped),typeof(bool)},null);
-                if(method==null)
-                {
-                    Game.LogTrivial("AdvancedK9 Callouts: LSPDFR SetPedAsArrested(Ped, bool) was unavailable; native arrest attempt remains active without forcing an unsupported ownership call.");
-                    return;
-                }
-                method.Invoke(null,new object[]{target,true});
-                Game.LogTrivial("AdvancedK9 Callouts: suspect handed to the verified LSPDFR arrest surface; AdvancedK9 suspect task ownership suspended.");
-            }
-            catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: LSPDFR custody handoff contained: "+ex.Message);}
         }
 
         public override void End()
