@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Collections.Generic;
 using AdvancedK9.API;
 using LSPD_First_Response.Mod.API;
 using LSPD_First_Response.Mod.Callouts;
@@ -72,6 +73,7 @@ namespace AdvancedK9.Callouts
         private string _transportStage="not-requested";
         private bool _suspectLocationPublished;
         private bool _sharedBackupArrestAttempted;
+        private readonly HashSet<int> _sharedOfficerArrestTargets=new HashSet<int>();
         private bool _sharedControlDispatchSent;
         private bool _sharedManualTransportNoticeSent;
         private static bool _nexusAudioSurfacesLogged;
@@ -86,6 +88,7 @@ namespace AdvancedK9.Callouts
         // Non-criminal search/recovery callouts can opt out without duplicating the
         // scene-persistence, emergency-light, traffic, route, or cleanup systems.
         protected virtual bool UsesSuspectLifecycle{get{return true;}}
+        protected virtual bool SharedOfficerArrestReady{get{return true;}}
         protected void SetCustodyObservationEnabled(bool enabled){_custodyObservationEnabled=enabled;}
         protected bool SharedSuspectTaskingBlocked{get{return UsesSuspectLifecycle&&SuspectControlLocked;}}
         protected bool SuspectControlLocked
@@ -896,10 +899,18 @@ namespace AdvancedK9.Callouts
 
         protected void BeginNativeLspdfrOfficerArrest()
         {
-            if(_sharedBackupArrestAttempted||Subject==null||!Subject.Exists()||ArrestProviderOwnsSubject||SubjectIsInCustody()||!SubjectIsComplying())return;
-            Ped arrestOfficer=OfficerOne;Ped lethalCover=OfficerTwo;Ped suspect=Subject;
-            if(arrestOfficer==null||!arrestOfficer.Exists())return;
+            if(_sharedBackupArrestAttempted||!SharedOfficerArrestReady||Subject==null||!Subject.Exists()||ArrestProviderOwnsSubject||SubjectIsInCustody()||!SubjectIsComplying())return;
             _sharedBackupArrestAttempted=true;
+            BeginNativeLspdfrOfficerArrest(Subject,OfficerOne,OfficerTwo);
+        }
+
+        protected void BeginNativeLspdfrOfficerArrest(Ped suspect,Ped arrestOfficer,Ped lethalCover)
+        {
+            if(suspect==null||!suspect.Exists()||arrestOfficer==null||!arrestOfficer.Exists())return;
+            int targetHandle=HandleOf(suspect);if(targetHandle==0||_sharedOfficerArrestTargets.Contains(targetHandle))return;
+            bool restrained=false;try{restrained=NativeFunction.Natives.IS_PED_CUFFED<bool>(suspect)||NativeFunction.Natives.IS_PED_HANDCUFFED<bool>(suspect);}catch{}
+            if(restrained)return;
+            _sharedOfficerArrestTargets.Add(targetHandle);
             GameFiber.StartNew(delegate
             {
                 try
@@ -912,10 +923,10 @@ namespace AdvancedK9.Callouts
                     uint deadline=Game.GameTime+10000;
                     while(!Finished&&arrestOfficer.Exists()&&suspect.Exists()&&arrestOfficer.DistanceTo(suspect)>2.8f&&Game.GameTime<deadline)
                     {
-                        if(ArrestProviderOwnsSubject||SubjectIsInCustody()){ReleaseSupportForCustody();return;}
+                        if(PedIsRestrained(suspect)){if(suspect==Subject)ReleaseSupportForCustody();return;}
                         GameFiber.Wait(200);
                     }
-                    if(Finished||!arrestOfficer.Exists()||!suspect.Exists()||ArrestProviderOwnsSubject||SubjectIsInCustody())return;
+                    if(Finished||!arrestOfficer.Exists()||!suspect.Exists()||PedIsRestrained(suspect))return;
                     NativeFunction.Natives.TASK_ARREST_PED(arrestOfficer,suspect);
                     NativeFunction.Natives.SET_PED_KEEP_TASK(arrestOfficer,true);
                     var setArrested=typeof(Functions).GetMethod("SetPedAsArrested",System.Reflection.BindingFlags.Public|System.Reflection.BindingFlags.Static,null,new[]{typeof(Ped),typeof(bool)},null);
@@ -924,6 +935,13 @@ namespace AdvancedK9.Callouts
                 }
                 catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: native LSPDFR officer arrest contained: "+ex.Message);}
             },"AdvancedK9 native LSPDFR officer arrest");
+        }
+
+        private static bool PedIsRestrained(Ped ped)
+        {
+            if(ped==null||!ped.Exists())return true;
+            try{return NativeFunction.Natives.IS_PED_CUFFED<bool>(ped)||NativeFunction.Natives.IS_PED_HANDCUFFED<bool>(ped);}
+            catch{return false;}
         }
 
         protected bool ValidateTrafficStopFormation(Vehicle stoppedVehicle,Vehicle cruiser,float expectedHeading)
