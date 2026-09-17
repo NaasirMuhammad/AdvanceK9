@@ -401,7 +401,7 @@ namespace AdvancedK9
             Game.LogTrivial(line);
             Game.DisplayNotification("~b~Calibration point captured~s~~n~"+position.X.ToString("0.00")+", "+position.Y.ToString("0.00")+", "+position.Z.ToString("0.00")+"~n~Heading: "+player.Heading.ToString("0.0")+"~n~Saved in RagePluginHook.log");
         }
-        private void RequestCallout(string name){_menu.Close();AdvancedK9Api.RequestCallout(name);Game.DisplayNotification("~b~AdvancedK9:~s~ requesting "+name+".");}
+        private void RequestCallout(string name){_menu.Close();AdvancedK9Api.RequestCallout(name);Game.DisplayNotification("~b~AdvancedK9:~s~ requesting "+name+".~n~~y~Accept immediately with your normal LSPDFR callout key; the pending offer expires before a delayed voice acknowledgement can complete.~s~");}
 
         private void OnMenuSelected(int index)
         {
