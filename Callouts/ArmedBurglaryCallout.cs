@@ -58,6 +58,14 @@ namespace AdvancedK9.Callouts
         private bool _bankPostArrestPostureAssigned;
         private uint _nextBankTacticalRefresh;
         private readonly List<Ped> _bankEntryTeam=new List<Ped>();
+        private readonly List<Ped> _bankEscapeSuspects=new List<Ped>();
+        private readonly List<Rage.Object> _bankScentArticles=new List<Rage.Object>();
+        private readonly List<Blip> _bankScentBlips=new List<Blip>();
+        private readonly List<Blip> _bankPursuitUnitBlips=new List<Blip>();
+        private Blip _bailoutVehicleBlip;
+        private int _selectedBailoutTarget=-1;
+        private bool _scentChoiceHeld;
+        private bool _bankPursuitUnitsDeployed;
         private static int _lastBankScene=-1;
         protected override bool SharedOfficerArrestReady{get{return !_bankEntryTeamActive||_bankEntryAuthorized;}}
 
@@ -506,6 +514,11 @@ namespace AdvancedK9.Callouts
 
         private bool AllBankRobbersResolved()
         {
+            if(_bankEscapeSuspects.Count>0)
+            {
+                for(int i=0;i<_bankEscapeSuspects.Count;i++)if(!BankRobberResolved(_bankEscapeSuspects[i]))return false;
+                return true;
+            }
             if(Subject!=null&&Subject.Exists()&&!Subject.IsDead&&!SubjectIsInCustody())return false;
             for(int i=0;i<_bankAccomplices.Count;i++)
             {
@@ -518,6 +531,13 @@ namespace AdvancedK9.Callouts
                 }
             }
             return true;
+        }
+
+        private static bool BankRobberResolved(Ped robber)
+        {
+            if(robber==null||!robber.Exists()||robber.IsDead)return true;
+            try{return NativeFunction.Natives.IS_PED_CUFFED<bool>(robber)||NativeFunction.Natives.IS_PED_HANDCUFFED<bool>(robber);}
+            catch{return false;}
         }
 
         public override bool OnBeforeCalloutDisplayed()
@@ -546,8 +566,8 @@ namespace AdvancedK9.Callouts
             if(_bankScenario==2||_bankScenario==3)return InitializeBankContainmentScenario(_bankScenario==3);
             EvidenceProp=SpawnProp("prop_ld_shirt_01",new Vector3(Scene.X-1.5f,Scene.Y+1f,Scene.Z));
             float angle=Random.Next(360);float dx=1f,dy=0f,length=1f;
-            bool found=false;Vector3 coverPosition=Scene;float[] offsets={10f,-10f,14f,-14f,18f,-18f};
-            for(int routeAttempt=0;routeAttempt<10&&!found;routeAttempt++)
+            bool found=false;Vector3 bestOffRoad=Vector3.Zero;int viableRoutes=0;float[] offsets={10f,-10f,14f,-14f,18f,-18f,22f,-22f};
+            for(int routeAttempt=0;routeAttempt<24&&!found;routeAttempt++)
             {
                 float distance=Random.Next(65,111);float radians=(float)(angle*System.Math.PI/180.0);
                 Vector3 streetTarget=World.GetNextPositionOnStreet(Scene+new Vector3((float)System.Math.Sin(radians)*distance,(float)System.Math.Cos(radians)*distance,0f));
@@ -556,16 +576,25 @@ namespace AdvancedK9.Callouts
                 for(int i=0;i<offsets.Length;i++)
                 {
                     Vector3 candidate=new Vector3(streetTarget.X-dy/length*offsets[i],streetTarget.Y+dx/length*offsets[i],streetTarget.Z);
-                    if(NativeFunction.Natives.GET_INTERIOR_AT_COORDS<int>(candidate.X,candidate.Y,candidate.Z)==0&&!NativeFunction.Natives.IS_POINT_ON_ROAD<bool>(candidate.X,candidate.Y,candidate.Z,0)){coverPosition=candidate;found=true;break;}
+                    if(NativeFunction.Natives.GET_INTERIOR_AT_COORDS<int>(candidate.X,candidate.Y,candidate.Z)!=0||NativeFunction.Natives.IS_POINT_ON_ROAD<bool>(candidate.X,candidate.Y,candidate.Z,0))continue;
+                    viableRoutes++;if(viableRoutes==1)bestOffRoad=candidate;
+                    Vector3 concealed;
+                    if((TryFindExistingCover(candidate,out concealed)||TryFindWorldGeometryCover(candidate,out concealed))&&
+                       !NativeFunction.Natives.IS_POINT_ON_ROAD<bool>(concealed.X,concealed.Y,concealed.Z,0))
+                    {
+                        _hidePosition=concealed;found=true;
+                        Game.LogTrivial("AdvancedK9 Callouts: bank foot-trail route "+(routeAttempt+1)+" accepted after evaluating "+viableRoutes+" viable off-road endpoints.");
+                        break;
+                    }
                 }
                 angle=(angle+41f)%360f;
             }
-            if(!found){Game.LogTrivial("AdvancedK9 Callouts: Armed Burglary rejected because no safe off-road suspect cover was available.");return false;}
-            if(!TryFindExistingCover(coverPosition,out _hidePosition))
+            if(!found&&viableRoutes>0)
             {
-                Game.LogTrivial("AdvancedK9 Callouts: Armed Burglary rejected because the trail end had no existing environmental concealment.");
-                return false;
+                _hidePosition=bestOffRoad;found=true;
+                Game.LogTrivial("AdvancedK9 Callouts: no streamed concealment object was available after "+viableRoutes+" viable route checks; retaining the selected foot-trail scenario at the safest off-road endpoint instead of changing variants.");
             }
+            if(!found){Game.LogTrivial("AdvancedK9 Callouts: bank foot-trail variant rejected only after 24 route directions produced no viable off-road endpoint.");return false;}
             Subject=SpawnPed("g_m_y_mexgoon_02",_hidePosition,Random.Next(360));if(Subject==null)return false;
             Subject.MaxHealth=250;Subject.Health=250;
             ConfigureArmedBankRobber(false);
@@ -592,16 +621,73 @@ namespace AdvancedK9.Callouts
             Subject.MaxHealth=250;Subject.Health=250;
             ConfigureArmedBankRobber(false);
             NativeFunction.Natives.SET_PED_INTO_VEHICLE(Subject,_getawayVehicle,-1);
-            int accompliceCount=Random.Next(1,3);
+            _bankEscapeSuspects.Add(Subject);
+            int accompliceCount=1;
             for(int i=0;i<accompliceCount;i++)
             {
                 Ped accomplice=SpawnPed(i==0?"g_m_y_mexgoon_01":"g_m_y_salvagoon_01",road,CruiserHeadings[_sceneIndex]);
                 ConfigureArmedAccomplice(accomplice,false);
-                if(accomplice!=null&&accomplice.Exists())NativeFunction.Natives.SET_PED_INTO_VEHICLE(accomplice,_getawayVehicle,i);
+                if(accomplice!=null&&accomplice.Exists())
+                {
+                    NativeFunction.Natives.SET_PED_INTO_VEHICLE(accomplice,_getawayVehicle,i);
+                    _bankEscapeSuspects.Add(accomplice);
+                }
             }
             if(!AcceptAndRouteToSelectedBank("The manager is safe with officers; armed suspects fled in a vehicle moments before arrival."))return false;
             DispatchUpdate("CalloutAccepted","Bank robbery vehicle escape","Local patrol jurisdiction","Dark Buffalo fleeing the bank","Armed bank-robbery suspect","Leaving the bank district by vehicle","Confirmed armed","Bank robbery in progress. The manager remains with officers at the bank while an armed suspect escapes in a dark Buffalo. Prepare for a vehicle pursuit and possible K9 bailout track.","WE_HAVE CRIME_BURGLARY IN_OR_ON_POSITION UNITS_RESPOND_CODE_3",Scene);
             return true;
+        }
+
+        private void DeployBankPursuitUnits()
+        {
+            if(_bankPursuitUnitsDeployed||Subject==null||!Subject.Exists())return;
+            _bankPursuitUnitsDeployed=true;
+            List<Vehicle> vehicles=AllBankPoliceVehicles();List<Ped> officers=AllBankOfficers();
+            int officerIndex=2;int deployed=0;
+            // Vehicle zero and the first two officers remain at the bank to secure
+            // evidence and preserve the primary crime scene.
+            for(int vehicleIndex=1;vehicleIndex<vehicles.Count&&officerIndex<officers.Count;vehicleIndex++,officerIndex++)
+            {
+                Vehicle cruiser=vehicles[vehicleIndex];Ped officer=officers[officerIndex];
+                if(cruiser==null||!cruiser.Exists()||officer==null||!officer.Exists())continue;
+                deployed++;
+                NativeFunction.Natives.SET_VEHICLE_SIREN(cruiser,true);NativeFunction.Natives.SET_VEHICLE_LIGHTS(cruiser,2);
+                Blip unitBlip=officer.AttachBlip();unitBlip.Name="Bank pursuit unit "+deployed;unitBlip.IsRouteEnabled=deployed==1;_bankPursuitUnitBlips.Add(unitBlip);
+                Ped chaseTarget=Subject;Vehicle chaseVehicle=cruiser;Ped chaseOfficer=officer;
+                GameFiber.StartNew(delegate
+                {
+                    try
+                    {
+                        NativeFunction.Natives.SET_PED_KEEP_TASK(chaseOfficer,true);
+                        NativeFunction.Natives.TASK_ENTER_VEHICLE(chaseOfficer,chaseVehicle,10000,-1,4.5f,1,0);
+                        uint entryDeadline=Game.GameTime+10000;
+                        while(!Finished&&chaseOfficer.Exists()&&chaseVehicle.Exists()&&!chaseOfficer.IsInVehicle(chaseVehicle,false)&&Game.GameTime<entryDeadline)GameFiber.Wait(200);
+                        if(!chaseOfficer.IsInVehicle(chaseVehicle,false))NativeFunction.Natives.SET_PED_INTO_VEHICLE(chaseOfficer,chaseVehicle,-1);
+                        NativeFunction.Natives.TASK_VEHICLE_CHASE(chaseOfficer,chaseTarget);
+                        while(!Finished&&chaseOfficer.Exists()&&chaseTarget.Exists()&&chaseTarget.IsInVehicle(_getawayVehicle,false))GameFiber.Wait(300);
+                        if(!Finished&&chaseOfficer.Exists()&&chaseVehicle.Exists())
+                        {
+                            NativeFunction.Natives.TASK_LEAVE_VEHICLE(chaseOfficer,chaseVehicle,0);
+                            GameFiber.Wait(1200);
+                            Ped footTarget=NearestUnresolvedEscapeSuspect(chaseOfficer.Position);
+                            if(footTarget!=null&&footTarget.Exists())NativeFunction.Natives.TASK_GO_TO_ENTITY(chaseOfficer,footTarget,-1,8f,4.2f,0f,0);
+                        }
+                    }
+                    catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: bank pursuit-unit task contained: "+ex.Message);}
+                },"AdvancedK9 bank pursuit unit");
+            }
+            Game.LogTrivial("AdvancedK9 Callouts: "+deployed+" existing scene cruisers joined the bank pursuit; one marked cruiser and two officers remained at the primary evidence scene. Pursuing officer GPS blips remain active through vehicle and foot phases.");
+        }
+
+        private Ped NearestUnresolvedEscapeSuspect(Vector3 position)
+        {
+            Ped nearest=null;float best=float.MaxValue;
+            for(int i=0;i<_bankEscapeSuspects.Count;i++)
+            {
+                Ped suspect=_bankEscapeSuspects[i];if(BankRobberResolved(suspect))continue;
+                float distance=suspect.DistanceTo(position);if(distance<best){best=distance;nearest=suspect;}
+            }
+            return nearest;
         }
 
         private bool InitializeBankContainmentScenario(bool pacificInterior)
@@ -744,31 +830,74 @@ namespace AdvancedK9.Callouts
                     TryStartBankPursuit();
                 }
                 catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: LSPDFR bank pursuit setup contained; native flight remains active: "+ex.Message);}
+                DeployBankPursuitUnits();
                 Game.DisplayNotification("~r~Bank robbery vehicle located.~s~ Join the pursuit. If the suspect bails out, Rex can transition to the recorded foot trail.");
-                Game.LogTrivial("AdvancedK9 Callouts: bank vehicle-escape scenario started native high-speed flight; manager and scene officers remained at the bank.");
+                Game.LogTrivial("AdvancedK9 Callouts: bank vehicle-escape scenario started native high-speed flight; pursuit units departed in marked cruisers while one cruiser remained at the bank evidence scene.");
             }
             bool driverOnFoot=_bankScenarioStarted&&_getawayVehicle!=null&&_getawayVehicle.Exists()&&!Subject.IsInVehicle(_getawayVehicle,false);
             if(driverOnFoot&&!_bailoutTrackReady&&Subject.DistanceTo(_getawayVehicle)>6f&&!SubjectIsInCustody())
             {
                 _bailoutTrackReady=true;
                 try{if(BankPursuitIsRunning())EndBankPursuit();}catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: pursuit-to-track handoff contained: "+ex.Message);}
-                EvidenceProp=SpawnProp("prop_cs_shoe_01",_getawayVehicle.Position);
-                Vector3 article=EvidenceProp!=null&&EvidenceProp.Exists()?EvidenceProp.Position:_getawayVehicle.Position;
-                AssignCalloutScent(Subject,article,"shoe recovered beside the abandoned bank getaway vehicle","The driver bailed out and left a shoe beside the getaway vehicle. Bring Rex to it and command COLLECT SCENT or TRACK.");
-                Game.DisplayNotification("~b~Dispatch:~s~ Bank robber bailed out. The abandoned getaway vehicle now contains a viable K9 scent article.");
-                DispatchUpdate("BailoutTrackReady","Bank robbery bailout track","Local patrol jurisdiction","Abandoned dark Buffalo","Armed bank-robbery suspects","Last seen fleeing from the vehicle","Confirmed armed","The getaway driver bailed out. A shoe beside the abandoned vehicle has been preserved for Rex.","",_getawayVehicle.Position);
+                StageBailoutScentArticles();
+                Game.DisplayNotification("~b~Dispatch:~s~ Driver and passenger fled separately. Return to the abandoned getaway car and select which seat scent Rex should track first.");
+                DispatchUpdate("BailoutTrackReady","Bank robbery bailout track","Local patrol jurisdiction","Abandoned dark Buffalo","Armed driver and passenger","Separate directions from the abandoned vehicle","Confirmed armed","Distinct driver-seat and passenger-seat scent articles are preserved. The handler must select one target for Rex first.","",_getawayVehicle.Position);
             }
+            if(_bailoutTrackReady)ProcessBailoutScentSelection(player);
             if(_bailoutTrackReady&&!_suspectLocated&&K9TrackingActive())SupportOfficersFollowK9();
-            if(_bailoutTrackReady&&!_suspectLocated&&System.Math.Min(K9DistanceTo(Subject.Position),player.DistanceTo(Subject))<18f)
+            if(_bailoutTrackReady&&_selectedBailoutTarget>=0&&!_suspectLocated&&System.Math.Min(K9DistanceTo(Subject.Position),player.DistanceTo(Subject))<18f)
             {
                 _suspectLocated=true;EndSupportTracking();
                 if(_bankWeaponHash!=0)NativeFunction.Natives.SET_CURRENT_PED_WEAPON(Subject,_bankWeaponHash,true);
                 SupportOfficersContainSubject();
-                Game.DisplayNotification("~r~Rex located the armed getaway driver.~s~ Establish containment and issue commands.");
+                if(SubjectBlip!=null&&SubjectBlip.Exists())SubjectBlip.Delete();SubjectBlip=Subject.AttachBlip();SubjectBlip.Name="Located bank suspect";SubjectBlip.IsRouteEnabled=true;
+                Game.DisplayNotification("~r~Rex located the selected armed bank suspect.~s~ The live GPS marker is restored. Establish containment and issue commands.");
             }
-            if(SubjectIsInCustody()&&!_bankCustodyNotice){_bankCustodyNotice=true;PublishBankOutcome("SuspectInCustody","The primary getaway suspect is in custody. Confirm every accomplice before clearing the bank scene.");}
-            else if(AllBankRobbersResolved())PublishBankOutcome("AllSuspectsResolved","All getaway suspects are secured or otherwise resolved. The bank scene remains held for investigation.");
+            if(_selectedBailoutTarget>=0&&BankRobberResolved(Subject)&&!AllBankRobbersResolved())PrepareNextBailoutTrack();
+            if(AllBankRobbersResolved())PublishBankOutcome("AllSuspectsResolved","Driver and passenger are both secured or otherwise resolved. The bank scene remains held for investigation.");
             else if(_bankScenarioStarted&&Game.GameTime-_scenarioStartedAt>480000)PublishBankOutcome("SuspectsEscaped","The getaway suspects escaped after an extended pursuit. Preserve the originating bank scene for investigation.");
+        }
+
+        private void StageBailoutScentArticles()
+        {
+            if(_getawayVehicle==null||!_getawayVehicle.Exists())return;
+            Vector3 driverArticle=_getawayVehicle.GetOffsetPosition(new Vector3(-1.35f,.15f,0f));
+            Vector3 passengerArticle=_getawayVehicle.GetOffsetPosition(new Vector3(1.35f,.15f,0f));
+            string[] models={"prop_cs_shoe_01","prop_cs_shopping_bag"};
+            Vector3[] positions={driverArticle,passengerArticle};
+            int count=System.Math.Min(_bankEscapeSuspects.Count,2);
+            for(int i=0;i<count;i++)
+            {
+                Rage.Object article=SpawnProp(models[i],positions[i]);_bankScentArticles.Add(article);
+                Blip articleBlip=new Blip(positions[i]);articleBlip.Name=i==0?"Driver scent article":"Passenger scent article";_bankScentBlips.Add(articleBlip);
+            }
+            _bailoutVehicleBlip=new Blip(_getawayVehicle.Position);_bailoutVehicleBlip.Name="Abandoned bank getaway vehicle";
+            Game.LogTrivial("AdvancedK9 Callouts: distinct driver and passenger scent articles staged at the abandoned getaway vehicle; no target is assigned until the player selects a scent.");
+        }
+
+        private void ProcessBailoutScentSelection(Ped player)
+        {
+            if(_selectedBailoutTarget>=0||_getawayVehicle==null||!_getawayVehicle.Exists()||player.DistanceTo(_getawayVehicle)>14f)return;
+            bool one=Game.IsKeyDown(System.Windows.Forms.Keys.D1),two=Game.IsKeyDown(System.Windows.Forms.Keys.D2);bool any=one||two;
+            Game.DisplayHelp("Select Rex's scent: [1] ~y~driver-seat article~s~  [2] ~b~passenger-seat article~s~. Rex tracks only the scent you present.");
+            if(!any){_scentChoiceHeld=false;return;}if(_scentChoiceHeld)return;_scentChoiceHeld=true;
+            int index=one?0:1;if(index>=_bankEscapeSuspects.Count||BankRobberResolved(_bankEscapeSuspects[index]))
+            {
+                Game.DisplayNotification("~y~That bank suspect is already resolved. Select the remaining scent article.");return;
+            }
+            _selectedBailoutTarget=index;Subject=_bankEscapeSuspects[index];_suspectLocated=false;_bankCustodyNotice=false;ApiRequested=false;ResetSuspectLifecycleForNewSubject();
+            Rage.Object article=index<_bankScentArticles.Count?_bankScentArticles[index]:null;Vector3 collection=article!=null&&article.Exists()?article.Position:_getawayVehicle.Position;
+            AssignCalloutScent(Subject,collection,index==0?"preserved driver-seat scent":"preserved passenger-seat scent",(index==0?"Driver":"Passenger")+" scent selected. Bring Rex to the marked article and command COLLECT SCENT or TRACK.");
+            if(index<_bankScentBlips.Count&&_bankScentBlips[index]!=null&&_bankScentBlips[index].Exists())_bankScentBlips[index].IsRouteEnabled=true;
+            Game.DisplayNotification("~b~K9 target selected:~s~ "+(index==0?"getaway driver":"front passenger")+". Pursuing officers remain marked on GPS.");
+        }
+
+        private void PrepareNextBailoutTrack()
+        {
+            int completed=_selectedBailoutTarget;_selectedBailoutTarget=-1;_suspectLocated=false;ApiRequested=false;
+            if(SubjectBlip!=null&&SubjectBlip.Exists())SubjectBlip.Delete();SubjectBlip=null;
+            if(completed>=0&&completed<_bankScentBlips.Count&&_bankScentBlips[completed]!=null&&_bankScentBlips[completed].Exists())_bankScentBlips[completed].IsRouteEnabled=false;
+            Game.DisplayNotification("~b~First scent resolved.~s~ Return to the abandoned getaway vehicle and select the remaining driver or passenger article. Pursuing-unit GPS markers remain active.");
         }
 
         private void ProcessBankContainment(Ped player)
@@ -924,6 +1053,13 @@ namespace AdvancedK9.Callouts
             _bankPerimeterVehicles.Clear();
             for(int i=0;i<_bankGetawayVehicles.Count;i++)if(_bankGetawayVehicles[i]!=null&&_bankGetawayVehicles[i].Exists())_bankGetawayVehicles[i].Dismiss();
             _bankGetawayVehicles.Clear();
+            for(int i=0;i<_bankScentArticles.Count;i++)if(_bankScentArticles[i]!=null&&_bankScentArticles[i].Exists())_bankScentArticles[i].Delete();
+            _bankScentArticles.Clear();
+            for(int i=0;i<_bankScentBlips.Count;i++)if(_bankScentBlips[i]!=null&&_bankScentBlips[i].Exists())_bankScentBlips[i].Delete();
+            _bankScentBlips.Clear();
+            for(int i=0;i<_bankPursuitUnitBlips.Count;i++)if(_bankPursuitUnitBlips[i]!=null&&_bankPursuitUnitBlips[i].Exists())_bankPursuitUnitBlips[i].Delete();
+            _bankPursuitUnitBlips.Clear();
+            if(_bailoutVehicleBlip!=null&&_bailoutVehicleBlip.Exists())_bailoutVehicleBlip.Delete();
             if(_swatBearcat!=null&&_swatBearcat.Exists())_swatBearcat.Dismiss();
             for(int i=0;i<_airOneOfficers.Count;i++)if(_airOneOfficers[i]!=null&&_airOneOfficers[i].Exists())_airOneOfficers[i].Dismiss();
             _airOneOfficers.Clear();

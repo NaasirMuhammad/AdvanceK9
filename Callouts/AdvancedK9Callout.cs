@@ -772,6 +772,16 @@ namespace AdvancedK9.Callouts
             Game.LogTrivial("AdvancedK9 Callouts: search-follow controller stopped; later phases now own officer tasks.");
         }
 
+        protected void ResetSuspectLifecycleForNewSubject()
+        {
+            _custodyLeaseStarted=0;_custodyLeaseActive=false;_custodyObservedAt=0;_custodyOwnerSettleUntil=0;_custodyOwner="None";
+            _deathObservedAt=0;_suspectLifecycle=SuspectLifecycle.Located;_arrestStartedPublished=false;_calloutBridgeRequestId="";_nextCalloutBridgeObservation=0;
+            _supportTrackingEnded=false;_supportFiberStarted=false;_supportContainmentLogged=false;_supportContainmentAssigned=false;_supportCustodyGuardAssigned=false;
+            _sharedBackupArrestAttempted=false;_sharedOfficerArrestTargets.Clear();_sharedControlDispatchSent=false;_sharedManualTransportNoticeSent=false;
+            _k9DisengageIssued=false;_medicalResponseStarted=false;MedicalResponseComplete=false;SeriousMedicalTransport=false;_medicalStage="not-requested";_transportStage="not-requested";
+            Game.LogTrivial("AdvancedK9 Callouts: shared suspect lifecycle reset for the newly selected multi-suspect scent target.");
+        }
+
         protected void SupportOfficersFollowK9()
         {
             _backupInvestigationActive=false;
