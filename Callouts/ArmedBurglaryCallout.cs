@@ -76,6 +76,7 @@ namespace AdvancedK9.Callouts
         private bool _scentChoiceHeld;
         private bool _bankPursuitUnitsDeployed;
         private bool _bankGetawayDeparted;
+        private bool _bankCleanupStarted;
         private uint _nextGetawayEntryRetry;
         private uint _nextBankTrackingOfficerRefresh;
         private static int _lastBankScene=-1;
@@ -229,7 +230,8 @@ namespace AdvancedK9.Callouts
                 // Great Ocean Highway hand-mapped by the tester. The first four
                 // units block the two highway approaches; the final two close the
                 // bank-side access without relying on procedural road offsets.
-                positions.Add(new Vector3(-2976.24f,453.11f,15.13f));headings.Add(87.7f);
+                // Shifted east off the metal guard rail after the live Great Ocean test.
+                positions.Add(new Vector3(-2973.74f,453.21f,15.13f));headings.Add(87.7f);
                 positions.Add(new Vector3(-2980.22f,453.10f,15.13f));headings.Add(88.6f);
                 positions.Add(new Vector3(-2996.60f,528.70f,16.20f));headings.Add(280.6f);
                 positions.Add(new Vector3(-2993.69f,529.22f,16.21f));headings.Add(280.1f);
@@ -804,17 +806,36 @@ namespace AdvancedK9.Callouts
             {
                 try
                 {
-                    for(int i=0;i<route.Length&&!Finished&&vehicle.Exists()&&driver.Exists();i++)
+                    for(int i=0;i<route.Length&&!Finished&&!_bankCleanupStarted&&vehicle.Exists()&&driver.Exists();i++)
                     {
                         Vector3 destination=World.GetNextPositionOnStreet(route[i]);
                         NativeFunction.Natives.TASK_VEHICLE_DRIVE_TO_COORD_LONGRANGE(driver,vehicle,destination.X,destination.Y,destination.Z,34f,786603,12f);
                         uint deadline=Game.GameTime+55000;
-                        while(!Finished&&vehicle.Exists()&&driver.Exists()&&driver.IsInVehicle(vehicle,false)&&vehicle.DistanceTo(destination)>70f&&Game.GameTime<deadline)GameFiber.Wait(400);
+                        while(!Finished&&!_bankCleanupStarted&&vehicle.Exists()&&driver.Exists()&&driver.IsInVehicle(vehicle,false)&&vehicle.DistanceTo(destination)>70f&&Game.GameTime<deadline)GameFiber.Wait(400);
                     }
                 }
                 catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: routed bank escape contained: "+ex.Message);}
             },"AdvancedK9 routed bank escape");
             Game.LogTrivial("AdvancedK9 Callouts: getaway driver assigned a multi-leg route away from the bank district rather than local wandering.");
+        }
+
+        private void SendRobberThroughBankExit(Ped robber,int seat)
+        {
+            if(robber==null||!robber.Exists()||_getawayVehicle==null||!_getawayVehicle.Exists())return;
+            Vehicle getaway=_getawayVehicle;Vector3 exit=Scene;
+            GameFiber.StartNew(delegate
+            {
+                try
+                {
+                    robber.Tasks.ClearImmediately();
+                    NativeFunction.Natives.TASK_FOLLOW_NAV_MESH_TO_COORD(robber,exit.X,exit.Y,exit.Z,3.2f,12000,1.2f,0,0f);
+                    uint exitDeadline=Game.GameTime+12000;
+                    while(!Finished&&!_bankCleanupStarted&&robber.Exists()&&getaway.Exists()&&robber.DistanceTo(exit)>3.5f&&Game.GameTime<exitDeadline)GameFiber.Wait(200);
+                    if(Finished||_bankCleanupStarted||!robber.Exists()||!getaway.Exists())return;
+                    NativeFunction.Natives.TASK_ENTER_VEHICLE(robber,getaway,30000,seat,4.2f,1,0);
+                }
+                catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: robber bank-exit route contained: "+ex.Message);}
+            },"AdvancedK9 visible robber bank exit");
         }
 
         private void DeployBankPursuitUnits()
@@ -841,12 +862,13 @@ namespace AdvancedK9.Callouts
                         NativeFunction.Natives.TASK_ENTER_VEHICLE(chaseOfficer,chaseVehicle,10000,-1,4.5f,1,0);
                         NativeFunction.Natives.TASK_ENTER_VEHICLE(chasePartner,chaseVehicle,10000,0,4.5f,1,0);
                         uint entryDeadline=Game.GameTime+10000;
-                        while(!Finished&&chaseOfficer.Exists()&&chasePartner.Exists()&&chaseVehicle.Exists()&&(!chaseOfficer.IsInVehicle(chaseVehicle,false)||!chasePartner.IsInVehicle(chaseVehicle,false))&&Game.GameTime<entryDeadline)GameFiber.Wait(200);
+                        while(!Finished&&!_bankCleanupStarted&&chaseOfficer.Exists()&&chasePartner.Exists()&&chaseVehicle.Exists()&&(!chaseOfficer.IsInVehicle(chaseVehicle,false)||!chasePartner.IsInVehicle(chaseVehicle,false))&&Game.GameTime<entryDeadline)GameFiber.Wait(200);
+                        if(_bankCleanupStarted)return;
                         if(!chaseOfficer.IsInVehicle(chaseVehicle,false))NativeFunction.Natives.SET_PED_INTO_VEHICLE(chaseOfficer,chaseVehicle,-1);
                         if(!chasePartner.IsInVehicle(chaseVehicle,false))NativeFunction.Natives.SET_PED_INTO_VEHICLE(chasePartner,chaseVehicle,0);
                         NativeFunction.Natives.TASK_VEHICLE_CHASE(chaseOfficer,chaseTarget);
-                        while(!Finished&&chaseOfficer.Exists()&&chaseTarget.Exists()&&chaseTarget.IsInVehicle(_getawayVehicle,false))GameFiber.Wait(300);
-                        if(!Finished&&chaseOfficer.Exists()&&chaseVehicle.Exists())
+                        while(!Finished&&!_bankCleanupStarted&&chaseOfficer.Exists()&&chaseTarget.Exists()&&_getawayVehicle!=null&&_getawayVehicle.Exists()&&chaseTarget.IsInVehicle(_getawayVehicle,false))GameFiber.Wait(300);
+                        if(!Finished&&!_bankCleanupStarted&&chaseOfficer.Exists()&&chaseVehicle.Exists())
                         {
                             NativeFunction.Natives.TASK_LEAVE_VEHICLE(chaseOfficer,chaseVehicle,0);
                             if(chasePartner.Exists())NativeFunction.Natives.TASK_LEAVE_VEHICLE(chasePartner,chaseVehicle,0);
@@ -1019,18 +1041,19 @@ namespace AdvancedK9.Callouts
                 _bankScenarioStarted=true;_scenarioStartedAt=Game.GameTime;
                 Subject.BlockPermanentEvents=true;
                 NativeFunction.Natives.SET_PED_KEEP_TASK(Subject,true);
-                Subject.Tasks.ClearImmediately();NativeFunction.Natives.TASK_ENTER_VEHICLE(Subject,_getawayVehicle,30000,-1,4.2f,1,0);
+                _nextGetawayEntryRetry=Game.GameTime+15000;
+                SendRobberThroughBankExit(Subject,-1);
                 for(int i=0;i<_bankAccomplices.Count;i++)
                 {
                     Ped accomplice=_bankAccomplices[i];if(accomplice==null||!accomplice.Exists())continue;
-                    accomplice.Tasks.ClearImmediately();NativeFunction.Natives.TASK_ENTER_VEHICLE(accomplice,_getawayVehicle,30000,i,4.2f,1,0);
+                    SendRobberThroughBankExit(accomplice,i);
                 }
                 Game.DisplayNotification("~r~Robbers are making a break for the getaway car.~s~ Officers are holding until the suspects enter the vehicle.");
                 GameFiber.StartNew(delegate
                 {
                     uint entryDeadline=Game.GameTime+30000;
-                    while(!Finished&&Subject.Exists()&&_getawayVehicle.Exists()&&!Subject.IsInVehicle(_getawayVehicle,false)&&Game.GameTime<entryDeadline)GameFiber.Wait(250);
-                    if(Finished||!Subject.Exists()||!_getawayVehicle.Exists())return;
+                    while(!Finished&&!_bankCleanupStarted&&Subject.Exists()&&_getawayVehicle.Exists()&&!Subject.IsInVehicle(_getawayVehicle,false)&&Game.GameTime<entryDeadline)GameFiber.Wait(250);
+                    if(Finished||_bankCleanupStarted||!Subject.Exists()||!_getawayVehicle.Exists())return;
                     if(!Subject.IsInVehicle(_getawayVehicle,false))
                     {
                         NativeFunction.Natives.TASK_ENTER_VEHICLE(Subject,_getawayVehicle,30000,-1,4.2f,1,0);
@@ -1062,7 +1085,6 @@ namespace AdvancedK9.Callouts
             if(driverOnFoot&&!_bailoutTrackReady&&Subject.DistanceTo(_getawayVehicle)>6f&&!SubjectIsInCustody()&&!ArrestProviderOwnsSubject)
             {
                 _bailoutTrackReady=true;
-                try{if(BankPursuitIsRunning())EndBankPursuit();}catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: pursuit-to-track handoff contained: "+ex.Message);}
                 StageBailoutScentArticles();
                 Game.DisplayNotification("~b~Dispatch:~s~ Driver and passenger fled separately. Return to the abandoned getaway car and select which seat scent Rex should track first.");
                 DispatchUpdate("BailoutTrackReady","Bank robbery bailout track","Local patrol jurisdiction","Abandoned dark Buffalo","Armed driver and passenger","Separate directions from the abandoned vehicle","Confirmed armed","Distinct driver-seat and passenger-seat scent articles are preserved. The handler must select one target for Rex first.","",_getawayVehicle.Position);
@@ -1390,9 +1412,26 @@ namespace AdvancedK9.Callouts
 
         public override void End()
         {
-            try{if(BankPursuitIsRunning())EndBankPursuit();}catch{}
+            if(_bankCleanupStarted)return;
+            _bankCleanupStarted=true;
+            bool pursuitOwnedEntities=_bankPursuitStarted||_bankGetawayDeparted;
+            try{if(_bankPursuitStarted)EndBankPursuit();}catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: bank pursuit shutdown contained: "+ex.Message);}
             BeginAssignedBankPoliceDeparture();
-            for(int i=0;i<_bankAccomplices.Count;i++)if(_bankAccomplices[i]!=null&&_bankAccomplices[i].Exists())_bankAccomplices[i].Dismiss();
+            // LSPDFR's evasion task retains the fleeing peds and their vehicle for a
+            // short period after ForceEndPursuit. Releasing those entities in the
+            // same tick leaves TaskEvadeCopsAdvInVehicle with a null vehicle.
+            var delayedSuspects=new List<Ped>(_bankAccomplices);
+            Ped delayedSubject=pursuitOwnedEntities?Subject:null;
+            Vehicle delayedGetaway=pursuitOwnedEntities?_getawayVehicle:null;
+            if(pursuitOwnedEntities){Subject=null;_getawayVehicle=null;}
+            GameFiber.StartNew(delegate
+            {
+                GameFiber.Wait(8000);
+                for(int i=0;i<delayedSuspects.Count;i++)if(delayedSuspects[i]!=null&&delayedSuspects[i].Exists()&&!NativeFunction.Natives.IS_PED_CUFFED<bool>(delayedSuspects[i]))delayedSuspects[i].Dismiss();
+                if(delayedSubject!=null&&delayedSubject.Exists()&&!NativeFunction.Natives.IS_PED_CUFFED<bool>(delayedSubject))delayedSubject.Dismiss();
+                if(delayedGetaway!=null&&delayedGetaway.Exists())delayedGetaway.Dismiss();
+            },"AdvancedK9 delayed bank pursuit release");
+            if(!pursuitOwnedEntities)for(int i=0;i<_bankAccomplices.Count;i++)if(_bankAccomplices[i]!=null&&_bankAccomplices[i].Exists())_bankAccomplices[i].Dismiss();
             _bankAccomplices.Clear();
             for(int i=0;i<_bankPerimeterOfficers.Count;i++)if(_bankPerimeterOfficers[i]!=null&&_bankPerimeterOfficers[i].Exists())_bankPerimeterOfficers[i].Dismiss();
             _bankPerimeterOfficers.Clear();

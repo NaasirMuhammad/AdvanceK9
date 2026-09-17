@@ -139,6 +139,7 @@ namespace AdvancedK9
         private readonly Dictionary<string,uint> _lastOperationalXp=new Dictionary<string,uint>(StringComparer.OrdinalIgnoreCase);
         private bool _deployed;
         private bool _downed;
+        private uint _medicalProtectionUntil;
         private bool _carryingDog;
         private bool _carriedForAccess;
         private bool _emergencyTransport;
@@ -1063,7 +1064,27 @@ namespace AdvancedK9
         private void SpawnDogWaste(Vector3 position){try{var model=new Model("prop_big_shit_02");if(!model.IsValid)model=new Model("prop_big_shit_01");if(!model.IsValid)return;model.LoadAndWait();var waste=new Rage.Object(model,position);model.Dismiss();if(waste==null||!waste.Exists())return;waste.IsPersistent=true;GameFiber.StartNew(()=>{GameFiber.Wait(180000);if(waste.Exists())waste.Delete();});}catch(Exception ex){Game.LogTrivial("AdvancedK9 dog waste prop: "+ex.Message);}}
         private void VeterinaryCare(){if(!DogEntityExists())return;if(Game.LocalPlayer.Character.Position.DistanceTo(_veterinaryHospital)>25f){BeginVeterinaryTransport();return;}CompleteVeterinaryIntake();}
 
-        private void RestoreDogAfterTreatment(int healthPercent){if(!DogEntityExists())return;NativeFunction.Natives.FREEZE_ENTITY_POSITION(_dog,false);NativeFunction.Natives.SET_PED_CAN_RAGDOLL(_dog,true);if(_dog.IsDead)NativeFunction.Natives.RESURRECT_PED(_dog);NativeFunction.Natives.REVIVE_INJURED_PED(_dog);NativeFunction.Natives.CLEAR_PED_TASKS_IMMEDIATELY(_dog);int health=Math.Max(1,(int)(_dog.MaxHealth*Math.Max(1,Math.Min(100,healthPercent))/100f));_dog.Health=health;NativeFunction.Natives.SET_ENTITY_HEALTH(_dog,health);_dog.IsInvincible=false;_dog.BlockPermanentEvents=true;ConfigureAmbientGunfireImmunity();}
+        private void RestoreDogAfterTreatment(int healthPercent)
+        {
+            if(!DogEntityExists())return;
+            Vector3 recoveryPosition=_dog.Position;float recoveryHeading=_dog.Heading;
+            NativeFunction.Natives.FREEZE_ENTITY_POSITION(_dog,false);NativeFunction.Natives.DETACH_ENTITY(_dog,true,true);
+            if(_dog.IsDead||NativeFunction.Natives.IS_PED_DEAD_OR_DYING<bool>(_dog,true))NativeFunction.Natives.RESURRECT_PED(_dog);
+            NativeFunction.Natives.SET_ENTITY_COORDS_NO_OFFSET(_dog,recoveryPosition.X,recoveryPosition.Y,recoveryPosition.Z,false,false,false);_dog.Heading=recoveryHeading;
+            NativeFunction.Natives.REVIVE_INJURED_PED(_dog);NativeFunction.Natives.CLEAR_PED_TASKS_IMMEDIATELY(_dog);
+            int health=Math.Max(1,(int)(_dog.MaxHealth*Math.Max(1,Math.Min(100,healthPercent))/100f));
+            _dog.Health=health;NativeFunction.Natives.SET_ENTITY_HEALTH(_dog,health);NativeFunction.Natives.SET_ENTITY_COLLISION(_dog,true,true);NativeFunction.Natives.SET_PED_CAN_RAGDOLL(_dog,true);
+            // Treatment can occur in the middle of an active firefight. Keep the
+            // revived ped protected long enough for the death state and combat
+            // damage queued on the prior frame to clear.
+            _dog.IsInvincible=true;_medicalProtectionUntil=Game.GameTime+12000;_dog.BlockPermanentEvents=true;ConfigureAmbientGunfireImmunity();
+            GameFiber.Wait(150);
+            if(DogEntityExists()&&(_dog.IsDead||NativeFunction.Natives.IS_PED_DEAD_OR_DYING<bool>(_dog,true)))
+            {
+                NativeFunction.Natives.RESURRECT_PED(_dog);NativeFunction.Natives.SET_ENTITY_COORDS_NO_OFFSET(_dog,recoveryPosition.X,recoveryPosition.Y,recoveryPosition.Z,false,false,false);
+                _dog.Health=health;NativeFunction.Natives.SET_ENTITY_HEALTH(_dog,health);NativeFunction.Natives.CLEAR_PED_TASKS_IMMEDIATELY(_dog);
+            }
+        }
 
         private void ToggleCarryK9()
         {
@@ -1124,7 +1145,7 @@ namespace AdvancedK9
 
         private void BeginVeterinaryTransport()
         {
-            if(!DogEntityExists()||(!_emergencyTransport&&!_carryingDog&&!_profile.IsRehabilitating)){Game.DisplayNotification("~y~Veterinary transport requires an injured, carried, or emergency-loaded K9.");return;}
+            if(!DogEntityExists()||(!_emergencyTransport&&!_carryingDog&&!_profile.IsRehabilitating&&_profile.Health>=95&&_state!=K9State.Injured)){Game.DisplayNotification("~y~Veterinary transport requires an injured, carried, or emergency-loaded K9.");return;}
             if(_carryingDog){Game.DisplayNotification("~y~Emergency-load the K9 into a stopped vehicle first.");return;}
             _veterinaryTransportActive=true;if(_veterinaryBlip!=null&&_veterinaryBlip.Exists())_veterinaryBlip.Delete();_veterinaryBlip=new Blip(_veterinaryHospital){Color=Color.Red,Name="K9 Veterinary Emergency"};try{NativeFunction.Natives.SET_BLIP_ROUTE(_veterinaryBlip,true);NativeFunction.Natives.SET_BLIP_ROUTE_COLOUR(_veterinaryBlip,1);}catch{}
             K9IncidentLog.Write(_profile.Name,"Medical","Veterinary transport started",Game.LocalPlayer.Character.Position);Game.DisplayNotification("~b~Veterinary route active.~s~~n~Transport "+_profile.Name+" to the marked clinic. Arrival is detected automatically.");
@@ -2172,6 +2193,7 @@ namespace AdvancedK9
         private void MaintainState()
         {
             if (!DogEntityExists()) return;
+            if(_medicalProtectionUntil!=0&&Game.GameTime>=_medicalProtectionUntil){_medicalProtectionUntil=0;_dog.IsInvincible=false;ConfigureAmbientGunfireImmunity();}
             if(_carryingDog){MaintainCarryPresentation();return;}
             if(_downed) return;
             if(_seatCalibrationDoorOpen&&(!_menu.Visible||_menuMode!="seat_config"||_state!=K9State.InVehicle))CloseSeatCalibrationDoor();
