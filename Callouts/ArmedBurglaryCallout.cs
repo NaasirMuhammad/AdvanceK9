@@ -75,6 +75,8 @@ namespace AdvancedK9.Callouts
         private int _selectedBailoutTarget=-1;
         private bool _scentChoiceHeld;
         private bool _bankPursuitUnitsDeployed;
+        private bool _bankGetawayDeparted;
+        private uint _nextGetawayEntryRetry;
         private uint _nextBankTrackingOfficerRefresh;
         private static int _lastBankScene=-1;
         protected override bool SharedOfficerArrestReady{get{return !_bankEntryTeamActive||_bankEntryAuthorized;}}
@@ -235,6 +237,17 @@ namespace AdvancedK9.Callouts
                 positions.Add(new Vector3(-3002.44f,448.52f,15.10f));headings.Add(310.3f);
                 return;
             }
+            if(_sceneIndex==6)
+            {
+                // Tester-recorded Blaine County Savings / Paleto perimeter.
+                positions.Add(new Vector3(-161.17f,6463.11f,31.01f));headings.Add(299.2f);
+                positions.Add(new Vector3(-119.04f,6433.97f,31.44f));headings.Add(95.7f);
+                positions.Add(new Vector3(-97.58f,6442.74f,31.33f));headings.Add(189.3f);
+                positions.Add(new Vector3(-125.88f,6400.79f,31.36f));headings.Add(29.2f);
+                positions.Add(new Vector3(-168.07f,6495.64f,29.70f));headings.Add(217.4f);
+                positions.Add(new Vector3(-137.99f,6439.01f,31.34f));headings.Add(38.3f);
+                return;
+            }
             Vector3 forward=HeadingVector(CruiserHeadings[_sceneIndex]);Vector3 right=new Vector3(forward.Y,-forward.X,0f);
             Vector3 anchor=CruiserScenes[_sceneIndex];
             int pairCount=_sceneIndex==0?4:2;
@@ -313,7 +326,7 @@ namespace AdvancedK9.Callouts
             if(!StagePoliceScene(CruiserScenes[_sceneIndex],CruiserHeadings[_sceneIndex],true))return false;
             Vector3 forward=HeadingVector(CruiserHeadings[_sceneIndex]);
             Vector3 right=new Vector3(forward.Y,-forward.X,0f);
-            int requiredVehicles=_sceneIndex==0?8:_sceneIndex==1?6:_sceneIndex==4?6:4;
+            int requiredVehicles=_sceneIndex==0?8:(_sceneIndex==1||_sceneIndex==4||_sceneIndex==6)?6:4;
             int requiredOfficers=_sceneIndex==0?20:requiredVehicles*2;
             float heading=CruiserHeadings[_sceneIndex];
             List<Vector3> positions;List<float> headings;GetBankPerimeterLayout(out positions,out headings);
@@ -374,7 +387,7 @@ namespace AdvancedK9.Callouts
             AssignBankOfficersToVehicles(perimeterVehicles);
             MaintainSpawnedPoliceAssets();
             _bankPerimeterStaged=true;
-            Game.LogTrivial("AdvancedK9 Callouts: bank perimeter staged at "+BankNames[_sceneIndex]+" with "+requiredVehicles+" marked cruisers and "+requiredOfficers+" armed ground personnel behind vehicle cover"+(_sceneIndex==0?" (all Pacific approaches closed; 16 patrol officers, four-officer SWAT team with BearCat, and two-officer Air One orbit).":_sceneIndex==1?" (tester-recorded Legion Square six-car layout).":_sceneIndex==4?" (tester-mapped Great Ocean Highway six-cruiser closure).":" (two roadblock pairs close both incoming lanes)."));
+            Game.LogTrivial("AdvancedK9 Callouts: bank perimeter staged at "+BankNames[_sceneIndex]+" with "+requiredVehicles+" marked cruisers and "+requiredOfficers+" armed ground personnel behind vehicle cover"+(_sceneIndex==0?" (all Pacific approaches closed; 16 patrol officers, four-officer SWAT team with BearCat, and two-officer Air One orbit).":_sceneIndex==1?" (tester-recorded Legion Square six-car layout).":_sceneIndex==4?" (tester-mapped Great Ocean Highway six-cruiser closure).":_sceneIndex==6?" (tester-mapped Paleto six-cruiser closure).":" (two roadblock pairs close both incoming lanes)."));
             return true;
         }
 
@@ -737,30 +750,71 @@ namespace AdvancedK9.Callouts
 
         private bool InitializeVehicleEscapeScenario()
         {
-            float radians=(float)(CruiserHeadings[_sceneIndex]*System.Math.PI/180.0);
-            Vector3 roadSeed=Scene+new Vector3((float)System.Math.Sin(radians)*24f,(float)System.Math.Cos(radians)*24f,0f);
-            Vector3 road=World.GetNextPositionOnStreet(roadSeed);
-            _getawayVehicle=SpawnVehicle("buffalo",road,CruiserHeadings[_sceneIndex]);
-            Subject=SpawnPed("g_m_y_mexgoon_02",road,CruiserHeadings[_sceneIndex]);
+            Vector3 vehiclePosition;float vehicleHeading;GetGetawayStaging(out vehiclePosition,out vehicleHeading);
+            _getawayVehicle=SpawnVehicle("buffalo",vehiclePosition,vehicleHeading,true);
+            Vector3 robberPosition=InteriorRobberPositions[_sceneIndex];
+            Subject=SpawnPed("g_m_y_mexgoon_02",robberPosition,vehicleHeading);
             if(_getawayVehicle==null||!_getawayVehicle.Exists()||Subject==null||!Subject.Exists())return false;
+            _getawayVehicle.IsPersistent=true;NativeFunction.Natives.SET_VEHICLE_DOORS_LOCKED(_getawayVehicle,1);NativeFunction.Natives.SET_VEHICLE_ON_GROUND_PROPERLY(_getawayVehicle);
             Subject.MaxHealth=250;Subject.Health=250;
             ConfigureArmedBankRobber(false);
-            NativeFunction.Natives.SET_PED_INTO_VEHICLE(Subject,_getawayVehicle,-1);
+            NativeFunction.Natives.TASK_COWER(Subject,-1);
             _bankEscapeSuspects.Add(Subject);
             int accompliceCount=1;
             for(int i=0;i<accompliceCount;i++)
             {
-                Ped accomplice=SpawnPed(i==0?"g_m_y_mexgoon_01":"g_m_y_salvagoon_01",road,CruiserHeadings[_sceneIndex]);
+                Ped accomplice=SpawnPed(i==0?"g_m_y_mexgoon_01":"g_m_y_salvagoon_01",robberPosition+new Vector3(-1.8f,1.1f,0f),vehicleHeading);
                 ConfigureArmedAccomplice(accomplice,false);
                 if(accomplice!=null&&accomplice.Exists())
                 {
-                    NativeFunction.Natives.SET_PED_INTO_VEHICLE(accomplice,_getawayVehicle,i);
+                    NativeFunction.Natives.TASK_COWER(accomplice,-1);
                     _bankEscapeSuspects.Add(accomplice);
                 }
             }
-            if(!AcceptAndRouteToSelectedBank("The manager is safe with officers; armed suspects fled in a vehicle moments before arrival."))return false;
-            DispatchUpdate("CalloutAccepted","Bank robbery vehicle escape","Local patrol jurisdiction","Dark Buffalo fleeing the bank","Armed bank-robbery suspect","Leaving the bank district by vehicle","Confirmed armed","Bank robbery in progress. The manager remains with officers at the bank while an armed suspect escapes in a dark Buffalo. Prepare for a vehicle pursuit and possible K9 bailout track.","WE_HAVE CRIME_BURGLARY IN_OR_ON_POSITION UNITS_RESPOND_CODE_3",Scene);
+            if(!AcceptAndRouteToSelectedBank("Armed suspects remain inside; their getaway car is staged outside."))return false;
+            DispatchUpdate("CalloutAccepted","Bank robbery vehicle escape","Local patrol jurisdiction","Dark Buffalo staged outside","Armed bank-robbery suspects","Contained inside pending escape attempt","Confirmed armed","Bank robbery in progress. Armed suspects remain inside while an unoccupied getaway vehicle is staged outside. They may attempt to run to it as units arrive.","WE_HAVE CRIME_BURGLARY IN_OR_ON_POSITION UNITS_RESPOND_CODE_3",Scene);
+            Game.LogTrivial("AdvancedK9 Callouts: unoccupied bank getaway vehicle staged outside at "+_getawayVehicle.Position+"; both suspects remain inside until the response reaches the scene.");
             return true;
+        }
+
+        private void GetGetawayStaging(out Vector3 position,out float heading)
+        {
+            Vector3[] positions={new Vector3(263f,206f,105.5f),new Vector3(175.5f,-1047.8f,29.2f),new Vector3(326f,-267f,54f),new Vector3(-1196f,-323f,37.7f),new Vector3(-2942f,486f,15.3f),new Vector3(1188f,2696f,38f),new Vector3(-96.4f,6481.8f,31.4f)};
+            float[] headings={70f,250f,250f,25f,85f,180f,225f};
+            position=positions[_sceneIndex];heading=headings[_sceneIndex];
+        }
+
+        private Vector3[] GetBankEscapeRoute()
+        {
+            if(_sceneIndex==6)return new[]{new Vector3(-220f,6120f,31f),new Vector3(180f,5400f,38f),new Vector3(1180f,4500f,52f)};
+            if(_sceneIndex==5)return new[]{new Vector3(1450f,2500f,45f),new Vector3(2200f,1700f,68f),new Vector3(1800f,600f,78f)};
+            if(_sceneIndex==4)return new[]{new Vector3(-2550f,2200f,20f),new Vector3(-1900f,1200f,75f),new Vector3(-900f,300f,70f)};
+            if(_sceneIndex==3)return new[]{new Vector3(-1600f,-650f,30f),new Vector3(-1150f,-1100f,4f),new Vector3(-300f,-1450f,30f)};
+            if(_sceneIndex==2)return new[]{new Vector3(900f,-200f,72f),new Vector3(1250f,-900f,42f),new Vector3(900f,-1700f,30f)};
+            if(_sceneIndex==1)return new[]{new Vector3(700f,-1200f,35f),new Vector3(1250f,-1550f,50f),new Vector3(1700f,-2200f,105f)};
+            return new[]{new Vector3(650f,-350f,42f),new Vector3(1250f,-900f,45f),new Vector3(1650f,-1700f,110f)};
+        }
+
+        private void BeginRealisticBankEscape(Vehicle vehicle,Ped driver)
+        {
+            if(_bankGetawayDeparted||vehicle==null||!vehicle.Exists()||driver==null||!driver.Exists())return;
+            _bankGetawayDeparted=true;
+            Vector3[] route=GetBankEscapeRoute();
+            GameFiber.StartNew(delegate
+            {
+                try
+                {
+                    for(int i=0;i<route.Length&&!Finished&&vehicle.Exists()&&driver.Exists();i++)
+                    {
+                        Vector3 destination=World.GetNextPositionOnStreet(route[i]);
+                        NativeFunction.Natives.TASK_VEHICLE_DRIVE_TO_COORD_LONGRANGE(driver,vehicle,destination.X,destination.Y,destination.Z,34f,786603,12f);
+                        uint deadline=Game.GameTime+55000;
+                        while(!Finished&&vehicle.Exists()&&driver.Exists()&&driver.IsInVehicle(vehicle,false)&&vehicle.DistanceTo(destination)>70f&&Game.GameTime<deadline)GameFiber.Wait(400);
+                    }
+                }
+                catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: routed bank escape contained: "+ex.Message);}
+            },"AdvancedK9 routed bank escape");
+            Game.LogTrivial("AdvancedK9 Callouts: getaway driver assigned a multi-leg route away from the bank district rather than local wandering.");
         }
 
         private void DeployBankPursuitUnits()
@@ -877,7 +931,12 @@ namespace AdvancedK9.Callouts
                 base.Process();return;
             }
             ObserveSuspectLifecycle();
-            if(Finished||Subject==null||!Subject.Exists()){if(!Finished)Resolve("~r~Armed Burglary ended: suspect unavailable.");return;}
+            if(Finished)return;
+            if(Subject==null||!Subject.Exists())
+            {
+                PublishBankOutcome("AwaitingPlayerClear","The active suspect is no longer present. The bank scene, evidence, and perimeter remain active until the player clears the callout.");
+                base.Process();return;
+            }
             MaintainSpawnedPoliceAssets();
             MaintainPoliceEmergencyLights();
             if(player.DistanceTo(Scene)<45f)UnlockNearbyBankDoors();
@@ -960,18 +1019,47 @@ namespace AdvancedK9.Callouts
                 _bankScenarioStarted=true;_scenarioStartedAt=Game.GameTime;
                 Subject.BlockPermanentEvents=true;
                 NativeFunction.Natives.SET_PED_KEEP_TASK(Subject,true);
-                NativeFunction.Natives.TASK_VEHICLE_DRIVE_WANDER(Subject,_getawayVehicle,28f,786603);
-                try
+                Subject.Tasks.ClearImmediately();NativeFunction.Natives.TASK_ENTER_VEHICLE(Subject,_getawayVehicle,30000,-1,4.2f,1,0);
+                for(int i=0;i<_bankAccomplices.Count;i++)
                 {
-                    TryStartBankPursuit();
+                    Ped accomplice=_bankAccomplices[i];if(accomplice==null||!accomplice.Exists())continue;
+                    accomplice.Tasks.ClearImmediately();NativeFunction.Natives.TASK_ENTER_VEHICLE(accomplice,_getawayVehicle,30000,i,4.2f,1,0);
                 }
-                catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: LSPDFR bank pursuit setup contained; native flight remains active: "+ex.Message);}
-                DeployBankPursuitUnits();
-                Game.DisplayNotification("~r~Bank robbery vehicle located.~s~ Join the pursuit. If the suspect bails out, Rex can transition to the recorded foot trail.");
-                Game.LogTrivial("AdvancedK9 Callouts: bank vehicle-escape scenario started native high-speed flight; pursuit units departed in marked cruisers while one cruiser remained at the bank evidence scene.");
+                Game.DisplayNotification("~r~Robbers are making a break for the getaway car.~s~ Officers are holding until the suspects enter the vehicle.");
+                GameFiber.StartNew(delegate
+                {
+                    uint entryDeadline=Game.GameTime+30000;
+                    while(!Finished&&Subject.Exists()&&_getawayVehicle.Exists()&&!Subject.IsInVehicle(_getawayVehicle,false)&&Game.GameTime<entryDeadline)GameFiber.Wait(250);
+                    if(Finished||!Subject.Exists()||!_getawayVehicle.Exists())return;
+                    if(!Subject.IsInVehicle(_getawayVehicle,false))
+                    {
+                        NativeFunction.Natives.TASK_ENTER_VEHICLE(Subject,_getawayVehicle,30000,-1,4.2f,1,0);
+                        Game.LogTrivial("AdvancedK9 Callouts: getaway entry path did not complete; driver is retrying the staged vehicle instead of being converted to an unrelated escape state.");
+                        return;
+                    }
+                    BeginRealisticBankEscape(_getawayVehicle,Subject);
+                    try{TryStartBankPursuit();}catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: LSPDFR bank pursuit setup contained; routed native flight remains active: "+ex.Message);}
+                    DeployBankPursuitUnits();
+                    Game.DisplayNotification("~r~Getaway vehicle is fleeing the bank district.~s~ Join the pursuit. If the suspects bail out, Rex can work the preserved seat scents.");
+                    Game.LogTrivial("AdvancedK9 Callouts: suspects visibly ran from the bank and entered the staged getaway vehicle before the routed pursuit began.");
+                },"AdvancedK9 bank getaway entry");
             }
-            bool driverOnFoot=_bankScenarioStarted&&_getawayVehicle!=null&&_getawayVehicle.Exists()&&!Subject.IsInVehicle(_getawayVehicle,false);
-            if(driverOnFoot&&!_bailoutTrackReady&&Subject.DistanceTo(_getawayVehicle)>6f&&!SubjectIsInCustody())
+            if(_bankScenarioStarted&&!_bankGetawayDeparted&&Subject!=null&&Subject.Exists()&&_getawayVehicle!=null&&_getawayVehicle.Exists())
+            {
+                if(Subject.IsInVehicle(_getawayVehicle,false))
+                {
+                    BeginRealisticBankEscape(_getawayVehicle,Subject);
+                    try{if(!_bankPursuitStarted)TryStartBankPursuit();}catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: delayed getaway pursuit setup contained: "+ex.Message);}
+                    DeployBankPursuitUnits();
+                }
+                else if(Game.GameTime>=_nextGetawayEntryRetry)
+                {
+                    _nextGetawayEntryRetry=Game.GameTime+5000;
+                    NativeFunction.Natives.TASK_ENTER_VEHICLE(Subject,_getawayVehicle,30000,-1,4.2f,1,0);
+                }
+            }
+            bool driverOnFoot=_bankGetawayDeparted&&_getawayVehicle!=null&&_getawayVehicle.Exists()&&!Subject.IsInVehicle(_getawayVehicle,false);
+            if(driverOnFoot&&!_bailoutTrackReady&&Subject.DistanceTo(_getawayVehicle)>6f&&!SubjectIsInCustody()&&!ArrestProviderOwnsSubject)
             {
                 _bailoutTrackReady=true;
                 try{if(BankPursuitIsRunning())EndBankPursuit();}catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: pursuit-to-track handoff contained: "+ex.Message);}
@@ -991,7 +1079,7 @@ namespace AdvancedK9.Callouts
             }
             if(_selectedBailoutTarget>=0&&BankRobberResolved(Subject)&&!AllBankRobbersResolved())PrepareNextBailoutTrack();
             if(AllBankRobbersResolved())PublishBankOutcome("AllSuspectsResolved","Driver and passenger are both secured or otherwise resolved. The bank scene remains held for investigation.");
-            else if(_bankScenarioStarted&&Game.GameTime-_scenarioStartedAt>480000)PublishBankOutcome("SuspectsEscaped","The getaway suspects escaped after an extended pursuit. Preserve the originating bank scene for investigation.");
+            else if(_bankScenarioStarted&&Game.GameTime-_scenarioStartedAt>480000&&!SubjectIsInCustody()&&!ArrestProviderOwnsSubject)PublishBankOutcome("SuspectsEscaped","The getaway suspects escaped after an extended pursuit. Preserve the originating bank scene for investigation.");
         }
 
         private void StageBailoutScentArticles()
@@ -1240,7 +1328,7 @@ namespace AdvancedK9.Callouts
                 while(Game.GameTime<entryDeadline&&negotiatedVehicle!=null&&negotiatedVehicle.Exists()&&Subject!=null&&Subject.Exists()&&!Subject.IsInVehicle(negotiatedVehicle,false))GameFiber.Wait(250);
                 if(Subject!=null&&Subject.Exists()&&negotiatedVehicle!=null&&negotiatedVehicle.Exists()&&Subject.IsInVehicle(negotiatedVehicle,false))
                 {
-                    NativeFunction.Natives.TASK_VEHICLE_DRIVE_WANDER(Subject,negotiatedVehicle,30f,786603);
+                    BeginRealisticBankEscape(negotiatedVehicle,Subject);
                     try{TryStartBankPursuit();}catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: negotiated getaway pursuit setup contained: "+ex.Message);}
                 }
                 else Game.LogTrivial("AdvancedK9 Callouts: robbers did not reach the promised vehicle before the entry deadline; containment remains active and no foot-flee substitution was issued.");

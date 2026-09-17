@@ -1,5 +1,13 @@
 # Changelog
 
+## Paleto bank staging and routed getaway correction
+
+- Applies all six tester-recorded Blaine County Savings/Paleto cruiser coordinates with twelve assigned patrol officers.
+- Starts vehicle-escape suspects inside the bank with an empty getaway car staged outside; suspects must visibly run out and enter it before pursuit units deploy.
+- Replaces local vehicle wandering with bank-specific multi-leg escape routes that lead away from the crime scene and surrounding district.
+- Prevents custody or arrest from creating a late bailout, scent-selection, or false `SuspectsEscaped` transition.
+- Keeps the bank perimeter and evidence active after arrest, custody, transport, death, or a missing suspect entity; only the player clears the callout.
+
 ## Bank-scene route, negotiation, custody, and departure correction
 
 - Keeps foot-trail bank variants active when distant collision data is unavailable, then retries multiple regenerated routes after the player streams the district instead of canceling or changing the scenario.
