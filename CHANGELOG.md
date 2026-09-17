@@ -1,5 +1,13 @@
 # Changelog
 
+## Bank-scene route, negotiation, custody, and departure correction
+
+- Keeps foot-trail bank variants active when distant collision data is unavailable, then retries multiple regenerated routes after the player streams the district instead of canceling or changing the scenario.
+- Uses the six Legion Square cruiser placements captured in the tester log and assigns exactly two patrol officers to every cruiser.
+- Physically delivers an agreed getaway vehicle, holds the suspects until the released hostage reaches police, and no longer substitutes an unrelated foot escape when vehicle entry fails.
+- Keeps officers covering an injured suspect through EMS treatment, prevents premature `AllSuspectsResolved`, and transfers a revived suspect into a visible native LSPDFR officer arrest.
+- Sends pursuit cruisers with both assigned officers while one complete two-officer unit secures the bank, then returns every patrol pair to its assigned cruiser for coordinated scene departure.
+
 ## 0.24.0-beta
 
 ### Coordinated callout custody, medical response, and dynamic dispatch
