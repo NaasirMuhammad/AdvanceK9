@@ -658,7 +658,7 @@ namespace AdvancedK9.Callouts
                 Vector3 grounded;if(!TryResolveSafePedPosition(routeCandidates[i],out grounded))continue;
                 if(NativeFunction.Natives.GET_INTERIOR_AT_COORDS<int>(grounded.X,grounded.Y,grounded.Z)!=0||NativeFunction.Natives.IS_POINT_ON_ROAD<bool>(grounded.X,grounded.Y,grounded.Z,0))continue;
                 viableRoutes++;if(viableRoutes==1)bestOffRoad=grounded;
-                Vector3 concealed,safeConcealed;
+                Vector3 concealed,safeConcealed=Vector3.Zero;
                 if((TryFindExistingCover(grounded,out concealed)||TryFindWorldGeometryCover(grounded,out concealed))&&TryResolveSafePedPosition(concealed,out safeConcealed)&&
                    !NativeFunction.Natives.IS_POINT_ON_ROAD<bool>(safeConcealed.X,safeConcealed.Y,safeConcealed.Z,0))
                 {
