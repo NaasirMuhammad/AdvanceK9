@@ -219,7 +219,8 @@ namespace AdvancedK9.Callouts
                 // Tester-recorded Legion Square perimeter from the 2026-09-17 log.
                 positions.Add(new Vector3(194.04f,-1025.37f,29.36f));headings.Add(158.2f);
                 positions.Add(new Vector3(193.94f,-1029.66f,29.36f));headings.Add(153.3f);
-                positions.Add(new Vector3(158.84f,-1010.77f,29.39f));headings.Add(246.0f);
+                // The former Elgin-facing unit is intentionally omitted. Legion
+                // uses five cruisers and does not close that outbound approach.
                 positions.Add(new Vector3(145.50f,-1002.87f,29.35f));headings.Add(188.7f);
                 positions.Add(new Vector3(128.72f,-1015.59f,29.41f));headings.Add(334.9f);
                 positions.Add(new Vector3(127.10f,-1020.00f,29.27f));headings.Add(323.4f);
@@ -343,7 +344,7 @@ namespace AdvancedK9.Callouts
             // Rockford always uses the first four mapped cruisers. The fifth and
             // sixth form an optional reinforcement pair so staffing remains two
             // officers per vehicle and the perimeter never produces an odd unit.
-            int requiredVehicles=_sceneIndex==0?8:(_sceneIndex==3?(Random.Next(2)==0?4:6):(_sceneIndex==1||_sceneIndex==4||_sceneIndex==6)?6:4);
+            int requiredVehicles=_sceneIndex==0?8:(_sceneIndex==1?5:(_sceneIndex==3?(Random.Next(2)==0?4:6):(_sceneIndex==4||_sceneIndex==6)?6:4));
             int requiredOfficers=_sceneIndex==0?20:requiredVehicles*2;
             float heading=CruiserHeadings[_sceneIndex];
             List<Vector3> positions;List<float> headings;GetBankPerimeterLayout(out positions,out headings);
@@ -404,7 +405,7 @@ namespace AdvancedK9.Callouts
             AssignBankOfficersToVehicles(perimeterVehicles);
             MaintainSpawnedPoliceAssets();
             _bankPerimeterStaged=true;
-            Game.LogTrivial("AdvancedK9 Callouts: bank perimeter staged at "+BankNames[_sceneIndex]+" with "+requiredVehicles+" marked cruisers and "+requiredOfficers+" armed ground personnel behind vehicle cover"+(_sceneIndex==0?" (all Pacific approaches closed; 16 patrol officers, four-officer SWAT team with BearCat, and two-officer Air One orbit).":_sceneIndex==1?" (tester-recorded Legion Square six-car layout).":_sceneIndex==3?(requiredVehicles==6?" (tester-recorded Rockford Hills layout with optional reinforcement pair present).":" (tester-recorded Rockford Hills four-car base perimeter; optional reinforcement pair not dispatched)."):_sceneIndex==4?" (tester-mapped Great Ocean Highway six-cruiser closure).":_sceneIndex==6?" (tester-mapped Paleto six-cruiser closure).":" (two roadblock pairs close both incoming lanes)."));
+            Game.LogTrivial("AdvancedK9 Callouts: bank perimeter staged at "+BankNames[_sceneIndex]+" with "+requiredVehicles+" marked cruisers and "+requiredOfficers+" armed ground personnel behind vehicle cover"+(_sceneIndex==0?" (all Pacific approaches closed; 16 patrol officers, four-officer SWAT team with BearCat, and two-officer Air One orbit).":_sceneIndex==1?" (tester-recorded Legion Square five-car layout; Elgin-facing unit omitted).":_sceneIndex==3?(requiredVehicles==6?" (tester-recorded Rockford Hills layout with optional reinforcement pair present).":" (tester-recorded Rockford Hills four-car base perimeter; optional reinforcement pair not dispatched)."):_sceneIndex==4?" (tester-mapped Great Ocean Highway six-cruiser closure).":_sceneIndex==6?" (tester-mapped Paleto six-cruiser closure).":" (two roadblock pairs close both incoming lanes)."));
             return true;
         }
 
