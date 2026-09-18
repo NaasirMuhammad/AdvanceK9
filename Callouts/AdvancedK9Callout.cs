@@ -569,12 +569,12 @@ namespace AdvancedK9.Callouts
                 foreach(Vehicle vehicle in World.GetAllVehicles())
                 {
                     if(vehicle==null||!vehicle.Exists()||vehicle.DistanceTo(Scene)>SceneTrafficClosureRadius||vehicle==SceneVehicle||vehicle==PoliceVehicle||vehicle==PoliceVehicleTwo||vehicle==playerVehicle)continue;
-                    Ped driver=vehicle.Driver;if(driver==null||!driver.Exists()||LspdfrBridge.IsPedCop(driver))continue;
+                    Ped driver=vehicle.Driver;if(driver==null||!driver.Exists()||NativeFunction.Natives.IS_PED_A_COP<bool>(driver))continue;
                     NativeFunction.Natives.TASK_VEHICLE_TEMP_ACTION(driver,vehicle,6,5000);
                 }
                 foreach(Ped ped in World.GetAllPeds())
                 {
-                    if(ped==null||!ped.Exists()||ped==player||ped==Subject||ped==Reporter||ped==ParentTwo||ped==OfficerOne||ped==OfficerTwo||ped==OfficerThree||ped.IsDead||NativeFunction.Natives.IS_PED_IN_ANY_VEHICLE<bool>(ped,false)||LspdfrBridge.IsPedCop(ped)||ped.DistanceTo(Scene)>70f)continue;
+                    if(ped==null||!ped.Exists()||ped==player||ped==Subject||ped==Reporter||ped==ParentTwo||ped==OfficerOne||ped==OfficerTwo||ped==OfficerThree||ped.IsDead||NativeFunction.Natives.IS_PED_IN_ANY_VEHICLE<bool>(ped,false)||NativeFunction.Natives.IS_PED_A_COP<bool>(ped)||ped.DistanceTo(Scene)>70f)continue;
                     float dx=ped.Position.X-Scene.X,dy=ped.Position.Y-Scene.Y,length=(float)Math.Sqrt(dx*dx+dy*dy);if(length<.1f){dx=1f;length=1f;}
                     Vector3 safe=new Vector3(Scene.X+dx/length*82f,Scene.Y+dy/length*82f,ped.Position.Z);
                     NativeFunction.Natives.TASK_FOLLOW_NAV_MESH_TO_COORD(ped,safe.X,safe.Y,safe.Z,2.8f,30000,2f,0,0f);
