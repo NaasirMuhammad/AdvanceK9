@@ -127,7 +127,7 @@ namespace AdvancedK9.Callouts
         private static readonly float[] CruiserHeadings={250f,340f,250f,25f,85f,180f,45f};
         private static readonly Vector3[] InteriorRobberPositions={
             new Vector3(253.55f,221.45f,101.68f),new Vector3(146.25f,-1044.05f,29.37f),
-            new Vector3(310.35f,-283.85f,54.17f),new Vector3(-1209.65f,-335.35f,37.79f),
+            new Vector3(310.35f,-283.85f,54.17f),new Vector3(-1212.88f,-329.57f,37.78f),
             new Vector3(-2957.25f,481.15f,15.70f),new Vector3(1171.85f,2711.30f,38.09f),
             new Vector3(-107.75f,6474.35f,31.63f)
         };
@@ -239,6 +239,18 @@ namespace AdvancedK9.Callouts
                 positions.Add(new Vector3(-3002.44f,448.52f,15.10f));headings.Add(310.3f);
                 return;
             }
+            if(_sceneIndex==3)
+            {
+                // Tester-recorded Rockford Hills perimeter. Six cruisers close
+                // the mapped approaches without placing the response behind the bank.
+                positions.Add(new Vector3(-1195.33f,-276.14f,37.76f));headings.Add(228.1f);
+                positions.Add(new Vector3(-1191.98f,-279.80f,37.82f));headings.Add(219.3f);
+                positions.Add(new Vector3(-1262.30f,-337.55f,36.88f));headings.Add(19.5f);
+                positions.Add(new Vector3(-1264.43f,-334.24f,36.92f));headings.Add(26.3f);
+                positions.Add(new Vector3(-1232.10f,-295.48f,37.52f));headings.Add(290.4f);
+                positions.Add(new Vector3(-1181.15f,-277.71f,37.72f));headings.Add(210.3f);
+                return;
+            }
             if(_sceneIndex==6)
             {
                 // Tester-recorded Blaine County Savings / Paleto perimeter.
@@ -328,7 +340,10 @@ namespace AdvancedK9.Callouts
             if(!StagePoliceScene(CruiserScenes[_sceneIndex],CruiserHeadings[_sceneIndex],true))return false;
             Vector3 forward=HeadingVector(CruiserHeadings[_sceneIndex]);
             Vector3 right=new Vector3(forward.Y,-forward.X,0f);
-            int requiredVehicles=_sceneIndex==0?8:(_sceneIndex==1||_sceneIndex==4||_sceneIndex==6)?6:4;
+            // Rockford always uses the first four mapped cruisers. The fifth and
+            // sixth form an optional reinforcement pair so staffing remains two
+            // officers per vehicle and the perimeter never produces an odd unit.
+            int requiredVehicles=_sceneIndex==0?8:(_sceneIndex==3?(Random.Next(2)==0?4:6):(_sceneIndex==1||_sceneIndex==4||_sceneIndex==6)?6:4);
             int requiredOfficers=_sceneIndex==0?20:requiredVehicles*2;
             float heading=CruiserHeadings[_sceneIndex];
             List<Vector3> positions;List<float> headings;GetBankPerimeterLayout(out positions,out headings);
@@ -389,7 +404,7 @@ namespace AdvancedK9.Callouts
             AssignBankOfficersToVehicles(perimeterVehicles);
             MaintainSpawnedPoliceAssets();
             _bankPerimeterStaged=true;
-            Game.LogTrivial("AdvancedK9 Callouts: bank perimeter staged at "+BankNames[_sceneIndex]+" with "+requiredVehicles+" marked cruisers and "+requiredOfficers+" armed ground personnel behind vehicle cover"+(_sceneIndex==0?" (all Pacific approaches closed; 16 patrol officers, four-officer SWAT team with BearCat, and two-officer Air One orbit).":_sceneIndex==1?" (tester-recorded Legion Square six-car layout).":_sceneIndex==4?" (tester-mapped Great Ocean Highway six-cruiser closure).":_sceneIndex==6?" (tester-mapped Paleto six-cruiser closure).":" (two roadblock pairs close both incoming lanes)."));
+            Game.LogTrivial("AdvancedK9 Callouts: bank perimeter staged at "+BankNames[_sceneIndex]+" with "+requiredVehicles+" marked cruisers and "+requiredOfficers+" armed ground personnel behind vehicle cover"+(_sceneIndex==0?" (all Pacific approaches closed; 16 patrol officers, four-officer SWAT team with BearCat, and two-officer Air One orbit).":_sceneIndex==1?" (tester-recorded Legion Square six-car layout).":_sceneIndex==3?(requiredVehicles==6?" (tester-recorded Rockford Hills layout with optional reinforcement pair present).":" (tester-recorded Rockford Hills four-car base perimeter; optional reinforcement pair not dispatched)."):_sceneIndex==4?" (tester-mapped Great Ocean Highway six-cruiser closure).":_sceneIndex==6?" (tester-mapped Paleto six-cruiser closure).":" (two roadblock pairs close both incoming lanes)."));
             return true;
         }
 
