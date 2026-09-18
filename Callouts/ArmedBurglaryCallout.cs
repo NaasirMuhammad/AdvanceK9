@@ -217,8 +217,8 @@ namespace AdvancedK9.Callouts
             if(_sceneIndex==1)
             {
                 // Tester-recorded Legion Square perimeter from the 2026-09-17 log.
-                positions.Add(new Vector3(197.35f,-1023.20f,29.36f));headings.Add(154.6f);
-                positions.Add(new Vector3(200.32f,-1024.10f,29.36f));headings.Add(241.7f);
+                positions.Add(new Vector3(194.04f,-1025.37f,29.36f));headings.Add(158.2f);
+                positions.Add(new Vector3(193.94f,-1029.66f,29.36f));headings.Add(153.3f);
                 positions.Add(new Vector3(158.84f,-1010.77f,29.39f));headings.Add(246.0f);
                 positions.Add(new Vector3(145.50f,-1002.87f,29.35f));headings.Add(188.7f);
                 positions.Add(new Vector3(128.72f,-1015.59f,29.41f));headings.Add(334.9f);
@@ -694,7 +694,7 @@ namespace AdvancedK9.Callouts
         {
             if(_bankOutcomeReported)return;
             _bankOutcomeReported=true;
-            DispatchUpdate(stage,_bankScenario==1?"Bank robbery vehicle escape":_bankScenario==2?"Bank hostage incident":_bankScenario==3?"Pacific Standard interior search":"Bank robbery foot escape","Local patrol jurisdiction",_bankScenario==1?"Dark Buffalo getaway vehicle":"No active getaway vehicle","Armed bank-robbery suspects","Incident scene",ConfirmedSubjectDeath()?"Armed suspect deceased":"Scene stable",BankNames[_sceneIndex]+": "+summary,"",Subject!=null&&Subject.Exists()?Subject.Position:Scene);
+            DispatchUpdate(stage,_bankScenario==1?"Bank robbery vehicle escape":_bankScenario==2?"Bank hostage incident":_bankScenario==3?"Pacific Standard interior search":"Bank robbery foot escape","Local patrol jurisdiction",_bankScenario==1?"Dark Buffalo getaway vehicle":"No active getaway vehicle","Armed bank-robbery suspects","Incident scene",ConfirmedSubjectDeath()?"Armed suspect deceased":"Scene stable",BankNames[_sceneIndex]+": "+summary,"",CurrentSubjectServicePosition);
             Game.DisplayNotification("~b~Dispatch:~s~ "+summary);
             Game.DisplayHelp("The bank scene remains active. Clear the callout manually after evidence, medical, and prisoner arrangements are complete.");
             Game.LogTrivial("AdvancedK9 Callouts: bank outcome published without dismissing scene personnel: "+summary);

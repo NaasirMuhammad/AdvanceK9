@@ -35,6 +35,8 @@ namespace AdvancedK9.LSPDFRBridge
         private static string _calloutRequestId="",_calloutResult="",_custodyOwner="None",_custodyStage="None",_transportStage="NotRequested",_transportProvider="None";
         private static int _observedPedHandle;
         private static bool _prOwnershipSticky;
+        private static float _calloutTargetX,_calloutTargetY,_calloutTargetZ;
+        private static bool _calloutTargetDeceased;
 
         public override void Initialize()
         {
@@ -105,6 +107,10 @@ namespace AdvancedK9.LSPDFRBridge
             IDictionary<string,string> request=ReadMap(CalloutRequestPath);
             string requestId=Read(request,"RequestId"),action=Read(request,"Action");
             int requestedHandle;int.TryParse(Read(request,"PedHandle"),out requestedHandle);
+            float.TryParse(Read(request,"TargetX"),System.Globalization.NumberStyles.Float,System.Globalization.CultureInfo.InvariantCulture,out _calloutTargetX);
+            float.TryParse(Read(request,"TargetY"),System.Globalization.NumberStyles.Float,System.Globalization.CultureInfo.InvariantCulture,out _calloutTargetY);
+            float.TryParse(Read(request,"TargetZ"),System.Globalization.NumberStyles.Float,System.Globalization.CultureInfo.InvariantCulture,out _calloutTargetZ);
+            bool.TryParse(Read(request,"TargetDeceased"),out _calloutTargetDeceased);
             if(requestedHandle>0&&requestedHandle!=_observedPedHandle){_observedPedHandle=requestedHandle;_prOwnershipSticky=false;_custodyOwner="None";_custodyStage="None";_transportStage="NotRequested";_transportProvider="None";}
             Ped target=World.GetAllPeds().FirstOrDefault(p=>p!=null&&p.Exists()&&HandleOf(p)==_observedPedHandle.ToString());
             bool arrested=false,arresting=false;
@@ -128,7 +134,7 @@ namespace AdvancedK9.LSPDFRBridge
                     _transportStage=requested?"Requested":"Unavailable";_calloutResult=requested?"TransportRequested":"TransportSurfaceUnavailable";
                 }
             }
-            var lines=new[]{"Protocol=1","HeartbeatUtcTicks="+DateTime.UtcNow.Ticks,"RequestId="+_calloutRequestId,"Result="+_calloutResult,"ObservedPedHandle="+_observedPedHandle,"CustodyOwner="+_custodyOwner,"CustodyStage="+_custodyStage,"TransportProvider="+_transportProvider,"TransportStage="+_transportStage};
+            var lines=new[]{"Protocol=2","HeartbeatUtcTicks="+DateTime.UtcNow.Ticks,"RequestId="+_calloutRequestId,"Result="+_calloutResult,"ObservedPedHandle="+_observedPedHandle,"CustodyOwner="+_custodyOwner,"CustodyStage="+_custodyStage,"TransportProvider="+_transportProvider,"TransportStage="+_transportStage,"TargetX="+_calloutTargetX.ToString(System.Globalization.CultureInfo.InvariantCulture),"TargetY="+_calloutTargetY.ToString(System.Globalization.CultureInfo.InvariantCulture),"TargetZ="+_calloutTargetZ.ToString(System.Globalization.CultureInfo.InvariantCulture),"TargetDeceased="+_calloutTargetDeceased};
             if(!Directory.Exists(DirectoryPath))Directory.CreateDirectory(DirectoryPath);File.WriteAllLines(CalloutTempPath,lines);File.Copy(CalloutTempPath,CalloutStatePath,true);File.Delete(CalloutTempPath);
         }
 
