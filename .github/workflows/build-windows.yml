@@ -105,9 +105,10 @@ jobs:
               throw "Unexpected AI voice runtime version: $runtimeFile"
             }
           }
-          Compress-Archive -Path (Join-Path $package '*') -DestinationPath (Join-Path $pwd 'AdvancedK9-v0.24.0-beta.zip') -Force
       - uses: actions/upload-artifact@v4
         with:
           name: AdvancedK9-v0.24.0-beta-release
-          path: AdvancedK9-v0.24.0-beta.zip
+          # upload-artifact already produces the downloadable ZIP. Uploading a
+          # pre-compressed archive here creates a ZIP inside a ZIP for testers.
+          path: release-package/**
           if-no-files-found: error
