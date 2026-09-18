@@ -43,6 +43,7 @@ namespace AdvancedK9.Callouts
         private uint _nextCivilianEvacuation;
         private uint _nextSupportMove;
         private bool _medicalResponseStarted;
+        private bool _medicalDeathPublished;
         private int _cachedDogHandle;
         private bool _supportFiberStarted;
         private bool _supportTrackingEnded;
@@ -569,18 +570,25 @@ namespace AdvancedK9.Callouts
                 foreach(Vehicle vehicle in World.GetAllVehicles())
                 {
                     if(vehicle==null||!vehicle.Exists()||vehicle.DistanceTo(Scene)>SceneTrafficClosureRadius||vehicle==SceneVehicle||vehicle==PoliceVehicle||vehicle==PoliceVehicleTwo||vehicle==playerVehicle)continue;
-                    Ped driver=vehicle.Driver;if(driver==null||!driver.Exists()||NativeFunction.Natives.IS_PED_A_COP<bool>(driver))continue;
+                    Ped driver=vehicle.Driver;if(driver==null||!driver.Exists()||IsLawEnforcementPed(driver))continue;
                     NativeFunction.Natives.TASK_VEHICLE_TEMP_ACTION(driver,vehicle,6,5000);
                 }
                 foreach(Ped ped in World.GetAllPeds())
                 {
-                    if(ped==null||!ped.Exists()||ped==player||ped==Subject||ped==Reporter||ped==ParentTwo||ped==OfficerOne||ped==OfficerTwo||ped==OfficerThree||ped.IsDead||NativeFunction.Natives.IS_PED_IN_ANY_VEHICLE<bool>(ped,false)||NativeFunction.Natives.IS_PED_A_COP<bool>(ped)||ped.DistanceTo(Scene)>70f)continue;
+                    if(ped==null||!ped.Exists()||ped==player||ped==Subject||ped==Reporter||ped==ParentTwo||ped==OfficerOne||ped==OfficerTwo||ped==OfficerThree||ped.IsDead||NativeFunction.Natives.IS_PED_IN_ANY_VEHICLE<bool>(ped,false)||IsLawEnforcementPed(ped)||ped.DistanceTo(Scene)>70f)continue;
                     float dx=ped.Position.X-Scene.X,dy=ped.Position.Y-Scene.Y,length=(float)Math.Sqrt(dx*dx+dy*dy);if(length<.1f){dx=1f;length=1f;}
                     Vector3 safe=new Vector3(Scene.X+dx/length*82f,Scene.Y+dy/length*82f,ped.Position.Z);
                     NativeFunction.Natives.TASK_FOLLOW_NAV_MESH_TO_COORD(ped,safe.X,safe.Y,safe.Z,2.8f,30000,2f,0,0f);
                 }
             }
             catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: civilian scene exclusion contained: "+ex.Message);}
+        }
+
+        private static bool IsLawEnforcementPed(Ped ped)
+        {
+            if(ped==null||!ped.Exists())return false;
+            string model=(ped.Model.Name??"").ToLowerInvariant();
+            return model.Contains("cop")||model.Contains("sheriff")||model.Contains("swat")||model.Contains("fbi")||model.Contains("hwaycop")||model.Contains("pilot");
         }
 
         protected float K9DistanceTo(Vector3 position)
@@ -767,6 +775,8 @@ namespace AdvancedK9.Callouts
             if(_deathObservedAt==0)
             {
                 _deathObservedAt=Game.GameTime;_confirmedBodyPosition=_lastSubjectPosition;_confirmedBodyPositionSet=true;CalloutPosition=_confirmedBodyPosition;
+                Subject.IsPersistent=true;
+                NativeFunction.Natives.SET_ENTITY_AS_MISSION_ENTITY(Subject,true,true);
                 Game.LogTrivial("AdvancedK9 Callouts: deceased-subject service anchor captured at "+_confirmedBodyPosition+" for EMS/coroner routing.");
             }
             if(_custodyLeaseActive||ArrestProviderOwnsSubject)return false;
@@ -830,7 +840,7 @@ namespace AdvancedK9.Callouts
             _deathObservedAt=0;_confirmedBodyPositionSet=false;_confirmedBodyPosition=Vector3.Zero;_lastSubjectPosition=Subject!=null&&Subject.Exists()?Subject.Position:Vector3.Zero;_suspectLifecycle=SuspectLifecycle.Located;_arrestStartedPublished=false;_calloutBridgeRequestId="";_nextCalloutBridgeObservation=0;
             _supportTrackingEnded=false;_supportFiberStarted=false;_supportContainmentLogged=false;_supportContainmentAssigned=false;_supportCustodyGuardAssigned=false;
             _sharedBackupArrestAttempted=false;_sharedOfficerArrestTargets.Clear();_sharedOfficerEscortTargets.Clear();_sharedControlDispatchSent=false;_sharedManualTransportNoticeSent=false;
-            _k9DisengageIssued=false;_medicalResponseStarted=false;MedicalResponseComplete=false;SeriousMedicalTransport=false;_medicalStage="not-requested";_transportStage="not-requested";
+            _k9DisengageIssued=false;_medicalResponseStarted=false;_medicalDeathPublished=false;MedicalResponseComplete=false;SeriousMedicalTransport=false;_medicalStage="not-requested";_transportStage="not-requested";
             Game.LogTrivial("AdvancedK9 Callouts: shared suspect lifecycle reset for the newly selected multi-suspect scent target.");
         }
 
@@ -1321,11 +1331,12 @@ namespace AdvancedK9.Callouts
                     Ped respondingMedic=null;uint responseDeadline=Game.GameTime+25000;
                     while(suspect.Exists()&&Game.GameTime<responseDeadline)
                     {
+                        if(StopMedicalForDeath(suspect))return;
                         respondingMedic=FindRespondingMedic(suspect,existingPedHandles);
                         if(respondingMedic!=null)break;
                         GameFiber.Wait(1800);
                     }
-                    if(!suspect.Exists())return;
+                    if(!suspect.Exists()||StopMedicalForDeath(suspect))return;
                     if(respondingMedic==null)
                     {
                         Game.DisplayNotification("~o~Dispatch:~s~ EMS could not reach the live location. A monitored on-scene medical fallback is beginning.");
@@ -1343,6 +1354,7 @@ namespace AdvancedK9.Callouts
                     NativeFunction.Natives.TASK_FOLLOW_NAV_MESH_TO_COORD(respondingMedic,suspect.Position.X,suspect.Position.Y,suspect.Position.Z,2.2f,12000,1.4f,0,0f);
                     uint approachDeadline=Game.GameTime+12000;
                     while(respondingMedic.Exists()&&suspect.Exists()&&respondingMedic.DistanceTo(suspect)>2.2f&&Game.GameTime<approachDeadline)GameFiber.Wait(250);
+                    if(StopMedicalForDeath(suspect))return;
                     if(respondingMedic!=null&&respondingMedic.Exists()&&suspect.Exists()&&respondingMedic.DistanceTo(suspect)>2.2f)
                     {
                         Vector3 closeContact=suspect.GetOffsetPosition(new Vector3(1.5f,-1.2f,0f));Vector3 safeContact;
@@ -1358,6 +1370,7 @@ namespace AdvancedK9.Callouts
                     }
                     NativeFunction.Natives.TASK_TURN_PED_TO_FACE_ENTITY(respondingMedic,suspect,1000);
                     GameFiber.Wait(1000);
+                    if(StopMedicalForDeath(suspect))return;
                     NativeFunction.Natives.TASK_START_SCENARIO_IN_PLACE(respondingMedic,"CODE_HUMAN_MEDIC_TEND_TO_DEAD",0,true);
                     _medicalStage="treating";
                     Game.DisplayNotification("~b~Dispatch:~s~ EMS is physically on scene and treating the suspect.");
@@ -1365,6 +1378,7 @@ namespace AdvancedK9.Callouts
                     uint treatmentUntil=Game.GameTime+6500;bool contactMaintained=true;
                     while(Game.GameTime<treatmentUntil&&respondingMedic.Exists()&&suspect.Exists())
                     {
+                        if(StopMedicalForDeath(suspect))return;
                         if(respondingMedic.DistanceTo(suspect)>3f){contactMaintained=false;break;}
                         GameFiber.Wait(250);
                     }
@@ -1374,6 +1388,7 @@ namespace AdvancedK9.Callouts
                         DispatchUpdate("MedicalFailed","K9 apprehension injury","Current jurisdiction","EMS on scene","Injured restrained suspect","Live apprehension location","Treatment interrupted","Medic contact was interrupted. The suspect has not been medically cleared.","",suspect.Exists()?suspect.Position:downedPosition);
                         return;
                     }
+                    if(StopMedicalForDeath(suspect))return;
                     bool serious=suspect.Health<=System.Math.Max(25,suspect.MaxHealth*45/100);
                     if(!ArrestProviderOwnsSubject&&!UpdateCustodyLease())suspect.Health=System.Math.Max(suspect.Health,serious?System.Math.Max(50,suspect.MaxHealth/2):System.Math.Max(75,suspect.MaxHealth*3/4));
                     if(serious)
@@ -1397,6 +1412,22 @@ namespace AdvancedK9.Callouts
                 catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: live-position EMS response contained: "+ex);}
                 if(!MedicalResponseComplete&&_medicalStage!="failed")_medicalResponseStarted=false;
             },"AdvancedK9 live-position EMS response");
+            return true;
+        }
+
+        private bool StopMedicalForDeath(Ped suspect)
+        {
+            if(suspect==null||!suspect.Exists())return true;
+            if(suspect.Health>0||!NativeFunction.Natives.IS_PED_DEAD_OR_DYING<bool>(suspect,true))return false;
+            _lastSubjectPosition=suspect.Position;_confirmedBodyPosition=_lastSubjectPosition;_confirmedBodyPositionSet=true;CalloutPosition=_confirmedBodyPosition;
+            suspect.IsPersistent=true;NativeFunction.Natives.SET_ENTITY_AS_MISSION_ENTITY(suspect,true,true);
+            _medicalStage="deceased";MedicalResponseComplete=true;SeriousMedicalTransport=false;
+            if(!_medicalDeathPublished)
+            {
+                _medicalDeathPublished=true;
+                DispatchUpdate("MedicalDeceased","Suspect medical response",_incidentJurisdiction,"EMS/coroner response",_incidentSuspect,"Confirmed body location","Deceased","EMS treatment stopped because the suspect is deceased. The body remains secured at its current location for coroner response.","",_confirmedBodyPosition);
+                Game.LogTrivial("AdvancedK9 Callouts: EMS treatment aborted after confirmed death; body retained at "+_confirmedBodyPosition+" for coroner response.");
+            }
             return true;
         }
 
