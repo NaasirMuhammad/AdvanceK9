@@ -257,6 +257,17 @@ namespace AdvancedK9.Callouts
                 positions.Add(new Vector3(-3002.44f,448.52f,15.10f));headings.Add(310.3f);
                 return;
             }
+            if(_sceneIndex==5)
+            {
+                // Tester-recorded Route 68 Fleeca perimeter from the
+                // 2026-09-18 calibration log.
+                positions.Add(new Vector3(1229.01f,2686.46f,37.62f));headings.Add(188.6f);
+                positions.Add(new Vector3(1229.89f,2684.35f,37.63f));headings.Add(177.1f);
+                positions.Add(new Vector3(1181.10f,2672.23f,37.84f));headings.Add(91.6f);
+                positions.Add(new Vector3(1127.57f,2681.67f,38.40f));headings.Add(352.9f);
+                positions.Add(new Vector3(1138.21f,2679.74f,38.30f));headings.Add(30.5f);
+                return;
+            }
             if(_sceneIndex==2)
             {
                 // Tester-recorded Hawick perimeter. Seven cruisers close the
@@ -374,7 +385,7 @@ namespace AdvancedK9.Callouts
             // Rockford always uses the first four mapped cruisers. The fifth and
             // sixth form an optional reinforcement pair so staffing remains two
             // officers per vehicle and the perimeter never produces an odd unit.
-            int requiredVehicles=_sceneIndex==0?8:(_sceneIndex==1?5:(_sceneIndex==2?7:(_sceneIndex==3?(Random.Next(2)==0?4:6):(_sceneIndex==4||_sceneIndex==6)?6:4)));
+            int requiredVehicles=_sceneIndex==0?8:(_sceneIndex==1?5:(_sceneIndex==2?7:(_sceneIndex==3?(Random.Next(2)==0?4:6):(_sceneIndex==4||_sceneIndex==6)?6:_sceneIndex==5?5:4)));
             int requiredOfficers=_sceneIndex==0?20:requiredVehicles*2;
             float heading=CruiserHeadings[_sceneIndex];
             List<Vector3> positions;List<float> headings;GetBankPerimeterLayout(out positions,out headings);
@@ -438,7 +449,7 @@ namespace AdvancedK9.Callouts
             AssignBankOfficersToVehicles(perimeterVehicles);
             MaintainSpawnedPoliceAssets();
             _bankPerimeterStaged=true;
-            Game.LogTrivial("AdvancedK9 Callouts: bank perimeter staged at "+BankNames[_sceneIndex]+" with "+requiredVehicles+" marked cruisers and "+requiredOfficers+" armed ground personnel behind vehicle cover"+(_sceneIndex==0?" (tester-mapped Pacific closure; 16 patrol officers, four SWAT officers staged with the BearCat, and two-officer Air One orbit).":_sceneIndex==1?" (tester-recorded Legion Square five-car layout; Elgin-facing unit omitted).":_sceneIndex==2?" (tester-mapped Hawick seven-cruiser closure).":_sceneIndex==3?(requiredVehicles==6?" (tester-recorded Rockford Hills layout with optional reinforcement pair present).":" (tester-recorded Rockford Hills four-car base perimeter; optional reinforcement pair not dispatched)."):_sceneIndex==4?" (tester-mapped Great Ocean Highway six-cruiser closure).":_sceneIndex==6?" (tester-mapped Paleto six-cruiser closure).":" (two roadblock pairs close both incoming lanes)."));
+            Game.LogTrivial("AdvancedK9 Callouts: bank perimeter staged at "+BankNames[_sceneIndex]+" with "+requiredVehicles+" marked cruisers and "+requiredOfficers+" armed ground personnel behind vehicle cover"+(_sceneIndex==0?" (tester-mapped Pacific closure; 16 patrol officers, four SWAT officers staged with the BearCat, and two-officer Air One orbit).":_sceneIndex==1?" (tester-recorded Legion Square five-car layout; Elgin-facing unit omitted).":_sceneIndex==2?" (tester-mapped Hawick seven-cruiser closure).":_sceneIndex==3?(requiredVehicles==6?" (tester-recorded Rockford Hills layout with optional reinforcement pair present).":" (tester-recorded Rockford Hills four-car base perimeter; optional reinforcement pair not dispatched)."):_sceneIndex==4?" (tester-mapped Great Ocean Highway six-cruiser closure).":_sceneIndex==5?" (tester-mapped Route 68 five-cruiser closure).":_sceneIndex==6?" (tester-mapped Paleto six-cruiser closure).":" (two roadblock pairs close both incoming lanes)."));
             return true;
         }
 

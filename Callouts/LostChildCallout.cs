@@ -13,6 +13,7 @@ namespace AdvancedK9.Callouts
         private bool _subjectLocated;
         private bool _recoveryPublished;
         private Vector3 _plannedSubjectPosition;
+        private Blip _scentArticleBlip;
         protected override bool UsesSuspectLifecycle{get{return false;}}
 
         private Vector3 NearestWildernessScene()
@@ -47,15 +48,27 @@ namespace AdvancedK9.Callouts
             try
             {
                 StartedAt=Game.GameTime;_outcome=Random.Next(3);
-                Reporter=SpawnPed("a_f_y_business_02",new Vector3(Scene.X-1.5f,Scene.Y,Scene.Z),0f);
-                ParentTwo=SpawnPed("a_m_y_business_02",new Vector3(Scene.X+1.5f,Scene.Y,Scene.Z),0f);
                 if(!StagePoliceScene()){End();return false;}
-                EvidenceProp=SpawnProp("prop_ld_shirt_01",new Vector3(Scene.X,Scene.Y+1.2f,Scene.Z));
+                Vector3 parentOnePosition=PoliceVehicle.GetOffsetPosition(new Vector3(-2.4f,-3.0f,0f));
+                Vector3 parentTwoPosition=PoliceVehicle.GetOffsetPosition(new Vector3(2.4f,-3.0f,0f));
+                Vector3 safe;
+                if(TryResolveSafePedPosition(parentOnePosition,out safe))parentOnePosition=safe;
+                if(TryResolveSafePedPosition(parentTwoPosition,out safe))parentTwoPosition=safe;
+                Reporter=SpawnPed("a_f_y_business_02",parentOnePosition,PoliceVehicle.Heading);
+                ParentTwo=SpawnPed("a_m_y_business_02",parentTwoPosition,PoliceVehicle.Heading);
+                Vector3 articlePosition=PoliceVehicle.GetOffsetPosition(new Vector3(0f,-2.0f,0f));
+                if(TryResolveSafePedPosition(articlePosition,out safe))articlePosition=safe;
+                EvidenceProp=SpawnProp("prop_ld_shirt_01",articlePosition);
                 Vector3 safeTeenPosition;
                 if(TryResolveSafePedPosition(_plannedSubjectPosition,out safeTeenPosition))_plannedSubjectPosition=safeTeenPosition;
                 CoverProp=SpawnProp("prop_bush_med_03",new Vector3(_plannedSubjectPosition.X+2f,_plannedSubjectPosition.Y,_plannedSubjectPosition.Z));
                 Subject=SpawnPed("a_f_y_hipster_02",_plannedSubjectPosition,Random.Next(360));
-                if(Reporter==null||!Reporter.Exists()||Subject==null||!Subject.Exists()){End();return false;}
+                if(Reporter==null||!Reporter.Exists()||ParentTwo==null||!ParentTwo.Exists()||EvidenceProp==null||!EvidenceProp.Exists()||Subject==null||!Subject.Exists()){Game.LogTrivial("AdvancedK9 Callouts: Missing Teen rejected because both parents, visible clothing, and the teen are required scene entities.");End();return false;}
+                Reporter.IsPersistent=true;Reporter.BlockPermanentEvents=true;ParentTwo.IsPersistent=true;ParentTwo.BlockPermanentEvents=true;
+                NativeFunction.Natives.TASK_START_SCENARIO_IN_PLACE(Reporter,"WORLD_HUMAN_STAND_MOBILE",0,true);
+                NativeFunction.Natives.TASK_START_SCENARIO_IN_PLACE(ParentTwo,"WORLD_HUMAN_STAND_IMPATIENT",0,true);
+                NativeFunction.Natives.PLACE_OBJECT_ON_GROUND_PROPERLY(EvidenceProp);NativeFunction.Natives.FREEZE_ENTITY_POSITION(EvidenceProp,true);
+                _scentArticleBlip=new Blip(EvidenceProp);_scentArticleBlip.Name="Teen's clothing — scent article";
                 SubjectBlip=Subject.AttachBlip();SubjectBlip.IsRouteEnabled=false;SubjectBlip.Alpha=0;
                 Subject.BlockPermanentEvents=true;Subject.IsPersistent=true;
                 Subject.Tasks.ClearImmediately();
@@ -104,6 +117,12 @@ namespace AdvancedK9.Callouts
                 base.Process();
             }
             catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: Missing Teen process error contained: "+ex);Resolve("~r~Missing Teen ended safely after an internal scene error.");}
+        }
+
+        public override void End()
+        {
+            if(_scentArticleBlip!=null&&_scentArticleBlip.Exists())_scentArticleBlip.Delete();
+            base.End();
         }
     }
 }

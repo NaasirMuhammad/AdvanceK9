@@ -649,6 +649,11 @@ namespace AdvancedK9
         {
             try
             {
+                if(_trackFiberRunning&&command==K9Command.CollectScent)
+                {
+                    Game.DisplayNotification("~b~Scent already locked.~s~~n~"+_profile.Name+" is actively tracking this article; no additional scent bag was used.");
+                    return;
+                }
                 if(_trackFiberRunning&&command!=K9Command.Track)
                 {
                     _dog?.Tasks.Clear();_state=K9State.Following;
@@ -1827,7 +1832,15 @@ namespace AdvancedK9
                 if(!TryResolvePedNavigationPoint(sample,sample.Z,out waypoint))
                 {
                     Vector3 street=World.GetNextPositionOnStreet(sample);
-                    waypoint=Math.Abs(street.Z-sample.Z)<=4.5f?street:sample;
+                    // A distant road snap can put a wilderness scent waypoint on
+                    // the opposite side of a ridge or ravine. Keep the authored
+                    // ground sample unless the road node is genuinely nearby.
+                    if(street.DistanceTo(sample)<=18f&&Math.Abs(street.Z-sample.Z)<=4.5f)waypoint=street;
+                    else
+                    {
+                        float ground;
+                        waypoint=NativeFunction.Natives.GET_GROUND_Z_FOR_3D_COORD<bool>(sample.X,sample.Y,sample.Z+25f,out ground,false)?new Vector3(sample.X,sample.Y,ground):sample;
+                    }
                 }
                 if(waypoint.DistanceTo(previous)>12f&&waypoint.DistanceTo(destination)>15f){route.Add(waypoint);previous=waypoint;}
             }
@@ -1843,7 +1856,7 @@ namespace AdvancedK9
             {
                 Vector3 nav;
                 if(!NativeFunction.Natives.GET_SAFE_COORD_FOR_PED<bool>(requested.X,requested.Y,requested.Z,true,out nav,16))return false;
-                if(nav.DistanceTo(requested)>28f)return false;
+                if(nav.DistanceTo(requested)>12f)return false;
                 if(Math.Abs(nav.Z-expectedZ)>3.25f)
                 {
                     Game.LogTrivial("AdvancedK9 route node rejected: navmesh elevation changed from "+expectedZ.ToString("0.00")+" to "+nav.Z.ToString("0.00")+" at "+FormatVector(requested)+".");
