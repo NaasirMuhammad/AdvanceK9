@@ -7,7 +7,7 @@ using Rage.Native;
 
 namespace AdvancedK9.Callouts
 {
-    [CalloutInterfaceAPI.CalloutInterface("AdvancedK9: Fugitive Trail",CalloutProbability.Medium,"Failed traffic stop. Driver abandoned the vehicle and fled on foot. Responding K9 unit will collect preserved driver-seat scent and track the fugitive.","Code 2","LSPD")]
+    [CalloutInterfaceAPI.CalloutInterface("AdvancedK9: Fugitive Trail",CalloutProbability.Low,"Failed traffic stop. Driver abandoned the vehicle and fled on foot. Responding K9 unit will collect preserved driver-seat scent and track the fugitive.","Code 2","LSPD")]
     public sealed class FugitiveTrailCallout : AdvancedK9Callout
     {
         private enum FugitivePhase{EnRoute,AwaitingScent,Tracking,Located,Medical,Custody,Transport,Complete}

@@ -7,7 +7,7 @@ using System.Drawing;
 
 namespace AdvancedK9.Callouts
 {
-    [CalloutInfo("AdvancedK9: Armed Burglary Suspect Hiding",CalloutProbability.Medium)]
+    [CalloutInfo("AdvancedK9: Armed Burglary Suspect Hiding",CalloutProbability.Low)]
     public sealed class ArmedBurglaryCallout : AdvancedK9Callout
     {
         private int _outcome;

@@ -5,7 +5,7 @@ using Rage.Native;
 
 namespace AdvancedK9.Callouts
 {
-    [CalloutInfo("AdvancedK9: Missing Vulnerable Teen",CalloutProbability.Medium)]
+    [CalloutInfo("AdvancedK9: Missing Vulnerable Teen",CalloutProbability.Low)]
     public sealed class LostChildCallout : AdvancedK9Callout
     {
         private int _outcome;

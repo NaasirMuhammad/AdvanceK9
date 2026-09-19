@@ -18,7 +18,7 @@ namespace AdvancedK9.Callouts
             "AdvancedK9: Fugitive Trail",
             "AdvancedK9: Armed Burglary Suspect Hiding"
         };
-        private static bool _automaticDispatch=true;
+        private static bool _forcedAutomaticDispatch;
         private static int _automaticMinimumSeconds=300;
         private static int _automaticMaximumSeconds=600;
         private static uint _nextAutomaticDispatch;
@@ -40,7 +40,7 @@ namespace AdvancedK9.Callouts
                 Game.LogTrivial("AdvancedK9 Callouts: registered "+count+"/3 callouts after LSPDFR duty initialization.");
             },"AdvancedK9 delayed callout registration");
             GameFiber.StartNew(CalloutRequestLoop,"AdvancedK9 callout request listener");
-            GameFiber.StartNew(AutomaticDispatchLoop,"AdvancedK9 automatic callout dispatcher");
+            if(_forcedAutomaticDispatch)GameFiber.StartNew(AutomaticDispatchLoop,"AdvancedK9 optional forced callout dispatcher");
         }
 
         private static void CalloutRequestLoop()
@@ -59,11 +59,11 @@ namespace AdvancedK9.Callouts
             while(_running)
             {
                 GameFiber.Wait(1000);
-                if(!_automaticDispatch||!_registered||Game.GameTime<_nextAutomaticDispatch)continue;
+                if(!_forcedAutomaticDispatch||!_registered||Game.GameTime<_nextAutomaticDispatch)continue;
                 K9ApiSnapshot snapshot;
                 if(!AdvancedK9Api.TryGetSnapshot(out snapshot)||!snapshot.OnDuty||!snapshot.Deployed){ScheduleNextAutomaticDispatch(60);continue;}
                 bool known;
-                if(IsCalloutActive(out known)||!known){ScheduleNextAutomaticDispatch(45);continue;}
+                if(IsPlayerBusy()||IsCalloutActive(out known)||!known){ScheduleNextAutomaticDispatch(120);continue;}
                 int selected;
                 do{selected=Random.Next(AutomaticCallouts.Length);}while(AutomaticCallouts.Length>1&&selected==_lastAutomaticCallout);
                 if(StartSelectedCallout(AutomaticCallouts[selected],"automatic dispatch"))_lastAutomaticCallout=selected;
@@ -93,16 +93,35 @@ namespace AdvancedK9.Callouts
             return false;
         }
 
+        private static bool IsPlayerBusy()
+        {
+            try
+            {
+                foreach(string name in new[]{"IsPlayerPerformingPullover","IsPlayerPerformingTrafficStop","IsPlayerInPursuit","IsPursuitStillRunning"})
+                {
+                    MethodInfo method=typeof(Functions).GetMethod(name,BindingFlags.Public|BindingFlags.Static,null,Type.EmptyTypes,null);
+                    if(method!=null&&method.ReturnType==typeof(bool)&&(bool)method.Invoke(null,null))return true;
+                }
+                foreach(string name in new[]{"GetCurrentPullover","GetActivePullover","GetCurrentPursuit","GetActivePursuit"})
+                {
+                    MethodInfo method=typeof(Functions).GetMethod(name,BindingFlags.Public|BindingFlags.Static,null,Type.EmptyTypes,null);
+                    if(method!=null&&method.Invoke(null,null)!=null)return true;
+                }
+            }
+            catch(Exception ex){Game.LogTrivial("AdvancedK9 Callouts: player-activity probe failed closed: "+ex.Message);return true;}
+            return false;
+        }
+
         private static void LoadAutomaticDispatchSettings()
         {
             try
             {
                 string path=Path.Combine("Plugins","LSPDFR","AdvancedK9","AdvancedK9.ini");
                 var ini=new InitializationFile(path);
-                _automaticDispatch=ini.ReadBoolean("Callouts","AutomaticDispatch",true);
+                _forcedAutomaticDispatch=ini.ReadBoolean("Callouts","ForceAdvancedK9Dispatch",false);
                 _automaticMinimumSeconds=Math.Max(60,ini.ReadInt32("Callouts","AutomaticMinimumSeconds",300));
                 _automaticMaximumSeconds=Math.Max(_automaticMinimumSeconds,ini.ReadInt32("Callouts","AutomaticMaximumSeconds",600));
-                Game.LogTrivial("AdvancedK9 Callouts: automatic dispatch "+(_automaticDispatch?"enabled":"disabled")+"; interval="+_automaticMinimumSeconds+"-"+_automaticMaximumSeconds+" seconds.");
+                Game.LogTrivial("AdvancedK9 Callouts: normal LSPDFR randomized dispatch enabled; forced AdvancedK9 scheduler "+(_forcedAutomaticDispatch?"enabled at "+_automaticMinimumSeconds+"-"+_automaticMaximumSeconds+" seconds.":"disabled."));
             }
             catch(Exception ex){Game.LogTrivial("AdvancedK9 Callouts: automatic-dispatch settings fallback contained: "+ex.Message);}
         }
