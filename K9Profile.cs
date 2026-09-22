@@ -41,11 +41,11 @@ namespace AdvancedK9
         public int WeaponsProgress { get; private set; }
         public int Food { get; private set; } = 100;
         public int Water { get; private set; } = 100;
-        public int FoodMeals { get; private set; } = 4;
-        public int WaterBottles { get; private set; } = 4;
-        public int FirstAidKits { get; private set; } = 2;
-        public int ScentBags { get; private set; } = 5;
-        public int Treats { get; private set; } = 6;
+        public int FoodMeals { get; private set; } = 10;
+        public int WaterBottles { get; private set; } = 10;
+        public int FirstAidKits { get; private set; } = 10;
+        public int ScentBags { get; private set; } = 10;
+        public int Treats { get; private set; } = 10;
         public int TrainingLevel { get; private set; } = 1;
         public int TrainingLevelProgress { get; private set; }
         public int Deployments { get; private set; }
@@ -163,7 +163,7 @@ namespace AdvancedK9
         public bool GiveWater(){if(WaterBottles<=0)return false;WaterBottles--;Water=100;Stamina=Clamp(Stamina+10,0,100);Save();return true;}
         public bool UseFirstAid(){if(FirstAidKits<=0)return false;FirstAidKits--;FirstAid();return true;}
         public bool UseScentBag(){if(ScentBags<=0)return false;ScentBags--;Save();return true;}
-        public void Restock(){FoodMeals=4;WaterBottles=4;FirstAidKits=2;ScentBags=5;Treats=6;Save();}
+        public void Restock(){FoodMeals=10;WaterBottles=10;FirstAidKits=10;ScentBags=10;Treats=10;Save();}
         public void Rest(){Stamina=100;Food=Clamp(Food-4,0,100);Water=Clamp(Water-6,0,100);Save();}
         public void VeterinaryTreat(){Health=Math.Max(70,Health);Stamina=Math.Max(55,Stamina);Injury="Rehabilitation required";RehabilitationProgress=0;IsRehabilitating=true;Save();}
         public int AdvanceRehabilitation(int amount){if(!IsRehabilitating)return RehabilitationProgress;RehabilitationProgress=Clamp(RehabilitationProgress+Math.Max(1,amount),0,100);Health=Clamp(Math.Max(Health,70)+Math.Max(2,amount/3),0,100);Stamina=Clamp(Math.Max(Stamina,55)+Math.Max(2,amount/4),0,100);if(RehabilitationProgress>=100){RehabilitationProgress=100;IsRehabilitating=false;Health=100;Stamina=100;Injury="None";}else Injury="Rehabilitation "+RehabilitationProgress+"%";Save();return RehabilitationProgress;}
@@ -309,4 +309,3 @@ namespace AdvancedK9
         private static int Wrap(int value,int count) => count<=0?0:(value%count+count)%count;
     }
 }
-

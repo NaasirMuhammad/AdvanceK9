@@ -1,5 +1,14 @@
 # Changelog
 
+## Immediate deployment, medical custody, and mobile veterinary care
+
+- Makes the dedicated keyboard/controller apprehend shortcut bypass response-delay and hesitation checks after a valid target has passed the safety interlocks.
+- Holds a released bite patient down without a fixed timeout until EMS treatment, native custody, restraint, or death resolves the medical state; treated suspects transition to a hands-up arrest posture instead of fleeing.
+- Dispatches a visible mobile K9 veterinarian to Rex when Veterinary Care is selected away from the clinic, while retaining Veterinary Transport as a fallback.
+- Allows rehabilitation sessions wherever Rex is safely located and keeps the existing recovery cooldown.
+- Sets meals, water, first-aid kits, scent bags, and treats to 10 on every restock.
+- Extends post-first-aid entity protection and revival stabilization to clear delayed GTA damage/death frames.
+
 ## Field medical recovery and controlled-bite stability
 
 - Replaces GTA's terminal K9 ped instance after successful field first aid so Rex cannot briefly stand and immediately fall back into the downed state.
