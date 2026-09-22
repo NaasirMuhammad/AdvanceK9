@@ -17,6 +17,11 @@ namespace AdvancedK9
         public Keys LeashKey = Keys.L;
         public Keys PushToTalkKey = Keys.V;
         public Keys KennelKey = Keys.U;
+        public Keys ApprehendKey = Keys.G;
+        public bool ControllerApprehendEnabled = true;
+        public int ControllerApprehendModifier = 25;
+        public int ControllerApprehendButton = 190;
+        public int ApprehendTargetMemoryMilliseconds = 3000;
         public bool ModifierEnabled = true;
         public bool VoiceEnabled = true;
         public bool ContinuousListening = false;
@@ -89,6 +94,11 @@ namespace AdvancedK9
             result.LeashKey = ini.ReadEnum("Keys", "Leash", result.LeashKey);
             result.PushToTalkKey = ini.ReadEnum("Keys", "PushToTalk", result.PushToTalkKey);
             result.KennelKey = ini.ReadEnum("Keys", "KennelProfile", result.KennelKey);
+            result.ApprehendKey = ini.ReadEnum("Keys", "Apprehend", result.ApprehendKey);
+            result.ControllerApprehendEnabled = ini.ReadBoolean("Controller", "ApprehendEnabled", result.ControllerApprehendEnabled);
+            result.ControllerApprehendModifier = Math.Max(0, Math.Min(360, ini.ReadInt32("Controller", "ApprehendModifierControl", result.ControllerApprehendModifier)));
+            result.ControllerApprehendButton = Math.Max(0, Math.Min(360, ini.ReadInt32("Controller", "ApprehendButtonControl", result.ControllerApprehendButton)));
+            result.ApprehendTargetMemoryMilliseconds = Math.Max(500, Math.Min(5000, ini.ReadInt32("Apprehension", "TargetMemoryMilliseconds", result.ApprehendTargetMemoryMilliseconds)));
             result.VoiceEnabled = ini.ReadBoolean("Voice", "Enabled", result.VoiceEnabled);
             // Continuous capture is intentionally disabled. Voice is push-to-talk only so
             // ambient game, radio and room audio cannot trigger K9 commands.
@@ -247,4 +257,3 @@ namespace AdvancedK9
         }
     }
 }
-

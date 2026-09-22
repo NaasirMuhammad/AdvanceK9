@@ -116,6 +116,8 @@ namespace AdvancedK9
         private Ped _controlledBiteTarget;
         private uint _controlledBiteHoldUntil;
         private bool _controlledBiteReleased;
+        private Ped _releasedBiteTarget;
+        private uint _releasedBiteHoldUntil;
         private string _hudCommand="READY";
         private string _hudSearchLabel="";
         private int _hudSearchProgress;
@@ -156,6 +158,9 @@ namespace AdvancedK9
         private Ped _containTarget;
         private Vector3 _lastDogPosition;
         private float _lastDogHeading;
+        private Ped _recentApprehendTarget;
+        private uint _recentApprehendTargetUntil;
+        private bool _controllerApprehendHeld;
 
         private sealed class ScentTrailPoint
         {
@@ -216,6 +221,7 @@ namespace AdvancedK9
                 HandlePushToTalk();
                 MaintainK9Availability();
                 if (!DogEntityExists()) { DrainVoice(false); continue; }
+                HandleApprehendShortcut();
                 UpdateHandlerDownProtection();
                 if (ChordPressed(_config.ModifierKey,_config.CameraKey)) Execute(K9Command.ToggleCamera);
                 if (ChordPressed(_config.ModifierKey,_config.LeashKey)) Execute(K9Command.ToggleLeash);
@@ -311,6 +317,28 @@ namespace AdvancedK9
 
         private bool ChordPressed(Keys modifier, Keys key)=>(!_config.ModifierEnabled||Game.IsKeyDownRightNow(modifier))&&Game.IsKeyDown(key);
         private string KeyChord(Keys key)=>_config.ModifierEnabled?_config.ModifierKey+" + "+key:key.ToString();
+
+        private void HandleApprehendShortcut()
+        {
+            Ped aimed=GetValidAimedSuspect(false);
+            if(aimed!=null)
+            {
+                _recentApprehendTarget=aimed;
+                _recentApprehendTargetUntil=Game.GameTime+(uint)_config.ApprehendTargetMemoryMilliseconds;
+            }
+            bool controllerDown=false;
+            if(_config.ControllerApprehendEnabled)
+            {
+                try
+                {
+                    controllerDown=NativeFunction.Natives.IS_CONTROL_PRESSED<bool>(0,_config.ControllerApprehendModifier)&&NativeFunction.Natives.IS_CONTROL_PRESSED<bool>(0,_config.ControllerApprehendButton);
+                }
+                catch{controllerDown=false;}
+            }
+            bool controllerPressed=controllerDown&&!_controllerApprehendHeld;
+            _controllerApprehendHeld=controllerDown;
+            if(ChordPressed(_config.ModifierKey,_config.ApprehendKey)||controllerPressed)Execute(K9Command.Apprehend);
+        }
 
         private void HandlePushToTalk()
         {
@@ -665,7 +693,6 @@ namespace AdvancedK9
                 if(leashed&&RequiresLeashRelease(command)){DeleteLeashRope();_state=K9State.Following;leashed=false;ActionNotification("~b~Leash automatically released for "+CommandLabel(command)+".");}
                 _workingLeashed=leashed&&IsWorkingLeashCommand(command);
                 if(_leashRope>=0&&(command==K9Command.Training||command==K9Command.TrainNarcotics||command==K9Command.TrainExplosives||command==K9Command.TrainWeapons)){Game.DisplayNotification("~y~Remove the leash before traveling to the academy.");return;}
-                if(_profile.Health<=25 && command!=K9Command.Inspect && command!=K9Command.FirstAid && command!=K9Command.Restock && command!=K9Command.CarryK9 && command!=K9Command.SpawnDismiss){Game.DisplayNotification("~r~K9 REMOVED FROM SERVICE~s~~n~Serious injury requires veterinary treatment. Earned certifications remain saved.");return;}
                 if((_profile.Health<=25||_profile.IsRehabilitating) && command!=K9Command.Inspect && command!=K9Command.FirstAid && command!=K9Command.Restock && command!=K9Command.CarryK9 && command!=K9Command.EmergencyLoadK9 && command!=K9Command.VeterinaryTransport && command!=K9Command.Rehabilitation && command!=K9Command.VeterinaryCare && command!=K9Command.SpawnDismiss){Game.DisplayNotification("~r~K9 REMOVED FROM SERVICE~s~~n~Serious injury or rehabilitation prevents patrol work. Earned certifications remain saved.");return;}
                 if (RequiresTrustCheck(command) && _leashRope<0 && !TrustAllowsCommand(command)) return;
                 if(leashed)Game.LogTrivial("AdvancedK9 leash: executing "+CommandLabel(command)+" while visual leash remains attached.");
@@ -1062,7 +1089,19 @@ namespace AdvancedK9
 
         private void Inspect(){Game.DisplayNotification("~b~K9 "+_profile.Name+" — FIELD INSPECTION~s~~n~Health: "+_profile.Health+"%  Stamina: "+_profile.Stamina+"%~n~Bond: "+_trust.Level+"/100 ("+_trust.Rank+")  Confidence: "+_profile.Confidence+"/100~n~Training: Level "+_profile.TrainingLevel+"/5 • "+_profile.TrainingLevelProgress+"/"+_profile.CurrentTrainingRequirement+" XP~n~~g~Completed certifications:~s~ "+Certifications());Game.DisplayNotification("~b~ROSTER & DUTY STATUS~s~~n~Profile: "+_profile.ProfileId+" • Kennel: "+(string.IsNullOrWhiteSpace(_roster.Active.KennelKey)?"Unassigned":_roster.Active.KennelKey)+"~n~Status: "+(_profile.IsRehabilitating?"Rehabilitation "+_profile.RehabilitationProgress+"%":_roster.Active.Status)+"~n~~b~DUTY EQUIPMENT~s~~n~Meals "+_profile.FoodMeals+"  Water "+_profile.WaterBottles+"  First aid "+_profile.FirstAidKits+"~n~Scent bags "+_profile.ScentBags+"  Treats "+_profile.Treats+"~n~~b~Integration:~s~ "+_pr.ModeLabel);}
         private string Certifications(){string s="";if(_profile.ObedienceCertified)s+="OB ";if(_profile.AgilityCertified)s+="AGI ";if(_profile.DetectionCertified)s+="DET ";if(_profile.NarcoticsCertified)s+="NAR ";if(_profile.ExplosivesCertified)s+="BOMB ";if(_profile.WeaponsCertified)s+="WPN ";if(_profile.TrackingCertified)s+="TRK ";if(_profile.ApprehensionCertified)s+="APP ";return s.Length==0?"In training":s.Trim();}
-        private void FirstAid(){if(!DogEntityExists()){Game.DisplayNotification("~y~No deployed K9 is available for treatment.");return;}if(!_downed&&_profile.Health>=95){Game.DisplayNotification("~g~No field treatment required.");return;}if(!_profile.UseFirstAid()){Game.DisplayNotification("~r~No first-aid kits. Restock at the patrol vehicle.");return;}if(_carryingDog)SetDownCarriedK9(false);int restored=Math.Max(35,_profile.Health);_profile.SetInjury("Serious — stabilized; veterinary treatment required",restored);RestoreDogAfterTreatment(restored);_downed=false;_state=K9State.Injured;if(_blip!=null&&_blip.Exists()){_blip.Color=Color.DodgerBlue;_blip.Name="K9 "+_profile.Name;}Sit();GameFiber.Wait(1800);_profile.ChangeTrust(2);K9IncidentLog.Write(_profile.Name,"Medical","Emergency field revival and stabilization",_dog.Position);Game.LogTrivial("AdvancedK9: downed K9 revived by field first aid at "+_dog.Position+".");Game.DisplayNotification("~g~K9 stabilized and revived.~s~~n~Return to the veterinarian before resuming duty.");}
+        private void FirstAid(){if(!DogEntityExists()){Game.DisplayNotification("~y~No deployed K9 is available for treatment.");return;}if(!_downed&&_profile.Health>=95){Game.DisplayNotification("~g~No field treatment required.");return;}if(!_profile.UseFirstAid()){Game.DisplayNotification("~r~No first-aid kits. Restock at the patrol vehicle.");return;}if(_carryingDog)SetDownCarriedK9(false);int restored=Math.Max(35,_profile.Health);bool wasDowned=_downed;_profile.SetInjury("Serious — stabilized; veterinary treatment required",restored);if(wasDowned)RecreateDogAfterFieldTreatment(restored);else RestoreDogAfterTreatment(restored);_downed=false;_state=K9State.Injured;if(_blip!=null&&_blip.Exists()){_blip.Color=Color.DodgerBlue;_blip.Name="K9 "+_profile.Name;}LieDown();GameFiber.Wait(1800);_profile.ChangeTrust(2);K9IncidentLog.Write(_profile.Name,"Medical","Emergency field revival and stabilization",_dog.Position);Game.LogTrivial("AdvancedK9: downed K9 stabilized by field first aid with persistent recovery entity at "+_dog.Position+".");Game.DisplayNotification("~g~K9 stabilized in the field.~s~~n~Use Veterinary Transport or Veterinary Care for definitive treatment.");}
+
+        private void RecreateDogAfterFieldTreatment(int healthPercent)
+        {
+            Vector3 position=_dog.Position;float heading=_dog.Heading;
+            if(_blip!=null&&_blip.Exists())_blip.Delete();
+            _dog.Delete();_dog=null;
+            if(!CreateDogAt(position,heading))throw new InvalidOperationException("Unable to recreate the treated K9 entity.");
+            _profile.SetInjury("Serious — stabilized; veterinary treatment required",healthPercent);
+            int health=Math.Max(1,(int)(_dog.MaxHealth*Math.Max(1,Math.Min(100,healthPercent))/100f));
+            _dog.Health=health;NativeFunction.Natives.SET_ENTITY_HEALTH(_dog,health);_dog.IsInvincible=true;_medicalProtectionUntil=Game.GameTime+12000;
+            Game.LogTrivial("AdvancedK9 medical recovery: replaced GTA's terminal ped instance after field stabilization.");
+        }
 
         private void Rest(){if(!DogExists())return;LieDown();ActionNotification("~b~K9 rest cycle started.~s~ Maintain a safe perimeter.");GameFiber.Wait(8000);_profile.Rest();K9IncidentLog.Write(_profile.Name,"Care","Rest cycle",_dog.Position);ActionNotification("~g~K9 rested.~s~ Stamina restored.");}
         private void Bathroom()
@@ -1981,6 +2020,7 @@ namespace AdvancedK9
             var handler=Game.LocalPlayer.Character;
             var aimedTarget=GetValidAimedSuspect(false);
             if(aimedTarget==null&&_voiceAimedTarget!=null&&_voiceAimedTarget.Exists()&&!_voiceAimedTarget.IsDead&&_voiceAimedTarget.DistanceTo(handler)<=250f&&!LspdfrBridge.IsPedCop(_voiceAimedTarget))aimedTarget=_voiceAimedTarget;
+            if(aimedTarget==null&&_recentApprehendTarget!=null&&_recentApprehendTarget.Exists()&&!_recentApprehendTarget.IsDead&&Game.GameTime<=_recentApprehendTargetUntil&&_recentApprehendTarget.DistanceTo(handler)<=250f&&!LspdfrBridge.IsPedCop(_recentApprehendTarget))aimedTarget=_recentApprehendTarget;
             Ped calloutTarget=null;
             if(!string.IsNullOrWhiteSpace(_activeSharedApiContextId))
             {
@@ -1991,12 +2031,13 @@ namespace AdvancedK9
             if(calloutTarget!=null&&aimedTarget!=null&&aimedTarget!=calloutTarget)
                 Game.DisplayNotification("~y~Callout suspect lock active.~s~~n~Ignored the aimed bystander and deployed only on the assigned fugitive.");
             _voiceAimedTarget=null;
-            if(target==null){Game.DisplayNotification("~y~No valid target identified.~s~~n~Aim your taser or firearm directly at a non-officer, then issue APPREHEND. No ped stop is required.");return;}
+            if(target==null){Game.DisplayNotification("~y~No valid target identified.~s~~n~Aim at a non-officer, then press "+KeyChord(_config.ApprehendKey)+" or LT + D-pad Right within "+(_config.ApprehendTargetMemoryMilliseconds/1000f).ToString("0.0")+" seconds.");return;}
             if(_warnedTarget==target&&_warningSurrendered){Game.DisplayNotification("~r~K9 safety interlock: the warned suspect surrendered.~s~~n~Move in for arrest; apprehension was not deployed.");return;}
             if(IsTargetComplyingOrRestrained(target)){Game.DisplayNotification("~r~K9 safety interlock: the suspect is complying or in custody.~s~~n~NPCI compliance is preserved; complete the LSPDFR arrest.");return;}
             if(_config.CompatibilityProtectManagedPeds&&IsProtectedOperationalPed(target)){Game.DisplayNotification("~r~K9 safety interlock: restrained or surrendered suspect rejected.~s~~n~PR/STP stop status is not required for deployment, but protected peds cannot be bitten.");return;}
             if(_state==K9State.InVehicle)DoorPop(false);
             _state = K9State.Apprehending;
+            _recentApprehendTarget=null;_recentApprehendTargetUntil=0;
             _dog.Tasks.Clear();
             string reaction=calloutTarget!=null?"Callout-authorized suspect deployment":"Immediate aimed deployment";K9IncidentLog.Write(_profile.Name,"Apprehension",reaction,target.Position);_biteStarted=Game.GameTime;
             int healthBeforeContact=target.Health;
@@ -2013,9 +2054,10 @@ namespace AdvancedK9
                 }
                 // Do not stop Rex merely because he entered the target radius.  The previous
                 // proximity-only check cancelled TASK_COMBAT_PED before GTA could render a bite.
-                bool visibleContact=target.Health<healthBeforeContact||target.IsRagdoll;
-                bool controlledContact=_dog.DistanceTo(target)<1.35f&&Game.GameTime-_biteStarted>=1800;
-                if (controlledContact || target.Health <= _config.NonLethalHealthFloor || target.IsRagdoll)
+                float contactDistance=_dog.DistanceTo(target);
+                bool visibleContact=contactDistance<=1.8f&&(target.Health<healthBeforeContact||target.IsRagdoll);
+                bool controlledContact=contactDistance<=1.35f&&Game.GameTime-_biteStarted>=1800;
+                if (controlledContact || visibleContact)
                 {
                     if(!visibleContact&&target.Health>=healthBeforeContact)target.Health=Math.Max(_config.NonLethalHealthFloor,healthBeforeContact-12);
                     _dog.Tasks.ClearImmediately();
@@ -2035,6 +2077,7 @@ namespace AdvancedK9
                     _controlledBiteReleased=false;
                     _state=K9State.HoldingSuspect;
                     NativeFunction.Natives.TASK_TURN_PED_TO_FACE_ENTITY(_dog,target,-1);
+                    Game.LogTrivial("AdvancedK9 controlled bite confirmed at "+contactDistance.ToString("0.00")+"m K9-to-suspect distance.");
                     Game.DisplayNotification("~g~Controlled K9 bite and takedown complete.~s~ The suspect is injured and held down. Command RELEASE before arrest and medical treatment.");
                     _pr.RecordApprehension(target);
                     _trust.Change(1, "controlled apprehension");
@@ -2051,8 +2094,10 @@ namespace AdvancedK9
             if(_controlledBiteTarget!=null&&_controlledBiteTarget.Exists()&&!_controlledBiteTarget.IsDead)
             {
                 _controlledBiteReleased=true;
-                NativeFunction.Natives.SET_PED_TO_RAGDOLL(_controlledBiteTarget,4500,6500,0,false,false,false);
-                Game.DisplayNotification("~b~K9 released.~s~ The injured suspect remains down for arrest and EMS assessment.");
+                _releasedBiteTarget=_controlledBiteTarget;_releasedBiteHoldUntil=Game.GameTime+30000;
+                NativeFunction.Natives.SET_PED_TO_RAGDOLL(_releasedBiteTarget,6000,8000,0,false,false,false);
+                Game.LogTrivial("AdvancedK9 controlled bite released; injured suspect ground hold active pending arrest/EMS.");
+                Game.DisplayNotification("~b~K9 released.~s~ The injured suspect will remain down for arrest and EMS assessment.");
             }
             _controlledBiteTarget=null;_controlledBiteHoldUntil=0;
             Follow();
@@ -2226,6 +2271,7 @@ namespace AdvancedK9
             UpdateEnvironment();
             MaintainContainment();
             MaintainControlledBiteHold();
+            MaintainReleasedBiteTarget();
             if(Game.GameTime>=_nextVitalsUpdate){_nextVitalsUpdate=Game.GameTime+5000;int liveHealth=(int)(100f*_dog.Health/Math.Max(1,_dog.MaxHealth));if(liveHealth<_profile.Health){string injury=liveHealth<=25?"Serious — veterinary treatment required":liveHealth<=55?"Moderate":"Minor";_profile.SetInjury(injury,liveHealth);K9IncidentLog.Write(_profile.Name,"Injury",injury,_dog.Position);}NativeFunction.Natives.SET_PED_MOVE_RATE_OVERRIDE(_dog,_profile.Health<=55?.65f:1f);if(_state==K9State.Searching||_state==K9State.Tracking||_state==K9State.Apprehending)_profile.UseStamina(2);else _profile.Recover(1);}
             if (_state == K9State.Leashed)
             {
@@ -2251,6 +2297,17 @@ namespace AdvancedK9
                 NativeFunction.Natives.SET_PED_TO_RAGDOLL(_controlledBiteTarget,1800,2600,0,false,false,false);
             if(DogExists()&&_dog.DistanceTo(_controlledBiteTarget)>1.8f)
                 NativeFunction.Natives.TASK_GO_TO_ENTITY(_dog,_controlledBiteTarget,-1,1.1f,3.8f,0f,0);
+        }
+
+        private void MaintainReleasedBiteTarget()
+        {
+            if(_releasedBiteTarget==null)return;
+            if(!_releasedBiteTarget.Exists()||_releasedBiteTarget.IsDead||IsTargetComplyingOrRestrained(_releasedBiteTarget)||Game.GameTime>=_releasedBiteHoldUntil)
+            {
+                _releasedBiteTarget=null;_releasedBiteHoldUntil=0;return;
+            }
+            if(!_releasedBiteTarget.IsRagdoll)
+                NativeFunction.Natives.SET_PED_TO_RAGDOLL(_releasedBiteTarget,2500,3500,0,false,false,false);
         }
 
         private void ConfigureK9RelationshipGroup(Ped handler)

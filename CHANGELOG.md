@@ -1,5 +1,18 @@
 # Changelog
 
+## Field medical recovery and controlled-bite stability
+
+- Replaces GTA's terminal K9 ped instance after successful field first aid so Rex cannot briefly stand and immediately fall back into the downed state.
+- Allows emergency loading, veterinary transport, veterinary care, and rehabilitation while Rex has critical health instead of blocking those medical commands behind the removed-from-service gate.
+- Requires real Rex-to-suspect proximity before a gunshot ragdoll can be interpreted as K9 bite contact.
+- Keeps a released, bite-injured suspect down for up to thirty seconds for arrest or EMS, ending the hold immediately when native custody begins.
+
+## Dedicated apprehend controls and moving-target lock
+
+- Adds a configurable `Left Ctrl + G` keyboard apprehend shortcut and an optional `LT + D-pad Right` controller chord.
+- Remembers the last valid non-officer under the handler's weapon aim for three configurable seconds, allowing deployment when a fleeing suspect moves off the crosshair as the command is pressed.
+- Preserves callout suspect locks and all surrender, restraint, custody, officer, and managed-ped safety interlocks.
+
 ## Paleto bank staging and routed getaway correction
 
 - Applies all six tester-recorded Blaine County Savings/Paleto cruiser coordinates with twelve assigned patrol officers.
