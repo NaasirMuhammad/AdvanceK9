@@ -86,6 +86,7 @@ namespace AdvancedK9
         private const float CarryX=.2f,CarryY=.52f,CarryZ=0f,CarryPitch=-110f,CarryRoll=90f,CarryYaw=-5f;
         private uint _nextCarryPresentation;
         private bool _trackFiberRunning;
+        private int _trackGeneration;
         private int _bladder=100;
         private int _bowel=100;
         private uint _nextReliefUpdate;
@@ -687,6 +688,7 @@ namespace AdvancedK9
         {
             try
             {
+                if(IsHandlerOwnershipCommand(command))TakeHandlerCommandOwnership(command);
                 if(_trackFiberRunning&&command==K9Command.CollectScent)
                 {
                     Game.DisplayNotification("~b~Scent already locked.~s~~n~"+_profile.Name+" is actively tracking this article; no additional scent bag was used.");
@@ -787,6 +789,32 @@ namespace AdvancedK9
 
         private static bool RequiresLeashRelease(K9Command command){return command==K9Command.Apprehend||command==K9Command.Fetch||command==K9Command.EnterVehicle||command==K9Command.CarryK9||command==K9Command.EmergencyLoadK9||command==K9Command.VeterinaryTransport||command==K9Command.VeterinaryCare;}
         private static bool IsWorkingLeashCommand(K9Command command){return command==K9Command.SearchArea||command==K9Command.SearchBuilding||command==K9Command.SearchVehicle||command==K9Command.SearchNarcotics||command==K9Command.SearchExplosives||command==K9Command.SearchWeapons||command==K9Command.Track||command==K9Command.FindTrail||command==K9Command.HoldPerimeter||command==K9Command.ContainSuspect||command==K9Command.SendContainmentPosition||command==K9Command.NextContainmentPosition;}
+
+        private static bool IsHandlerOwnershipCommand(K9Command command)
+        {
+            return command==K9Command.Follow||command==K9Command.Heel||command==K9Command.Recall||command==K9Command.WhistleRecall||
+                command==K9Command.SearchArea||command==K9Command.SearchBuilding||command==K9Command.SearchVehicle||
+                command==K9Command.SearchNarcotics||command==K9Command.SearchExplosives||command==K9Command.SearchWeapons;
+        }
+
+        private void TakeHandlerCommandOwnership(K9Command command)
+        {
+            bool interrupted=_trackFiberRunning||_state==K9State.Tracking||_state==K9State.Containing||_containTarget!=null;
+            _trackGeneration++;
+            _trackFiberRunning=false;
+            _containTarget=null;
+            _perimeterCenter=Vector3.Zero;
+            _nextPerimeterMove=0;
+            if(_searchInProgress)
+            {
+                _searchGeneration++;
+                _searchInProgress=false;
+                _hudSearchLabel="";
+                _hudSearchProgress=0;
+            }
+            if(DogEntityExists())NativeFunction.Natives.CLEAR_PED_TASKS_IMMEDIATELY(_dog);
+            if(interrupted)Game.LogTrivial("AdvancedK9 command ownership: handler "+CommandLabel(command)+" invalidated obsolete tracking/containment tasks before assignment.");
+        }
 
         private bool TrustAllowsCommand(K9Command command)
         {
@@ -1451,8 +1479,9 @@ namespace AdvancedK9
             return null;
         }
 
-        private void Search(bool vehicleOnly=false,DetectionSpecialty specialty=DetectionSpecialty.General)
+        private void Search(int generation,bool vehicleOnly=false,DetectionSpecialty specialty=DetectionSpecialty.General)
         {
+            if(!SearchSessionActive(generation))return;
             if(specialty!=DetectionSpecialty.General&&!_profile.HasSpecialty(specialty)){Game.DisplayNotification("~y~K9 is not certified for "+SpecialtyLabel(specialty)+" detection.~s~~n~Complete that specialty course at the academy.");return;}
             var officer = Game.LocalPlayer.Character;
             Entity target = FindCompatibilitySearchTarget(officer,vehicleOnly);
@@ -1469,14 +1498,15 @@ namespace AdvancedK9
             _dog.Tasks.Clear();
             if(target is Vehicle)
             {
-                if(!SearchVehiclePerimeter((Vehicle)target)){Follow();return;}
+                if(!SearchVehiclePerimeter((Vehicle)target,generation)){if(SearchSessionActive(generation))Follow();return;}
             }
             else
             {
                 _dog.Tasks.FollowNavigationMeshToPosition(target.GetOffsetPosition(new Vector3(0f,-1f,0f)),target.Heading,2f).WaitForCompletion(9000);
-                if(!DogExists()||!target.Exists()){Follow();return;}
+                if(!SearchSessionActive(generation)||!target.Exists()){if(SearchSessionActive(generation))Follow();return;}
                 for(var i=0;i<3;i++)
                 {
+                    if(!SearchSessionActive(generation))return;
                     _hudSearchProgress=(i*100)/3;
                     var sniffPoint=target.GetOffsetPosition(new Vector3(i==0?-.8f:i==1?.8f:0f,-.45f,0f));
                     _dog.Tasks.FollowNavigationMeshToPosition(sniffPoint,target.Heading,1.2f).WaitForCompletion(2500);
@@ -1539,9 +1569,9 @@ namespace AdvancedK9
         private void BeginSearch(bool vehicleOnly,DetectionSpecialty specialty)
         {
             if(_searchInProgress){Game.DisplayNotification("~y~K9 search already in progress.");return;}
-            _searchInProgress=true;_state=K9State.Searching;_hudSearchLabel=vehicleOnly?"VEHICLE SEARCH":"AREA SEARCH";_hudSearchProgress=0;
+            int generation=++_searchGeneration;_searchInProgress=true;_state=K9State.Searching;_hudSearchLabel=vehicleOnly?"VEHICLE SEARCH":"AREA SEARCH";_hudSearchProgress=0;
             if(_workingLeashed)ActionNotification("~b~Working leash retained.~s~ Follow the K9 as it leads the search.");
-            GameFiber.StartNew(()=>{try{Search(vehicleOnly,specialty);}catch(Exception ex){Game.LogTrivial("AdvancedK9 asynchronous search failed: "+ex);Game.DisplayNotification("~r~K9 search failed.~s~ See RagePluginHook.log.");Follow();}finally{_hudSearchLabel="";_searchInProgress=false;}},"AdvancedK9 Search");
+            GameFiber.StartNew(()=>{try{Search(generation,vehicleOnly,specialty);}catch(Exception ex){Game.LogTrivial("AdvancedK9 asynchronous search failed: "+ex);Game.DisplayNotification("~r~K9 search failed.~s~ See RagePluginHook.log.");if(SearchSessionActive(generation))Follow();}finally{if(generation==_searchGeneration){_hudSearchLabel="";_searchInProgress=false;}}},"AdvancedK9 Search");
         }
 
         private void BeginBuildingSearch()
@@ -1723,17 +1753,18 @@ namespace AdvancedK9
         private static string SpecialtyLabel(DetectionSpecialty specialty)=>specialty==DetectionSpecialty.Narcotics?"narcotics":specialty==DetectionSpecialty.Explosives?"explosives":specialty==DetectionSpecialty.Weapons?"weapons":"general odor";
         private DetectionSpecialty CertifiedGeneralSearchSpecialty(){var certified=new List<DetectionSpecialty>();if(_profile.NarcoticsCertified)certified.Add(DetectionSpecialty.Narcotics);if(_profile.ExplosivesCertified)certified.Add(DetectionSpecialty.Explosives);if(_profile.WeaponsCertified)certified.Add(DetectionSpecialty.Weapons);return certified.Count==0?DetectionSpecialty.General:certified[_random.Next(certified.Count)];}
 
-        private bool SearchVehiclePerimeter(Vehicle vehicle)
+        private bool SearchVehiclePerimeter(Vehicle vehicle,int generation)
         {
             var points=VehicleSearchPaths.Build(vehicle);
             for(var i=0;i<points.Count;i++)
             {
                 _hudSearchLabel="VEHICLE SEARCH";
                 _hudSearchProgress=(i*100)/Math.Max(1,points.Count);
-                if(!DogExists()||!vehicle.Exists()||_state!=K9State.Searching)return false;
+                if(!SearchSessionActive(generation)||!vehicle.Exists())return false;
                 var point=points[i].Position;
                 _dog.Tasks.Clear();
                 _dog.Tasks.FollowNavigationMeshToPosition(point,vehicle.Heading,1.45f).WaitForCompletion(5000);
+                if(!SearchSessionActive(generation))return false;
                 if(_dog.DistanceTo(point)>3.5f)continue;
                 NativeFunction.Natives.TASK_TURN_PED_TO_FACE_ENTITY(_dog,vehicle,900);GameFiber.Wait(900);
                 NativeFunction.Natives.TASK_PAUSE(_dog,900);GameFiber.Wait(900);
@@ -1746,16 +1777,16 @@ namespace AdvancedK9
         private void BeginTrack()
         {
             if(_trackFiberRunning){Game.DisplayNotification("~y~Rex is already tracking.~s~~n~Issue another K9 command to cancel or redirect him.");return;}
-            _trackFiberRunning=true;
+            int generation=++_trackGeneration;_trackFiberRunning=true;
             GameFiber.StartNew(delegate
             {
-                try{TrackRoutine();}
+                try{TrackRoutine(generation);}
                 catch(Exception ex){Game.LogTrivial("AdvancedK9 tracking fiber contained: "+ex);if(DogEntityExists())Follow();}
-                finally{_trackFiberRunning=false;}
+                finally{if(generation==_trackGeneration)_trackFiberRunning=false;}
             },"AdvancedK9 interruptible tracking");
         }
 
-        private void TrackRoutine()
+        private void TrackRoutine(int generation)
         {
             if(_state==K9State.InVehicle)
             {
@@ -1798,11 +1829,11 @@ namespace AdvancedK9
             GameFiber.Wait(250);
             var end = Game.GameTime + (sceneOneLongRange?480000u:120000u);
             uint nextScentCheck=Game.GameTime+(uint)_random.Next(18000,28001);
-            int routeVariant=calloutTrack?_random.Next(3):0;Vector3 trackTerminal=target.Position;bool ladderTerminal=false;
-            var route=calloutTrack?BuildCalloutNavigationRoute(_dog.Position,trackTerminal,sceneOneLongRange?60f:40f,routeVariant):BuildRecordedTrailRoute(target);int routeIndex=0;int stalledAttempts=0;Vector3 initialDirection=route.Count>0?route[0]:target.Position;PerformFullCircleDirectionTest(initialDirection,scentQuality,rain);_activeTrackDistance=0f;_activeTrackStarted=Game.GameTime;Vector3 previous=_dog.Position;
-            if(calloutTrack)Game.LogTrivial("AdvancedK9 callout track: endpoint expanded into authored route variant "+(routeVariant+1)+"/3 with "+route.Count+" elevation-safe waypoint(s) from "+_dog.DistanceTo(target).ToString("0.0")+"m away.");
+            int routeVariant=calloutTrack?_random.Next(5):0;Vector3 trackTerminal=target.Position;bool ladderTerminal=false;
+            var route=calloutTrack?BuildCalloutNavigationRoute(_dog.Position,trackTerminal,sceneOneLongRange?60f:40f,routeVariant):BuildRecordedTrailRoute(target);int routeIndex=0;int stalledAttempts=0,oscillationCount=0;float bestRemaining=float.MaxValue;Vector3 initialDirection=route.Count>0?route[0]:target.Position;PerformFullCircleDirectionTest(initialDirection,scentQuality,rain);_activeTrackDistance=0f;_activeTrackStarted=Game.GameTime;Vector3 previous=_dog.Position;
+            if(calloutTrack)Game.LogTrivial("AdvancedK9 callout track: endpoint expanded into navigation route variant "+(routeVariant+1)+"/5 with "+route.Count+" elevation-safe waypoint(s) from "+_dog.DistanceTo(target).ToString("0.0")+"m away.");
             if(sceneOneLongRange)Game.LogTrivial("AdvancedK9 Palomino Scene 1: extended track armed with "+route.Count+" staged navigation points, "+scentQuality+"% starting quality, and an eight-minute limit.");
-            while (_running && DogExists() && target.Exists() && !target.IsDead && Game.GameTime < end && _state == K9State.Tracking)
+            while (_running && generation==_trackGeneration && DogExists() && target.Exists() && !target.IsDead && Game.GameTime < end && _state == K9State.Tracking)
             {
                 if(!calloutTrack)CaptureTargetTrailPoint(target);
                 if (_dog.DistanceTo(ladderTerminal?trackTerminal:target.Position) <= 4.5f)
@@ -1844,7 +1875,7 @@ namespace AdvancedK9
                 }
                 if(routeIndex>=route.Count)
                 {
-                    route=calloutTrack?BuildCalloutNavigationRoute(_dog.Position,trackTerminal,sceneOneLongRange?60f:40f,routeVariant):BuildRecordedTrailRoute(target);routeIndex=0;stalledAttempts=0;if(route.Count>0&&!calloutTrack)IndicateTrackDirection(route[0]);
+                    route=calloutTrack?BuildCalloutNavigationRoute(_dog.Position,trackTerminal,sceneOneLongRange?60f:40f,routeVariant):BuildRecordedTrailRoute(target);routeIndex=0;stalledAttempts=0;oscillationCount=0;bestRemaining=float.MaxValue;if(route.Count>0&&!calloutTrack)IndicateTrackDirection(route[0]);
                     if(!calloutTrack&&route.Count==0&&_dog.DistanceTo(target)>25f)
                     {
                         _trailLost=true;_dog.Tasks.Clear();Sit();Game.DisplayNotification("~o~K9 lost the recorded scent trail.~s~~n~Move to the last-known area and command REACQUIRE TRAIL.");K9IncidentLog.Write(_profile.Name,"Track","Trail lost",_dog.Position);return;
@@ -1886,10 +1917,12 @@ namespace AdvancedK9
                 float moved=taskStart.DistanceTo(_dog.Position);
                 float remaining=_dog.DistanceTo(waypoint);
                 Game.LogTrivial("AdvancedK9 track navigation result: moved="+moved.ToString("0.0")+"m, remaining="+remaining.ToString("0.0")+"m, state="+_state+".");
-                if(calloutTrack&&routeIndex<route.Count&&moved<0.8f&&remaining>6f)
+                if(remaining<bestRemaining-.35f){bestRemaining=remaining;oscillationCount=0;}
+                else if(remaining>6f)oscillationCount++;
+                if(calloutTrack&&routeIndex<route.Count&&(moved<0.8f||oscillationCount>=3)&&remaining>6f)
                 {
                     stalledAttempts++;
-                    Game.LogTrivial("AdvancedK9 callout track stall: waypoint "+(routeIndex+1)+" failed to produce movement (attempt "+stalledAttempts+").");
+                    Game.LogTrivial("AdvancedK9 callout track obstruction: waypoint "+(routeIndex+1)+" failed progress validation (moved="+moved.ToString("0.0")+", remaining="+remaining.ToString("0.0")+", oscillation="+oscillationCount+", attempt="+stalledAttempts+").");
                     if(stalledAttempts>=2)
                     {
                         Vector3 failedWaypoint=waypoint;
@@ -1900,19 +1933,19 @@ namespace AdvancedK9
                             Game.DisplaySubtitle("~b~Rex isolated the rooftop trail to a ladder entrance.~s~",1400);
                             Game.LogTrivial("AdvancedK9 rooftop route: inaccessible elevated target redirected to loaded ladder entrance "+FormatVector(trackTerminal)+".");
                         }
-                        routeVariant=(routeVariant+1)%3;
+                        routeVariant=(routeVariant+1)%5;
                         route=BuildCalloutNavigationRoute(_dog.Position,trackTerminal,35f,routeVariant);
-                        routeIndex=0;stalledAttempts=0;
+                        routeIndex=0;stalledAttempts=0;oscillationCount=0;bestRemaining=float.MaxValue;
                         Game.DisplaySubtitle("~o~Rex is recasting the scent route around an obstruction.~s~",1200);
-                        Game.LogTrivial("AdvancedK9 callout track recovery: discarded unreachable waypoint "+FormatVector(failedWaypoint)+" and switched to route variant "+(routeVariant+1)+"/3 with "+route.Count+" waypoint(s).");
+                        Game.LogTrivial("AdvancedK9 callout track recovery: discarded unreachable waypoint "+FormatVector(failedWaypoint)+" and switched to wider route variant "+(routeVariant+1)+"/5 with "+route.Count+" waypoint(s).");
                     }
                 }
                 _activeTrackDistance+=previous.DistanceTo(_dog.Position);previous=_dog.Position;
                 _profile.UseStamina(1);
                 GameFiber.Yield();
             }
-            int elapsed=(int)((Game.GameTime-_activeTrackStarted)/1000);K9DeploymentReport.Write("Player",_profile.Name,"Track","Locate person",_activeScentSource,_warningGiven,_activeTrackDistance,elapsed,0,"Not located","None","Track ended",_dog.Position);
-            Follow();
+            int elapsed=(int)((Game.GameTime-_activeTrackStarted)/1000);K9DeploymentReport.Write("Player",_profile.Name,"Track","Locate person",_activeScentSource,_warningGiven,_activeTrackDistance,elapsed,0,"Not located","None",generation==_trackGeneration?"Track ended":"Superseded by handler command",_dog.Position);
+            if(generation==_trackGeneration)Follow();
         }
 
         private List<Vector3> BuildLongRangeCalloutRoute(Vector3 start,Vector3 destination)
@@ -1928,7 +1961,7 @@ namespace AdvancedK9
             float lineX=destination.X-start.X,lineY=destination.Y-start.Y;
             float horizontal=(float)Math.Sqrt(lineX*lineX+lineY*lineY);
             float perpendicularX=horizontal>.1f?-lineY/horizontal:0f,perpendicularY=horizontal>.1f?lineX/horizontal:0f;
-            float lateral=variant==1?14f:variant==2?-14f:0f;
+            float lateral=variant==1?14f:variant==2?-14f:variant==3?28f:variant==4?-28f:0f;
             Vector3 previous=start;
             for(int i=1;i<segments;i++)
             {
@@ -1951,8 +1984,9 @@ namespace AdvancedK9
                 }
                 if(waypoint.DistanceTo(previous)>12f&&waypoint.DistanceTo(destination)>15f){route.Add(waypoint);previous=waypoint;}
             }
-            route.Add(destination);
-            Game.LogTrivial("AdvancedK9 staged callout route built: variant="+(variant+1)+"/3, total="+total.ToString("0.0")+"m, spacing="+maximumSpacing.ToString("0")+"m, waypoints="+route.Count+".");
+            Vector3 safeTerminal;
+            route.Add(TryResolvePedNavigationPoint(destination,destination.Z,out safeTerminal)?safeTerminal:destination);
+            Game.LogTrivial("AdvancedK9 staged callout route built: variant="+(variant+1)+"/5, total="+total.ToString("0.0")+"m, spacing="+maximumSpacing.ToString("0")+"m, waypoints="+route.Count+".");
             return route;
         }
 
@@ -2737,6 +2771,13 @@ namespace AdvancedK9
                     return;
                 }
                 Execute(command);
+                if((command==K9Command.Follow||command==K9Command.Heel||command==K9Command.Recall)&&
+                   !string.IsNullOrWhiteSpace(request.Details)&&request.Details.IndexOf("custody confirmed",StringComparison.OrdinalIgnoreCase)>=0)
+                {
+                    _pendingCalloutScentTarget=null;_pendingCalloutScentDetails="";_scentTarget=null;_activeScentSample=null;_activeScentSource="None";
+                    _activeSharedApiContextId="";
+                    Game.LogTrivial("AdvancedK9 API: custody Follow cleared callout target, scent, tracking, containment, and context ownership.");
+                }
                 if(command==K9Command.ClearEvidenceMarkers)
                 {
                     _pendingCalloutScentTarget=null;_pendingCalloutScentDetails="";

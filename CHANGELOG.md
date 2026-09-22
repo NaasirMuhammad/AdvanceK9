@@ -1,5 +1,16 @@
 # Changelog
 
+## Build 807 targeted stabilization
+
+- Rejects zero-handle pedestrians and vehicles before civilian scene-exclusion natives run, and rate-limits contained exclusion warnings to one entry per 30 seconds.
+- Expands callout tracking from three to five navigation variants, adds wider obstacle detours, validates the terminal nav point, and rebuilds routes when distance oscillates without meaningful progress.
+- Gives handler Follow, Heel, Recall, Search, and Vehicle Search commands ownership over obsolete tracking, containment, and search fibers through generation-based cancellation.
+- Clears the callout scent target and returns Rex to Follow as soon as custody is confirmed and any active bite has been released.
+- Keeps all available scene officers mission-owned in arrest/security positions and retains cruisers until the player manually clears the scene.
+- Keeps vehicle searches available during pre-track and active callout phases without allowing the superseded callout task to retake Rex.
+- Logs the custody provider, request ID, suspect handle, and live location when PR/Nexus transport is requested; AdvancedK9 still does not automatically transport prisoners.
+- Keeps Nexus/NPCI adapter failures and HTTP rate-limit failures reported as external integration diagnostics rather than changing core callout behavior.
+
 ## Immediate deployment, medical custody, and mobile veterinary care
 
 - Makes the dedicated keyboard/controller apprehend shortcut bypass response-delay and hesitation checks after a valid target has passed the safety interlocks.
