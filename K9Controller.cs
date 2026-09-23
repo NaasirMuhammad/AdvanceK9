@@ -119,6 +119,9 @@ namespace AdvancedK9
         private bool _controlledBiteReleased;
         private Ped _releasedBiteTarget;
         private int _releasedBiteHealth;
+        private bool _releasedBiteTreated;
+        private uint _nextReleasedBiteMaintenance;
+        private uint _releasedBiteDeathObservedAt;
         private bool _immediateApprehendInput;
         private string _hudCommand="READY";
         private string _hudSearchLabel="";
@@ -800,6 +803,11 @@ namespace AdvancedK9
         private void TakeHandlerCommandOwnership(K9Command command)
         {
             bool interrupted=_trackFiberRunning||_state==K9State.Tracking||_state==K9State.Containing||_containTarget!=null;
+            if(_controlledBiteTarget!=null&&_controlledBiteTarget.Exists()&&!_controlledBiteTarget.IsDead)
+            {
+                BeginReleasedBiteMedicalHold(false);
+                Game.LogTrivial("AdvancedK9 bite interruption: "+CommandLabel(command)+" converted the active bite into a persistent medical hold before handler control resumed.");
+            }
             _trackGeneration++;
             _trackFiberRunning=false;
             _containTarget=null;
@@ -2133,7 +2141,7 @@ namespace AdvancedK9
             if(calloutTarget!=null&&aimedTarget!=null&&aimedTarget!=calloutTarget)
                 Game.DisplayNotification("~y~Callout suspect lock active.~s~~n~Ignored the aimed bystander and deployed only on the assigned fugitive.");
             _voiceAimedTarget=null;
-            if(target==null){Game.DisplayNotification("~y~No valid target identified.~s~~n~Aim at a non-officer, then press "+KeyChord(_config.ApprehendKey)+" or LT + D-pad Right within "+(_config.ApprehendTargetMemoryMilliseconds/1000f).ToString("0.0")+" seconds.");return;}
+            if(target==null){Game.DisplayNotification("~y~No valid target identified.~s~~n~Aim at a non-officer, then press "+KeyChord(_config.ApprehendKey)+" or LT + D-pad Up within "+(_config.ApprehendTargetMemoryMilliseconds/1000f).ToString("0.0")+" seconds.");return;}
             if(_warnedTarget==target&&_warningSurrendered){Game.DisplayNotification("~r~K9 safety interlock: the warned suspect surrendered.~s~~n~Move in for arrest; apprehension was not deployed.");return;}
             if(IsTargetComplyingOrRestrained(target)){Game.DisplayNotification("~r~K9 safety interlock: the suspect is complying or in custody.~s~~n~NPCI compliance is preserved; complete the LSPDFR arrest.");return;}
             if(_config.CompatibilityProtectManagedPeds&&IsProtectedOperationalPed(target)){Game.DisplayNotification("~r~K9 safety interlock: restrained or surrendered suspect rejected.~s~~n~PR/STP stop status is not required for deployment, but protected peds cannot be bitten.");return;}
@@ -2193,17 +2201,27 @@ namespace AdvancedK9
         }
         private void ReleaseControlledBite()
         {
+            BeginReleasedBiteMedicalHold(true);
+            Follow();
+            _state=K9State.MedicalStandby;
+        }
+        private void BeginReleasedBiteMedicalHold(bool notify)
+        {
             if(_controlledBiteTarget!=null&&_controlledBiteTarget.Exists()&&!_controlledBiteTarget.IsDead)
             {
                 _controlledBiteReleased=true;
-                _releasedBiteTarget=_controlledBiteTarget;_releasedBiteHealth=_releasedBiteTarget.Health;
+                _releasedBiteTarget=_controlledBiteTarget;
+                _releasedBiteHealth=_releasedBiteTarget.Health;
+                _releasedBiteTreated=false;
+                _nextReleasedBiteMaintenance=0;
+                _releasedBiteDeathObservedAt=0;
+                _releasedBiteTarget.IsPersistent=true;
+                NativeFunction.Natives.SET_ENTITY_AS_MISSION_ENTITY(_releasedBiteTarget,true,true);
                 NativeFunction.Natives.SET_PED_TO_RAGDOLL(_releasedBiteTarget,6000,8000,0,false,false,false);
-                Game.LogTrivial("AdvancedK9 controlled bite released; injured suspect ground hold active pending arrest/EMS.");
-                Game.DisplayNotification("~b~K9 released.~s~ The injured suspect will remain down for arrest and EMS assessment.");
+                Game.LogTrivial("AdvancedK9 controlled bite released; injured suspect medical hold anchored at "+_releasedBiteTarget.Position+" pending actual EMS treatment or completed restraint.");
+                if(notify)Game.DisplayNotification("~b~K9 released.~s~ The injured suspect will remain down until EMS treatment or completed restraint.");
             }
             _controlledBiteTarget=null;_controlledBiteHoldUntil=0;
-            Follow();
-            _state=K9State.MedicalStandby;
         }
         private static bool IsTargetComplyingOrRestrained(Ped target)
         {
@@ -2404,18 +2422,38 @@ namespace AdvancedK9
         private void MaintainReleasedBiteTarget()
         {
             if(_releasedBiteTarget==null)return;
-            if(!_releasedBiteTarget.Exists()||_releasedBiteTarget.IsDead||IsTargetComplyingOrRestrained(_releasedBiteTarget))
+            if(!_releasedBiteTarget.Exists()||IsTargetDurablyRestrained(_releasedBiteTarget))
             {
-                _releasedBiteTarget=null;_releasedBiteHealth=0;return;
+                _releasedBiteTarget=null;_releasedBiteHealth=0;_releasedBiteTreated=false;_nextReleasedBiteMaintenance=0;_releasedBiteDeathObservedAt=0;return;
             }
-            if(_releasedBiteTarget.Health>_releasedBiteHealth+10)
+            if(_releasedBiteTarget.IsDead)
             {
+                if(_releasedBiteDeathObservedAt==0){_releasedBiteDeathObservedAt=Game.GameTime;Game.LogTrivial("AdvancedK9 bite patient entered a death/downed state; medical reference retained for EMS revival at "+_releasedBiteTarget.Position+".");}
+                if(Game.GameTime-_releasedBiteDeathObservedAt>300000){_releasedBiteTarget=null;_releasedBiteHealth=0;_releasedBiteTreated=false;_nextReleasedBiteMaintenance=0;_releasedBiteDeathObservedAt=0;}
+                return;
+            }
+            if(_releasedBiteDeathObservedAt!=0){_releasedBiteDeathObservedAt=0;Game.LogTrivial("AdvancedK9 bite patient revived; medical hold resumed pending treatment/custody.");}
+            if(!_releasedBiteTreated&&_releasedBiteTarget.Health>_releasedBiteHealth+10)
+            {
+                _releasedBiteTreated=true;
                 NativeFunction.Natives.TASK_HANDS_UP(_releasedBiteTarget,-1,Game.LocalPlayer.Character,-1,true);
-                Game.LogTrivial("AdvancedK9 bite patient treatment detected; suspect transitioned from medical ground hold to compliant arrest posture.");
-                _releasedBiteTarget=null;_releasedBiteHealth=0;return;
+                Game.LogTrivial("AdvancedK9 bite patient treatment detected; suspect transitioned from medical ground hold to enforced compliant arrest posture pending cuffs.");
             }
-            if(!_releasedBiteTarget.IsRagdoll)
-                NativeFunction.Natives.SET_PED_TO_RAGDOLL(_releasedBiteTarget,2500,3500,0,false,false,false);
+            if(Game.GameTime<_nextReleasedBiteMaintenance)return;
+            _nextReleasedBiteMaintenance=Game.GameTime+900;
+            if(_releasedBiteTreated)
+            {
+                if(!NativeFunction.Natives.IS_PED_HANDS_UP<bool>(_releasedBiteTarget))NativeFunction.Natives.TASK_HANDS_UP(_releasedBiteTarget,-1,Game.LocalPlayer.Character,-1,true);
+            }
+            else if(!_releasedBiteTarget.IsRagdoll)
+                NativeFunction.Natives.SET_PED_TO_RAGDOLL(_releasedBiteTarget,3000,4200,0,false,false,false);
+        }
+
+        private static bool IsTargetDurablyRestrained(Ped target)
+        {
+            if(target==null||!target.Exists())return false;
+            try{return NativeFunction.Natives.IS_PED_CUFFED<bool>(target)||NativeFunction.Natives.IS_PED_HANDCUFFED<bool>(target);}
+            catch{return false;}
         }
 
         private void ConfigureK9RelationshipGroup(Ped handler)

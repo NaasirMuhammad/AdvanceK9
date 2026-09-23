@@ -20,7 +20,7 @@ namespace AdvancedK9
         public Keys ApprehendKey = Keys.G;
         public bool ControllerApprehendEnabled = true;
         public int ControllerApprehendModifier = 25;
-        public int ControllerApprehendButton = 190;
+        public int ControllerApprehendButton = 188;
         public int ApprehendTargetMemoryMilliseconds = 3000;
         public bool ModifierEnabled = true;
         public bool VoiceEnabled = true;
@@ -98,6 +98,9 @@ namespace AdvancedK9
             result.ControllerApprehendEnabled = ini.ReadBoolean("Controller", "ApprehendEnabled", result.ControllerApprehendEnabled);
             result.ControllerApprehendModifier = Math.Max(0, Math.Min(360, ini.ReadInt32("Controller", "ApprehendModifierControl", result.ControllerApprehendModifier)));
             result.ControllerApprehendButton = Math.Max(0, Math.Min(360, ini.ReadInt32("Controller", "ApprehendButtonControl", result.ControllerApprehendButton)));
+            // Control 190 was the shipped D-pad Right default and conflicts with
+            // the normal LSPDFR arrest input. Migrate existing installs to Up.
+            if(result.ControllerApprehendButton==190)result.ControllerApprehendButton=188;
             result.ApprehendTargetMemoryMilliseconds = Math.Max(500, Math.Min(5000, ini.ReadInt32("Apprehension", "TargetMemoryMilliseconds", result.ApprehendTargetMemoryMilliseconds)));
             result.VoiceEnabled = ini.ReadBoolean("Voice", "Enabled", result.VoiceEnabled);
             // Continuous capture is intentionally disabled. Voice is push-to-talk only so

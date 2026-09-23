@@ -1,5 +1,12 @@
 # Changelog
 
+## Bite-patient medical anchoring and controller conflict fix
+
+- Changes the default controller apprehend shortcut from `LT + D-pad Right` to `LT + D-pad Up` so it no longer conflicts with the LSPDFR arrest control.
+- Converts Recall, Follow, Heel, and search commands issued during an active bite into a proper medical release before returning K9 control to the handler.
+- Keeps an untreated bite patient down at the live injury position until actual health restoration or completed handcuff restraint; transient arrest threads and EMS arrival alone no longer clear the hold.
+- Keeps a treated bite patient in an enforced hands-up posture until cuffs are visibly applied, preventing the suspect from walking away or re-entering a vehicle after EMS arrives.
+
 ## Build 807 targeted stabilization
 
 - Rejects zero-handle pedestrians and vehicles before civilian scene-exclusion natives run, and rate-limits contained exclusion warnings to one entry per 30 seconds.
