@@ -1,5 +1,12 @@
 # Changelog
 
+## Released-bite hold crash containment
+
+- Prevents the health adjustment that occurs during bite release from being mistaken for completed EMS treatment; healing must occur after a grace period and remain stable before the suspect can stand.
+- Removes the unsupported hands-up status native that terminated the AdvancedK9 controller, causing the HUD and every Rex command to disappear during the shootout.
+- Validates the patient entity before native calls and contains/rate-limits any maintenance failure so a bad patient reference cannot crash the main K9 controller.
+- Keeps an untreated released suspect down until real treatment or completed cuffs, then repeatedly enforces a compliant hands-up posture pending arrest.
+
 ## Bite-patient medical anchoring and controller conflict fix
 
 - Changes the default controller apprehend shortcut from `LT + D-pad Right` to `LT + D-pad Up` so it no longer conflicts with the LSPDFR arrest control.

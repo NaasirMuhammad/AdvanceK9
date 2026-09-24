@@ -122,6 +122,10 @@ namespace AdvancedK9
         private bool _releasedBiteTreated;
         private uint _nextReleasedBiteMaintenance;
         private uint _releasedBiteDeathObservedAt;
+        private uint _releasedBiteTreatmentEligibleAt;
+        private uint _releasedBiteTreatmentCandidateAt;
+        private int _releasedBiteTreatmentCandidateHealth;
+        private uint _nextReleasedBiteWarning;
         private bool _immediateApprehendInput;
         private string _hudCommand="READY";
         private string _hudSearchLabel="";
@@ -2215,6 +2219,10 @@ namespace AdvancedK9
                 _releasedBiteTreated=false;
                 _nextReleasedBiteMaintenance=0;
                 _releasedBiteDeathObservedAt=0;
+                _releasedBiteTreatmentEligibleAt=Game.GameTime+5000;
+                _releasedBiteTreatmentCandidateAt=0;
+                _releasedBiteTreatmentCandidateHealth=0;
+                _nextReleasedBiteWarning=0;
                 _releasedBiteTarget.IsPersistent=true;
                 NativeFunction.Natives.SET_ENTITY_AS_MISSION_ENTITY(_releasedBiteTarget,true,true);
                 NativeFunction.Natives.SET_PED_TO_RAGDOLL(_releasedBiteTarget,6000,8000,0,false,false,false);
@@ -2421,32 +2429,72 @@ namespace AdvancedK9
 
         private void MaintainReleasedBiteTarget()
         {
-            if(_releasedBiteTarget==null)return;
-            if(!_releasedBiteTarget.Exists()||IsTargetDurablyRestrained(_releasedBiteTarget))
+            try
             {
-                _releasedBiteTarget=null;_releasedBiteHealth=0;_releasedBiteTreated=false;_nextReleasedBiteMaintenance=0;_releasedBiteDeathObservedAt=0;return;
+                if(_releasedBiteTarget==null)return;
+                if(!_releasedBiteTarget.Exists()||IsTargetDurablyRestrained(_releasedBiteTarget))
+                {
+                    ClearReleasedBiteTarget();return;
+                }
+                if(ApiHandleOf(_releasedBiteTarget)<=0)
+                {
+                    LogReleasedBiteWarning("patient entity has no valid native handle; maintenance deferred");return;
+                }
+                if(_releasedBiteTarget.IsDead)
+                {
+                    if(_releasedBiteDeathObservedAt==0){_releasedBiteDeathObservedAt=Game.GameTime;Game.LogTrivial("AdvancedK9 bite patient entered a death/downed state; medical reference retained for EMS revival at "+_releasedBiteTarget.Position+".");}
+                    if(Game.GameTime-_releasedBiteDeathObservedAt>300000)ClearReleasedBiteTarget();
+                    return;
+                }
+                if(_releasedBiteDeathObservedAt!=0){_releasedBiteDeathObservedAt=0;_releasedBiteTreatmentEligibleAt=Game.GameTime+5000;_releasedBiteHealth=_releasedBiteTarget.Health;Game.LogTrivial("AdvancedK9 bite patient revived; medical hold resumed pending treatment/custody.");}
+                int currentHealth=_releasedBiteTarget.Health;
+                if(!_releasedBiteTreated)
+                {
+                    if(Game.GameTime<_releasedBiteTreatmentEligibleAt)
+                    {
+                        if(currentHealth>_releasedBiteHealth)_releasedBiteHealth=currentHealth;
+                        _releasedBiteTreatmentCandidateAt=0;_releasedBiteTreatmentCandidateHealth=0;
+                    }
+                    else if(currentHealth>_releasedBiteHealth+10)
+                    {
+                        if(_releasedBiteTreatmentCandidateAt==0||currentHealth<_releasedBiteTreatmentCandidateHealth)
+                        {
+                            _releasedBiteTreatmentCandidateAt=Game.GameTime;
+                            _releasedBiteTreatmentCandidateHealth=currentHealth;
+                        }
+                        else if(Game.GameTime-_releasedBiteTreatmentCandidateAt>=1500)
+                        {
+                            _releasedBiteTreated=true;
+                            NativeFunction.Natives.TASK_HANDS_UP(_releasedBiteTarget,-1,Game.LocalPlayer.Character,-1,true);
+                            Game.LogTrivial("AdvancedK9 bite patient sustained treatment confirmed; suspect transitioned from medical ground hold to enforced compliant arrest posture pending cuffs.");
+                        }
+                    }
+                    else
+                    {
+                        _releasedBiteTreatmentCandidateAt=0;_releasedBiteTreatmentCandidateHealth=0;
+                    }
+                }
+                if(Game.GameTime<_nextReleasedBiteMaintenance)return;
+                _nextReleasedBiteMaintenance=Game.GameTime+900;
+                if(_releasedBiteTreated)
+                    NativeFunction.Natives.TASK_HANDS_UP(_releasedBiteTarget,-1,Game.LocalPlayer.Character,-1,true);
+                else if(!_releasedBiteTarget.IsRagdoll)
+                    NativeFunction.Natives.SET_PED_TO_RAGDOLL(_releasedBiteTarget,3000,4200,0,false,false,false);
             }
-            if(_releasedBiteTarget.IsDead)
-            {
-                if(_releasedBiteDeathObservedAt==0){_releasedBiteDeathObservedAt=Game.GameTime;Game.LogTrivial("AdvancedK9 bite patient entered a death/downed state; medical reference retained for EMS revival at "+_releasedBiteTarget.Position+".");}
-                if(Game.GameTime-_releasedBiteDeathObservedAt>300000){_releasedBiteTarget=null;_releasedBiteHealth=0;_releasedBiteTreated=false;_nextReleasedBiteMaintenance=0;_releasedBiteDeathObservedAt=0;}
-                return;
-            }
-            if(_releasedBiteDeathObservedAt!=0){_releasedBiteDeathObservedAt=0;Game.LogTrivial("AdvancedK9 bite patient revived; medical hold resumed pending treatment/custody.");}
-            if(!_releasedBiteTreated&&_releasedBiteTarget.Health>_releasedBiteHealth+10)
-            {
-                _releasedBiteTreated=true;
-                NativeFunction.Natives.TASK_HANDS_UP(_releasedBiteTarget,-1,Game.LocalPlayer.Character,-1,true);
-                Game.LogTrivial("AdvancedK9 bite patient treatment detected; suspect transitioned from medical ground hold to enforced compliant arrest posture pending cuffs.");
-            }
-            if(Game.GameTime<_nextReleasedBiteMaintenance)return;
-            _nextReleasedBiteMaintenance=Game.GameTime+900;
-            if(_releasedBiteTreated)
-            {
-                if(!NativeFunction.Natives.IS_PED_HANDS_UP<bool>(_releasedBiteTarget))NativeFunction.Natives.TASK_HANDS_UP(_releasedBiteTarget,-1,Game.LocalPlayer.Character,-1,true);
-            }
-            else if(!_releasedBiteTarget.IsRagdoll)
-                NativeFunction.Natives.SET_PED_TO_RAGDOLL(_releasedBiteTarget,3000,4200,0,false,false,false);
+            catch(Exception ex){LogReleasedBiteWarning("contained maintenance failure: "+ex.GetType().Name+": "+ex.Message);}
+        }
+
+        private void ClearReleasedBiteTarget()
+        {
+            _releasedBiteTarget=null;_releasedBiteHealth=0;_releasedBiteTreated=false;_nextReleasedBiteMaintenance=0;_releasedBiteDeathObservedAt=0;
+            _releasedBiteTreatmentEligibleAt=0;_releasedBiteTreatmentCandidateAt=0;_releasedBiteTreatmentCandidateHealth=0;_nextReleasedBiteWarning=0;
+        }
+
+        private void LogReleasedBiteWarning(string message)
+        {
+            if(Game.GameTime<_nextReleasedBiteWarning)return;
+            _nextReleasedBiteWarning=Game.GameTime+30000;
+            Game.LogTrivial("AdvancedK9 released-bite hold warning (rate-limited): "+message+". The controller remains active.");
         }
 
         private static bool IsTargetDurablyRestrained(Ped target)
