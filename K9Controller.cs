@@ -436,12 +436,7 @@ namespace AdvancedK9
 
         private void RefreshProfileMenu(){_menu.Update("K9 PROFILE — "+_profile.Name,new[]{L("Language")+": "+Localization.LanguageName,"K9 Roster ("+_roster.Entries.Count+")",L("Identity & Appearance"),L("HUD & Display"),L("Kennel Location Editor"),L("Vehicle Seat Configuration"),L("Profile, Health & Certifications"),VoiceMenuLabel()});}
         private void OpenAppearanceMenu(){_menuMode="profile_appearance";_menu.Open("K9 PROFILE — "+L("Appearance").ToUpperInvariant(),new[]{L("Edit name")+": "+_profile.Name,L("Breed/model")+": "+_profile.Breed,L("Skin/coat")+": "+(_profile.CoatVariation+1),L("Equipment/vest")+": "+_profile.Vest,L("Vest texture")+": "+_profile.VestTextureName(_dog),"← "+L("Back to K9 Profile")});}
-        private void OpenCalloutMenu(){_menuMode="callouts";_menu.Open("ADVANCED K9 — CALLOUTS",new[]{"Missing Vulnerable Teen","Fugitive Trail from an Abandoned Vehicle","Bank Robbery K9 Response","View supported bank scenes","Log current player coordinates","← "+L("Back to Command Categories")});}
-        private void OpenBankSceneList()
-        {
-            _menuMode="bank_scene_list";
-            _menu.Open("BANK ROBBERY — SUPPORTED SCENES",new[]{"Pacific Standard Bank","Legion Square Fleeca Bank","Hawick Fleeca Bank","Rockford Hills Fleeca Bank","Great Ocean Highway Fleeca Bank","Route 68 Fleeca Bank","Blaine County Savings Bank","← Back to Callouts"});
-        }
+        private void OpenCalloutMenu(){_menuMode="callouts";_menu.Open("ADVANCED K9 — CALLOUTS",new[]{"Missing Vulnerable Teen","Fugitive Trail from an Abandoned Vehicle","Bank Robbery K9 Response","Log current player coordinates","← "+L("Back to Command Categories")});}
         private void OpenFugitiveFullTestMenu()
         {
             _menuMode="fugitive_full_test";
@@ -485,8 +480,7 @@ namespace AdvancedK9
         private void OnMenuSelected(int index)
         {
             if(_menuMode=="commands_root"){if(index>=0&&index<7){OpenCommandGroup(index);return;}if(index==7){OpenCalloutMenu();return;}if(index==8){_menu.Close();Execute(K9Command.SpawnDismiss);return;}if(index==9)ToggleVoice();return;}
-            if(_menuMode=="callouts"){if(index==0)RequestCallout("AdvancedK9: Missing Vulnerable Teen");else if(index==1)RequestCallout("AdvancedK9: Fugitive Trail");else if(index==2)RequestCallout("AdvancedK9: Armed Burglary Suspect Hiding");else if(index==3)OpenBankSceneList();else if(index==4){LogCalibrationPosition();OpenCalloutMenu();}else ShowCommandMenu();return;}
-            if(_menuMode=="bank_scene_list"){if(index>=0&&index<7)Game.DisplayHelp("This location is included in random and automatic Bank Robbery K9 Response dispatches.");else OpenCalloutMenu();return;}
+            if(_menuMode=="callouts"){if(index==0)RequestCallout("AdvancedK9: Missing Vulnerable Teen");else if(index==1)RequestCallout("AdvancedK9: Fugitive Trail");else if(index==2)RequestCallout("AdvancedK9: Armed Burglary Suspect Hiding");else if(index==3){LogCalibrationPosition();OpenCalloutMenu();}else ShowCommandMenu();return;}
             if(_menuMode=="fugitive_full_test")
             {
                 if(index>=0&&index<13){RequestFugitiveFullTestScene(index);return;}
