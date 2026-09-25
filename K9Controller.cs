@@ -2223,6 +2223,7 @@ namespace AdvancedK9
             {
                 _controlledBiteReleased=true;
                 _releasedBiteTarget=_controlledBiteTarget;
+                _pr.RecordMedicalCustody(_releasedBiteTarget);
                 _releasedBiteHealth=_releasedBiteTarget.Health;
                 _releasedBiteTreated=false;
                 _nextReleasedBiteMaintenance=0;
@@ -2427,6 +2428,7 @@ namespace AdvancedK9
             if(_controlledBiteTarget==null)return;
             if(!_controlledBiteTarget.Exists()||_controlledBiteTarget.IsDead||IsTargetComplyingOrRestrained(_controlledBiteTarget)||Game.GameTime>=_controlledBiteHoldUntil)
             {
+                if(_controlledBiteTarget.Exists()&&IsTargetDurablyRestrained(_controlledBiteTarget))_pr.CompleteK9Custody(_controlledBiteTarget);
                 _controlledBiteTarget=null;_controlledBiteHoldUntil=0;return;
             }
             if(!_controlledBiteTarget.IsRagdoll)
@@ -2502,6 +2504,7 @@ namespace AdvancedK9
                         else if(Game.GameTime-_releasedBiteTreatmentCandidateAt>=1500)
                         {
                             _releasedBiteTreated=true;
+                            _pr.RecordTreatedCustody(_releasedBiteTarget);
                             NativeFunction.Natives.TASK_HANDS_UP(_releasedBiteTarget,-1,Game.LocalPlayer.Character,-1,true);
                             Game.LogTrivial("AdvancedK9 bite patient sustained treatment confirmed; suspect transitioned from medical ground hold to enforced compliant arrest posture pending cuffs.");
                         }
@@ -2523,6 +2526,7 @@ namespace AdvancedK9
 
         private void ClearReleasedBiteTarget()
         {
+            if(_releasedBiteTarget!=null&&_releasedBiteTarget.Exists())_pr.CompleteK9Custody(_releasedBiteTarget);
             _releasedBiteTarget=null;_releasedBiteHealth=0;_releasedBiteTreated=false;_nextReleasedBiteMaintenance=0;_releasedBiteDeathObservedAt=0;
             _releasedBiteTreatmentEligibleAt=0;_releasedBiteTreatmentCandidateAt=0;_releasedBiteTreatmentCandidateHealth=0;_nextReleasedBiteWarning=0;
         }

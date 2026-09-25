@@ -1,5 +1,13 @@
 # Changelog
 
+## Policing Redefined K9 custody integration
+
+- Registers each Rex apprehension with PR through its documented public `PedAPI` as a stopped subject without falsely marking the person arrested before cuffs are applied.
+- Enables PR's any-arrest interception for the exact bite target so player, backup-officer, pursuit, and callout arrests can transition into PR custody consistently.
+- Sets resistance chance to zero, surrender chance to 100, and resistance action to `None` while the suspect is bitten, medically held, treated, or awaiting arrest.
+- Publishes bite, medical-hold, treated, and cuffed phases through the LSPDFR AppDomain bridge and logs every accepted or unavailable PR API operation.
+- Retains PR ownership of free-patrol ambulance disposition because the current public API exposes EMS dispatch but not per-patient treatment-versus-transport control.
+
 ## Visible controlled-bite contact
 
 - Gives GTA's native canine combat task more time to render real contact instead of accepting proximity and dropping the suspect after only 1.8 seconds.

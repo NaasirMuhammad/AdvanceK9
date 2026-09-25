@@ -111,7 +111,22 @@ namespace AdvancedK9
 
         private static string SafeRequestValue(string value)=>string.IsNullOrWhiteSpace(value)?"K9":value.Replace("\r"," ").Replace("\n"," ").Replace("=","-").Trim();
         public void RecordLocatedSuspect(Ped suspect){if(_shareResults&&suspect!=null&&suspect.Exists())TryInvokeAction(new[]{"RecordK9Locate","SetLocatedSuspect","AddLocatedSuspect","RecordCanineLocate"},suspect,true,"Tracking");}
-        public void RecordApprehension(Ped suspect){if(_shareResults&&suspect!=null&&suspect.Exists())TryInvokeAction(new[]{"RecordK9Apprehension","SetApprehendedPed","AddApprehendedPed","RecordCanineApprehension"},suspect,true,"Apprehension");}
+        public void RecordApprehension(Ped suspect){if(suspect==null||!suspect.Exists())return;if(_shareResults)TryInvokeAction(new[]{"RecordK9Apprehension","SetApprehendedPed","AddApprehendedPed","RecordCanineApprehension"},suspect,true,"Apprehension");SendBridgeK9CustodyControl(suspect,"BiteHold");}
+        public void RecordMedicalCustody(Ped suspect){SendBridgeK9CustodyControl(suspect,"MedicalHold");}
+        public void RecordTreatedCustody(Ped suspect){SendBridgeK9CustodyControl(suspect,"TreatedAwaitingArrest");}
+        public void CompleteK9Custody(Ped suspect){SendBridgeK9CustodyControl(suspect,"Cuffed");}
+
+        private bool SendBridgeK9CustodyControl(Ped suspect,string phase)
+        {
+            if(Mode!=CompatibilityMode.PolicingRedefined||!BridgeAvailable()||suspect==null||!suspect.Exists())return false;
+            string id=Guid.NewGuid().ToString("N");
+            try
+            {
+                WriteBridgeRequest(new[]{"Action=K9CustodyControl","RequestId="+id,"Handle="+suspect.Handle,"Type=Ped","Phase="+SafeRequestValue(phase),"UtcTicks="+DateTime.UtcNow.Ticks});
+                Game.LogTrivial("AdvancedK9 PR integration: queued K9 custody phase "+phase+" for ped "+suspect.Handle+" through the public PedAPI bridge (request "+id+").");return true;
+            }
+            catch(Exception ex){Game.LogTrivial("AdvancedK9 PR custody integration request failed: "+ex.Message);return false;}
+        }
         public bool TryArrestHandoff(Ped suspect){if(suspect==null||!suspect.Exists()||Mode==CompatibilityMode.Standalone)return false;return TryInvokeAction(new[]{"StartArrest","ArrestPed","SetPedArrested","BeginArrest","OpenPedMenu","OpenContextMenu"},suspect,true,"AdvancedK9 handoff");}
         public bool TryRequestService(string service,Ped subject)
         {

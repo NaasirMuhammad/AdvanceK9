@@ -73,6 +73,7 @@ namespace AdvancedK9.LSPDFRBridge
             Entity query=FindRequestedEntity(request);
             ProcessInventoryQuery(request,cdf,pr,query);
             ProcessK9Indication(request,nexus,pr,query);
+            ProcessK9CustodyControl(request,pr,query as Ped);
             ProcessPendingOfficerSearches(pr,nexus);
             ProcessCalloutBridge(pr,stp);
             var lines=new[]{
@@ -191,6 +192,69 @@ namespace AdvancedK9.LSPDFRBridge
             string id=Read(request,"RequestId");if(string.IsNullOrWhiteSpace(id)||id==_lastQueryRequestId)return;
             _lastQueryRequestId=_queryRequestId=id;_queryHandle=Read(request,"Handle");_queryData="";_querySource="Requested entity unavailable";_queryAvailable=false;
             if(query!=null&&query.Exists())_queryData=GetUnifiedInventory(ReadBool(request,"UseCdfInventory",true)?cdf:null,pr,query,out _querySource,out _queryAvailable);
+        }
+
+        private static void ProcessK9CustodyControl(IDictionary<string,string> request,Assembly pr,Ped target)
+        {
+            if(!Read(request,"Action").Equals("K9CustodyControl",StringComparison.OrdinalIgnoreCase))return;
+            string id=Read(request,"RequestId");if(string.IsNullOrWhiteSpace(id)||id==_lastActionRequestId)return;
+            _lastActionRequestId=_actionRequestId=id;_actionSucceeded=false;_actionSink="Policing Redefined public PedAPI";
+            string phase=Read(request,"Phase");if(string.IsNullOrWhiteSpace(phase))phase="BiteHold";
+            if(pr==null){_actionDetail="PR unavailable for K9 custody phase "+phase;return;}
+            if(target==null||!target.Exists()){_actionDetail="K9 custody target unavailable for phase "+phase;return;}
+
+            // Do not mark the ped arrested here. PR/LSPDFR must still observe the real cuffing
+            // action. These public APIs only register the stop, preserve arrest interception,
+            // and prevent escape/resistance while Rex or EMS has physical custody.
+            bool stopped=TryInvokeExactPrPedApi(pr,"SetPedAsStopped",target,null,null);
+            bool intercepted=TryInvokeExactPrPedApi(pr,"SetInterceptPedAnyArrest",target,true,null);
+            bool resistance=TryInvokeExactPrPedApi(pr,"SetPedResistanceChance",target,null,0);
+            bool surrender=TryInvokeExactPrPedApi(pr,"SetPedSurrenderChance",target,null,100);
+            bool action=TryInvokePrResistanceNone(pr,target);
+            _actionSucceeded=stopped&&intercepted;
+            _actionDetail="phase="+phase+", stopped="+stopped+", arrestIntercept="+intercepted+", resistance0="+resistance+", surrender100="+surrender+", resistanceActionNone="+action;
+            Game.LogTrivial("AdvancedK9 bridge: PR K9 custody control "+(_actionSucceeded?"applied":"partially applied")+" for ped "+target.Handle+"; "+_actionDetail+". Arrest remains pending real cuffs.");
+        }
+
+        private static bool TryInvokeExactPrPedApi(Assembly pr,string methodName,Ped target,bool? booleanValue,int? integerValue)
+        {
+            foreach(Type type in Types(new[]{pr}).Where(t=>t.Name.Equals("PedAPI",StringComparison.OrdinalIgnoreCase)||(t.FullName??"").EndsWith(".PedAPI",StringComparison.OrdinalIgnoreCase)))
+            foreach(MethodInfo method in type.GetMethods(BindingFlags.Public|BindingFlags.Static).Where(m=>m.Name.Equals(methodName,StringComparison.OrdinalIgnoreCase)))
+            {
+                ParameterInfo[] p=method.GetParameters();object[] args=new object[p.Length];bool valid=true;
+                for(int i=0;i<p.Length;i++)
+                {
+                    if(p[i].ParameterType.IsInstanceOfType(target))args[i]=target;
+                    else if(p[i].ParameterType==typeof(bool)&&booleanValue.HasValue)args[i]=booleanValue.Value;
+                    else if(p[i].ParameterType==typeof(int)&&integerValue.HasValue)args[i]=integerValue.Value;
+                    else if(p[i].HasDefaultValue)args[i]=p[i].DefaultValue;
+                    else{valid=false;break;}
+                }
+                if(!valid)continue;
+                try{method.Invoke(null,args);return true;}catch(Exception ex){Game.LogTrivial("AdvancedK9 bridge: PR PedAPI."+methodName+" rejected K9 custody update: "+Unwrap(ex).Message);}
+            }
+            return false;
+        }
+
+        private static bool TryInvokePrResistanceNone(Assembly pr,Ped target)
+        {
+            foreach(Type type in Types(new[]{pr}).Where(t=>t.Name.Equals("PedAPI",StringComparison.OrdinalIgnoreCase)||(t.FullName??"").EndsWith(".PedAPI",StringComparison.OrdinalIgnoreCase)))
+            foreach(MethodInfo method in type.GetMethods(BindingFlags.Public|BindingFlags.Static).Where(m=>m.Name.Equals("SetPedResistanceAction",StringComparison.OrdinalIgnoreCase)).OrderByDescending(m=>m.GetParameters().Length))
+            {
+                ParameterInfo[] p=method.GetParameters();object[] args=new object[p.Length];bool valid=true;
+                for(int i=0;i<p.Length;i++)
+                {
+                    Type parameterType=p[i].ParameterType;
+                    if(parameterType.IsInstanceOfType(target))args[i]=target;
+                    else if(parameterType.IsEnum){try{args[i]=Enum.Parse(parameterType,"None",true);}catch{valid=false;break;}}
+                    else if(parameterType==typeof(bool))args[i]=true;
+                    else if(p[i].HasDefaultValue)args[i]=p[i].DefaultValue;
+                    else{valid=false;break;}
+                }
+                if(!valid)continue;
+                try{object result=method.Invoke(null,args);return method.ReturnType!=typeof(bool)||(bool)result;}catch(Exception ex){Game.LogTrivial("AdvancedK9 bridge: PR resistance-action update rejected: "+Unwrap(ex).Message);}
+            }
+            return false;
         }
 
         private static string GetUnifiedInventory(Assembly cdf,Assembly pr,Entity entity,out string source,out bool available)
@@ -436,7 +500,7 @@ namespace AdvancedK9.LSPDFRBridge
         private static void LogIntegrationSurfaces(Assembly cdf,Assembly pr,Assembly nexus)
         {
             Game.LogTrivial("AdvancedK9 bridge inventory integration: CDF="+(cdf!=null)+", PR="+(pr!=null)+", NexusMDT="+(nexus!=null)+"; AdvancedK9 never modifies third-party inventory files or records.");
-            foreach(Assembly assembly in new[]{cdf,pr,nexus}.Where(a=>a!=null))foreach(Type type in Types(new[]{assembly}))foreach(MethodInfo method in type.GetMethods(BindingFlags.Public|BindingFlags.Static|BindingFlags.Instance).Where(m=>ContainsAny(m.Name,"GetPedData","GetVehicleData","GetPedSearchItems","GetVehicleSearchItems","AppendIncidentNote","CaptureSearch","RecordK9Indication","IsPedArrested","IsPedCuffed","Custody","RequestPoliceTransport","RequestPrisonerTransport","DispatchNarrat","SpeakIncident","DispatchEvent")))Game.LogTrivial("AdvancedK9 bridge API surface: "+type.FullName+"."+method.Name+"("+string.Join(",",method.GetParameters().Select(p=>p.ParameterType.Name+" "+p.Name))+ ").");
+            foreach(Assembly assembly in new[]{cdf,pr,nexus}.Where(a=>a!=null))foreach(Type type in Types(new[]{assembly}))foreach(MethodInfo method in type.GetMethods(BindingFlags.Public|BindingFlags.Static|BindingFlags.Instance).Where(m=>ContainsAny(m.Name,"GetPedData","GetVehicleData","GetPedSearchItems","GetVehicleSearchItems","AppendIncidentNote","CaptureSearch","RecordK9Indication","IsPedArrested","IsPedCuffed","SetPedAsStopped","SetInterceptPedAnyArrest","SetPedResistanceChance","SetPedSurrenderChance","SetPedResistanceAction","Custody","RequestPoliceTransport","RequestPrisonerTransport","DispatchNarrat","SpeakIncident","DispatchEvent")))Game.LogTrivial("AdvancedK9 bridge API surface: "+type.FullName+"."+method.Name+"("+string.Join(",",method.GetParameters().Select(p=>p.ParameterType.Name+" "+p.Name))+ ").");
         }
 
         private sealed class PendingOfficerSearch
