@@ -74,6 +74,8 @@ namespace AdvancedK9
         private uint _nextFollowMotionSample;
         private uint _followStuckSince;
         private uint _followRouteRecoveryUntil;
+        private int _longRecallFailedAttempts;
+        private float _longRecallBestDistance=float.MaxValue;
         private bool _handlerWasShooting;
         private uint _k9RelationshipGroup;
         private Vector3 _lastHandlerNavigationPosition;
@@ -1127,6 +1129,12 @@ namespace AdvancedK9
         private Vector3 StageDogOutsideVehicle(Vehicle vehicle)
         {
             float side=_dogVehicleDoor==2?-1f:1f;Vector3 threshold=vehicle.GetOffsetPosition(new Vector3(side*1.08f,-1.18f,.42f));Vector3 exit=vehicle.GetOffsetPosition(new Vector3(side*1.58f,-1.42f,.12f));
+            // Break both GTA's seat ownership and AdvancedK9's calibrated attachment before
+            // animating the egress.  Clearing only the attachment can leave the canine logically
+            // seated, causing the walking-in-the-car behavior observed after pursuit bailouts.
+            _dog.Tasks.ClearImmediately();
+            if(_dog.CurrentVehicle!=null)NativeFunction.Natives.TASK_LEAVE_VEHICLE(_dog,vehicle,16);
+            GameFiber.Wait(250);
             _dog.Tasks.ClearImmediately();NativeFunction.Natives.SET_ENTITY_VISIBLE(_dog,false,false);ReleaseVehicleSeat();NativeFunction.Natives.SET_ENTITY_COLLISION(_dog,false,false);NativeFunction.Natives.SET_ENTITY_COORDS_NO_OFFSET(_dog,threshold.X,threshold.Y,threshold.Z,false,false,false);_dog.Heading=vehicle.Heading;
             NativeFunction.Natives.SET_ENTITY_VISIBLE(_dog,true,false);NativeFunction.Natives.RESET_ENTITY_ALPHA(_dog);try{NativeFunction.Natives.REQUEST_ANIM_DICT("creatures@rottweiler@move");uint timeout=Game.GameTime+600;while(!NativeFunction.Natives.HAS_ANIM_DICT_LOADED<bool>("creatures@rottweiler@move")&&Game.GameTime<timeout)GameFiber.Yield();NativeFunction.Natives.TASK_PLAY_ANIM(_dog,"creatures@rottweiler@move","jump",4f,-3f,450,0,0f,false,false,false);}catch{}
             const int frames=12;for(int i=1;i<=frames&&DogEntityExists();i++){float t=i/(float)frames;float arc=(float)Math.Sin(Math.PI*t)*.28f;float x=threshold.X+(exit.X-threshold.X)*t,y=threshold.Y+(exit.Y-threshold.Y)*t,z=threshold.Z+(exit.Z-threshold.Z)*t+arc;NativeFunction.Natives.SET_ENTITY_COORDS_NO_OFFSET(_dog,x,y,z,false,false,false);GameFiber.Wait(28);}
@@ -2436,9 +2444,9 @@ namespace AdvancedK9
             if(calloutTarget!=null&&aimedTarget!=null&&aimedTarget!=calloutTarget)
                 Game.DisplayNotification("~y~Callout suspect lock active.~s~~n~Ignored the aimed bystander and deployed only on the assigned fugitive.");
             _voiceAimedTarget=null;
-            if(target==null){Game.DisplayNotification("~y~No valid target identified.~s~~n~Keep the fleeing suspect aimed while saying '"+_profile.Name+", apprehend,' or use "+KeyChord(_config.ApprehendKey)+" / LT + D-pad Up.");return;}
+            if(target==null){_recentApprehendTarget=null;_recentApprehendTargetUntil=0;Follow();Game.DisplayNotification("~y~No valid target identified.~s~~n~Rex has been recalled. Keep an active fleeing suspect aimed while saying '"+_profile.Name+", apprehend,' or use "+KeyChord(_config.ApprehendKey)+" / LT + D-pad Up.");return;}
             if(_warnedTarget==target&&_warningSurrendered){Game.DisplayNotification("~r~K9 safety interlock: the warned suspect surrendered.~s~~n~Move in for arrest; apprehension was not deployed.");return;}
-            if(IsTargetComplyingOrRestrained(target)){Game.DisplayNotification("~r~K9 safety interlock: the suspect is complying or in custody.~s~~n~NPCI compliance is preserved; complete the LSPDFR arrest.");return;}
+            if(IsTargetComplyingOrRestrained(target)){_recentApprehendTarget=null;_recentApprehendTargetUntil=0;_scentTarget=null;Follow();Game.DisplayNotification("~r~K9 safety interlock: the suspect is complying or in custody.~s~~n~Rex has been recalled; complete the LSPDFR arrest.");return;}
             if(_config.CompatibilityProtectManagedPeds&&IsProtectedOperationalPed(target)){Game.DisplayNotification("~r~K9 safety interlock: restrained or surrendered suspect rejected.~s~~n~PR/STP stop status is not required for deployment, but protected peds cannot be bitten.");return;}
             if(_state==K9State.InVehicle)DoorPop(false);
             _state = K9State.Apprehending;
@@ -2997,8 +3005,9 @@ namespace AdvancedK9
             {
                 if(Game.GameTime<_followRouteRecoveryUntil)return;
                 _followRouteRecoveryUntil=0;
-                IssuePersistentFollow(handler,leashed);
-                Game.LogTrivial("AdvancedK9 recall recovery: navigation approach completed; persistent handler follow restored at "+distance.ToString("0.0")+"m.");
+                if(distance>22f)BeginLongDistanceRecall(handler);
+                else{_longRecallFailedAttempts=0;_longRecallBestDistance=float.MaxValue;IssuePersistentFollow(handler,leashed);}
+                Game.LogTrivial("AdvancedK9 recall recovery: navigation approach evaluated at "+distance.ToString("0.0")+"m; "+(distance>22f?"another live-handler route was assigned.":"persistent handler follow restored."));
                 return;
             }
             int handlerInterior=NativeFunction.Natives.GET_INTERIOR_FROM_ENTITY<int>(handler),dogInterior=NativeFunction.Natives.GET_INTERIOR_FROM_ENTITY<int>(_dog);
@@ -3036,6 +3045,7 @@ namespace AdvancedK9
             bool shouldBeFollowing=distance>(leashed?2.75f:7.5f);
             if(!shouldBeFollowing||dogMovement>.3f)
             {
+                if(distance<18f){_longRecallFailedAttempts=0;_longRecallBestDistance=float.MaxValue;}
                 _followStuckSince=0;return;
             }
             if(_followStuckSince==0){_followStuckSince=Game.GameTime;return;}
@@ -3070,15 +3080,29 @@ namespace AdvancedK9
         private void BeginLongDistanceRecall(Ped handler)
         {
             if(handler==null||!handler.Exists()||!DogExists())return;
-            Vector3 destination=handler.GetOffsetPosition(new Vector3(-.8f,-1.4f,0f));
+            float distance=_dog.DistanceTo(handler);
+            if(distance+3f<_longRecallBestDistance){_longRecallBestDistance=distance;_longRecallFailedAttempts=0;}
+            else _longRecallFailedAttempts++;
+            if(_longRecallFailedAttempts>=3&&distance>35f)
+            {
+                Vector3 recovery=handler.GetOffsetPosition(new Vector3(-2.2f,-10f,.15f));
+                _dog.Tasks.ClearImmediately();NativeFunction.Natives.SET_ENTITY_COLLISION(_dog,false,false);
+                NativeFunction.Natives.SET_ENTITY_COORDS_NO_OFFSET(_dog,recovery.X,recovery.Y,recovery.Z,false,false,false);
+                NativeFunction.Natives.SET_ENTITY_COLLISION(_dog,true,true);_dog.Heading=handler.Heading;
+                _longRecallFailedAttempts=0;_longRecallBestDistance=float.MaxValue;IssuePersistentFollow(handler,false);
+                Game.LogTrivial("AdvancedK9 long-distance recall recovery: three navigation routes failed to reduce separation; K9 safely rejoined ten metres behind the moving handler.");
+                return;
+            }
             _dog.Tasks.Clear();
-            NativeFunction.Natives.TASK_FOLLOW_NAV_MESH_TO_COORD(_dog,destination.X,destination.Y,destination.Z,5.8f,5000,.8f,0,handler.Heading);
+            // Follow the live handler entity rather than a coordinate snapshot. During a foot
+            // pursuit the old destination was obsolete before Rex reached it.
+            NativeFunction.Natives.TASK_GO_TO_ENTITY(_dog,handler,-1,2.4f,7.2f,0f,0);
             NativeFunction.Natives.SET_PED_KEEP_TASK(_dog,true);
             NativeFunction.Natives.SET_ENTITY_MAX_SPEED(_dog,16f);
             NativeFunction.Natives.SET_PED_MAX_MOVE_BLEND_RATIO(_dog,3f);
-            _followRouteRecoveryUntil=Game.GameTime+3500;
+            _followRouteRecoveryUntil=Game.GameTime+5000;
             _followMotionSamplePosition=_dog.Position;_followMotionSampleReady=true;_nextFollowMotionSample=_followRouteRecoveryUntil+500;_followStuckSince=0;
-            Game.LogTrivial("AdvancedK9 long-distance recall: navigation-mesh approach assigned from "+_dog.DistanceTo(handler).ToString("0.0")+"m before persistent follow handoff.");
+            Game.LogTrivial("AdvancedK9 long-distance recall: live-handler approach assigned from "+distance.ToString("0.0")+"m before persistent follow handoff; failed attempts="+_longRecallFailedAttempts+".");
         }
 
         private void CaptureHandlerWalkingLine()
