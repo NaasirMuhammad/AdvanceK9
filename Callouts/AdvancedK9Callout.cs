@@ -561,6 +561,9 @@ namespace AdvancedK9.Callouts
                     Ped driver=vehicle.Driver;
                     if(driver==null||!driver.Exists())continue;
                     NativeFunction.Natives.TASK_VEHICLE_TEMP_ACTION(driver,vehicle,6,5000);
+                    float dx=vehicle.Position.X-Scene.X,dy=vehicle.Position.Y-Scene.Y,length=(float)Math.Sqrt(dx*dx+dy*dy);if(length<.1f){dx=1f;length=1f;}
+                    Vector3 clear=World.GetNextPositionOnStreet(new Vector3(Scene.X+dx/length*(SceneTrafficClosureRadius+28f),Scene.Y+dy/length*(SceneTrafficClosureRadius+28f),vehicle.Position.Z));
+                    NativeFunction.Natives.TASK_VEHICLE_DRIVE_TO_COORD_LONGRANGE(driver,vehicle,clear.X,clear.Y,clear.Z,9f,786603,5f);
                 }
             }
             catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: live traffic containment fallback: "+ex.Message);}

@@ -63,8 +63,8 @@ namespace AdvancedK9
         private uint _nextHeatWarning;
         private int _dogVehicleDoor=3;
         private int _leashRope = -1;
-        private const float PatrolLeashMinimumLength=.55f;
-        private const float PatrolLeashMaximumLength=1.85f;
+        private const float PatrolLeashMinimumLength=.48f;
+        private const float PatrolLeashMaximumLength=1.35f;
         private bool _workingLeashed;
         private uint _nextLeashFollow;
         private uint _nextLeashVisualUpdate;
@@ -1609,6 +1609,21 @@ namespace AdvancedK9
         private void BeginSearch(bool vehicleOnly,DetectionSpecialty specialty)
         {
             if(_searchInProgress){Game.DisplayNotification("~y~K9 search already in progress.");return;}
+            var handler=Game.LocalPlayer.Character;
+            if(!vehicleOnly&&specialty==DetectionSpecialty.General&&_pendingCalloutScentTarget!=null&&
+                _pendingCalloutScentTarget.Exists()&&!_pendingCalloutScentTarget.IsDead&&
+                !string.IsNullOrWhiteSpace(_pendingCalloutScentDetails)&&
+                _pendingCalloutScentDetails.IndexOf("LiveHumanOdor",StringComparison.OrdinalIgnoreCase)>=0&&
+                handler.DistanceTo(_pendingCalloutScentPosition)<=30f)
+            {
+                _scentTarget=_pendingCalloutScentTarget;_scentCollectedAt=Game.GameTime;
+                _scentRainAtCollection=NativeFunction.Natives.GET_RAIN_LEVEL<float>();
+                _activeScentSample=NewScentSample(ScentArticleType.LastKnownLocationPad,"occupied-bank human odor","fresh human trail at the bank threshold");
+                _activeScentSource="Live human odor from occupied bank";_trailLost=false;
+                Game.DisplayNotification("~g~Human trail detected.~s~~n~Rex isolated a fresh occupied-bank scent from the entrance and is following it inside.");
+                Game.LogTrivial("AdvancedK9 area search: live callout human odor isolated without a physical clothing article; recorded interior trail assigned.");
+                BeginTrack();return;
+            }
             int generation=++_searchGeneration;_searchInProgress=true;_state=K9State.Searching;_hudSearchLabel=vehicleOnly?"VEHICLE SEARCH":"AREA SEARCH";_hudSearchProgress=0;
             if(_workingLeashed)ActionNotification("~b~Working leash retained.~s~ Follow the K9 as it leads the search.");
             GameFiber.StartNew(()=>{try{Search(generation,vehicleOnly,specialty);}catch(Exception ex){Game.LogTrivial("AdvancedK9 asynchronous search failed: "+ex);Game.DisplayNotification("~r~K9 search failed.~s~ See RagePluginHook.log.");if(SearchSessionActive(generation))Follow();}finally{if(generation==_searchGeneration){_hudSearchLabel="";_searchInProgress=false;}}},"AdvancedK9 Search");
@@ -1832,13 +1847,19 @@ namespace AdvancedK9
 
         private static Vector3 FindSafeMedicalStaging(Vector3 patient,Vector3 approachFrom)
         {
-            Vector3 best=World.GetNextPositionOnStreet(patient+new Vector3(18f,0f,0f));float bestScore=float.MaxValue;
-            for(int i=0;i<12;i++)
+            Vector3 best=World.GetNextPositionOnStreet(patient+new Vector3(12f,0f,0f));float bestScore=float.MaxValue;
+            for(int i=0;i<16;i++)
             {
-                float angle=i*30f;Vector3 sample=patient+HeadingOffset(angle,18f);Vector3 street=World.GetNextPositionOnStreet(sample);
-                float patientDistance=street.DistanceTo(patient);if(patientDistance<12f||patientDistance>30f)continue;
-                float score=street.DistanceTo(approachFrom)+Math.Abs(patientDistance-18f)*3f;
-                if(score<bestScore){bestScore=score;best=street;}
+                float angle=i*22.5f;Vector3 sample=patient+HeadingOffset(angle,12f);Vector3 roadCenter=World.GetNextPositionOnStreet(sample);
+                float dx=patient.X-roadCenter.X,dy=patient.Y-roadCenter.Y,horizontal=(float)Math.Sqrt(dx*dx+dy*dy);
+                if(horizontal<.1f)continue;
+                // Pull the destination from the lane center toward the patient's side of
+                // the road.  The ambulance still has a driveable approach, but stages at
+                // the curb/shoulder instead of leaving medics exposed in a live lane.
+                Vector3 curb=new Vector3(roadCenter.X+dx/horizontal*3.1f,roadCenter.Y+dy/horizontal*3.1f,roadCenter.Z);
+                float patientDistance=curb.DistanceTo(patient);if(patientDistance<7f||patientDistance>19f)continue;
+                float score=curb.DistanceTo(approachFrom)*.2f+Math.Abs(patientDistance-10f)*5f;
+                if(score<bestScore){bestScore=score;best=curb;}
             }
             return best;
         }
@@ -3015,13 +3036,16 @@ namespace AdvancedK9
             // Recall must recover even while the handler stands still.  The previous motion
             // test required handler speed, so a distant K9 could remain frozen until the
             // player walked close enough for the original entity-follow task to wake up.
-            bool shouldBeFollowing=distance>4f;
+            // A working dog at normal leash/follow spacing may pause to turn or negotiate
+            // nearby geometry.  Treat only meaningful separation as a stuck route; the old
+            // four-metre threshold repeatedly cancelled healthy locomotion inside Pacific.
+            bool shouldBeFollowing=distance>(leashed?2.75f:7.5f);
             if(!shouldBeFollowing||dogMovement>.3f)
             {
                 _followStuckSince=0;return;
             }
             if(_followStuckSince==0){_followStuckSince=Game.GameTime;return;}
-            if(Game.GameTime-_followStuckSince<2500)return;
+            if(Game.GameTime-_followStuckSince<(leashed?5500u:4500u))return;
             if(!leashed&&distance>18f)BeginLongDistanceRecall(handler);
             else IssuePersistentFollow(handler,leashed);
             ApplyAnimalPedSafeguards();
