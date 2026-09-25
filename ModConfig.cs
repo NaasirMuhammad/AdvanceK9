@@ -65,6 +65,9 @@ namespace AdvancedK9
         public bool CompatibilityBlr = true;
         public bool CompatibilityPdComp = true;
         public bool CompatibilityDamageTracker = true;
+        public bool UseAdvancedK9BiteMedicalResponse = true;
+        public int BitePatientTransportChance = 30;
+        public int BitePatientTreatmentSeconds = 10;
         public string PortraitFile = "";
         public readonly Dictionary<K9Command,string[]> CustomCommandPhrases=new Dictionary<K9Command,string[]>();
         private readonly Dictionary<string,string> _kennelLocations=new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase);
@@ -146,6 +149,9 @@ namespace AdvancedK9
             result.CompatibilityBlr = ini.ReadBoolean("Compatibility", "EnableBLR", result.CompatibilityBlr);
             result.CompatibilityPdComp = ini.ReadBoolean("Compatibility", "EnablePDComp", result.CompatibilityPdComp);
             result.CompatibilityDamageTracker = ini.ReadBoolean("Compatibility", "EnableDamageTracker", result.CompatibilityDamageTracker);
+            result.UseAdvancedK9BiteMedicalResponse = ini.ReadBoolean("Medical", "UseAdvancedK9BiteMedicalResponse", result.UseAdvancedK9BiteMedicalResponse);
+            result.BitePatientTransportChance = Math.Max(0, Math.Min(100, ini.ReadInt32("Medical", "BitePatientTransportChance", result.BitePatientTransportChance)));
+            result.BitePatientTreatmentSeconds = Math.Max(6, Math.Min(30, ini.ReadInt32("Medical", "BitePatientTreatmentSeconds", result.BitePatientTreatmentSeconds)));
             result.PortraitFile = ini.ReadString("HUD", "PortraitFile", result.PortraitFile);
             foreach(var definition in CommandRegistry.All)
             {
