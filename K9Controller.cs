@@ -71,6 +71,7 @@ namespace AdvancedK9
         private bool _followMotionSampleReady;
         private uint _nextFollowMotionSample;
         private uint _followStuckSince;
+        private uint _followRouteRecoveryUntil;
         private bool _handlerWasShooting;
         private uint _k9RelationshipGroup;
         private Vector3 _lastHandlerNavigationPosition;
@@ -117,6 +118,7 @@ namespace AdvancedK9
         private Ped _controlledBiteTarget;
         private uint _controlledBiteHoldUntil;
         private bool _controlledBiteReleased;
+        private uint _nextControlledBiteVisual;
         private Ped _releasedBiteTarget;
         private int _releasedBiteHealth;
         private bool _releasedBiteTreated;
@@ -1022,7 +1024,8 @@ namespace AdvancedK9
             _lastHandlerNavigationPosition=handler.Position;
             _handlerNavigationPositionReady=true;
             _dog.Tasks.Clear();
-            IssuePersistentFollow(handler,_leashRope>=0);
+            if(_leashRope<0&&_dog.DistanceTo(handler)>18f)BeginLongDistanceRecall(handler);
+            else IssuePersistentFollow(handler,_leashRope>=0);
             _state = _leashRope >= 0 ? K9State.Leashed : K9State.Following;
             Acknowledge("Following.");
         }
@@ -2170,11 +2173,13 @@ namespace AdvancedK9
                 // proximity-only check cancelled TASK_COMBAT_PED before GTA could render a bite.
                 float contactDistance=_dog.DistanceTo(target);
                 bool visibleContact=contactDistance<=1.8f&&(target.Health<healthBeforeContact||target.IsRagdoll);
-                bool controlledContact=contactDistance<=1.35f&&Game.GameTime-_biteStarted>=1800;
+                // Give GTA's native canine combat task time to render an actual bite before
+                // accepting proximity as a fallback.  The old 1.8-second fallback cleared the
+                // task while Rex was still running into position, making the suspect simply fall.
+                bool controlledContact=contactDistance<=1.2f&&Game.GameTime-_biteStarted>=4500;
                 if (controlledContact || visibleContact)
                 {
                     if(!visibleContact&&target.Health>=healthBeforeContact)target.Health=Math.Max(_config.NonLethalHealthFloor,healthBeforeContact-12);
-                    _dog.Tasks.ClearImmediately();
                     if (target.Health < _config.NonLethalHealthFloor) target.Health = _config.NonLethalHealthFloor;
                     NativeFunction.Natives.SET_PED_CAN_RAGDOLL(target,true);
                     uint heldWeapon=NativeFunction.Natives.GET_SELECTED_PED_WEAPON<uint>(target);
@@ -2189,8 +2194,9 @@ namespace AdvancedK9
                     _controlledBiteTarget=target;
                     _controlledBiteHoldUntil=Game.GameTime+120000;
                     _controlledBiteReleased=false;
+                    _nextControlledBiteVisual=0;
                     _state=K9State.HoldingSuspect;
-                    NativeFunction.Natives.TASK_TURN_PED_TO_FACE_ENTITY(_dog,target,-1);
+                    PlayControlledBiteVisual(target,true);
                     Game.LogTrivial("AdvancedK9 controlled bite confirmed at "+contactDistance.ToString("0.00")+"m K9-to-suspect distance.");
                     Game.DisplayNotification("~g~Controlled K9 bite and takedown complete.~s~ The suspect is injured and held down. Command RELEASE before arrest and medical treatment.");
                     _pr.RecordApprehension(target);
@@ -2425,6 +2431,35 @@ namespace AdvancedK9
                 NativeFunction.Natives.SET_PED_TO_RAGDOLL(_controlledBiteTarget,1800,2600,0,false,false,false);
             if(DogExists()&&_dog.DistanceTo(_controlledBiteTarget)>1.8f)
                 NativeFunction.Natives.TASK_GO_TO_ENTITY(_dog,_controlledBiteTarget,-1,1.1f,3.8f,0f,0);
+            else if(DogExists()&&Game.GameTime>=_nextControlledBiteVisual)
+                PlayControlledBiteVisual(_controlledBiteTarget,false);
+        }
+
+        private void PlayControlledBiteVisual(Ped target,bool firstContact)
+        {
+            if(!DogExists()||target==null||!target.Exists())return;
+            _nextControlledBiteVisual=Game.GameTime+1700;
+            try
+            {
+                NativeFunction.Natives.TASK_TURN_PED_TO_FACE_ENTITY(_dog,target,350);
+                const string dictionary="creatures@rottweiler@melee@";
+                NativeFunction.Natives.REQUEST_ANIM_DICT(dictionary);
+                uint deadline=Game.GameTime+500;
+                while(!NativeFunction.Natives.HAS_ANIM_DICT_LOADED<bool>(dictionary)&&Game.GameTime<deadline)GameFiber.Yield();
+                if(NativeFunction.Natives.HAS_ANIM_DICT_LOADED<bool>(dictionary))
+                {
+                    // This is GTA's native canine takedown motion. Replaying it while the
+                    // suspect is held down gives visible jaw/body contact without applying
+                    // repeated combat damage that could kill the patient.
+                    NativeFunction.Natives.TASK_PLAY_ANIM(_dog,dictionary,"dog_takedown_from_front",8f,-4f,1550,0,0f,false,false,false);
+                    if(firstContact)Game.LogTrivial("AdvancedK9 controlled bite visual: native canine takedown animation started and nonlethal hold established.");
+                }
+                else if(firstContact)Game.LogTrivial("AdvancedK9 controlled bite visual: canine animation dictionary unavailable; native combat contact retained as fallback.");
+            }
+            catch(Exception ex)
+            {
+                if(firstContact)Game.LogTrivial("AdvancedK9 controlled bite visual fallback contained: "+ex.GetType().Name+": "+ex.Message);
+            }
         }
 
         private void MaintainReleasedBiteTarget()
@@ -2626,6 +2661,14 @@ namespace AdvancedK9
             if(!_handlerNavigationPositionReady){_lastHandlerNavigationPosition=handlerPosition;_handlerNavigationPositionReady=true;}
             float handlerJump=handlerPosition.DistanceTo(_lastHandlerNavigationPosition),verticalJump=Math.Abs(handlerPosition.Z-_lastHandlerNavigationPosition.Z);_lastHandlerNavigationPosition=handlerPosition;
             float distance=_dog.DistanceTo(handler);
+            if(_followRouteRecoveryUntil!=0)
+            {
+                if(Game.GameTime<_followRouteRecoveryUntil)return;
+                _followRouteRecoveryUntil=0;
+                IssuePersistentFollow(handler,leashed);
+                Game.LogTrivial("AdvancedK9 recall recovery: navigation approach completed; persistent handler follow restored at "+distance.ToString("0.0")+"m.");
+                return;
+            }
             int handlerInterior=NativeFunction.Natives.GET_INTERIOR_FROM_ENTITY<int>(handler),dogInterior=NativeFunction.Natives.GET_INTERIOR_FROM_ENTITY<int>(_dog);
             if(distance>8f&&(verticalJump>4.5f||handlerJump>22f||(handlerInterior!=dogInterior&&distance>18f)))
             {
@@ -2652,16 +2695,20 @@ namespace AdvancedK9
             }
             float dogMovement=dogPosition.DistanceTo(_followMotionSamplePosition);_followMotionSamplePosition=dogPosition;
             float handlerSpeed=0f;try{handlerSpeed=NativeFunction.Natives.GET_ENTITY_SPEED<float>(handler);}catch{}
-            bool shouldBeFollowing=handlerSpeed>.5f&&distance>4f;
+            // Recall must recover even while the handler stands still.  The previous motion
+            // test required handler speed, so a distant K9 could remain frozen until the
+            // player walked close enough for the original entity-follow task to wake up.
+            bool shouldBeFollowing=distance>4f;
             if(!shouldBeFollowing||dogMovement>.3f)
             {
                 _followStuckSince=0;return;
             }
             if(_followStuckSince==0){_followStuckSince=Game.GameTime;return;}
             if(Game.GameTime-_followStuckSince<2500)return;
-            IssuePersistentFollow(handler,leashed);
+            if(!leashed&&distance>18f)BeginLongDistanceRecall(handler);
+            else IssuePersistentFollow(handler,leashed);
             ApplyAnimalPedSafeguards();
-            Game.LogTrivial("AdvancedK9 follow recovery: persistent task reissued after K9 moved less than 0.3m for 2.5 seconds while handler was moving.");
+            Game.LogTrivial("AdvancedK9 follow recovery: route rebuilt after K9 moved less than 0.3m for 2.5 seconds at "+distance.ToString("0.0")+"m from the handler.");
         }
 
         private static float handlerSpeedForFollow(Ped handler){try{return handler==null||!handler.Exists()?0f:NativeFunction.Natives.GET_ENTITY_SPEED<float>(handler);}catch{return 0f;}}
@@ -2669,6 +2716,7 @@ namespace AdvancedK9
         private void IssuePersistentFollow(Ped handler,bool leashed)
         {
             if(handler==null||!handler.Exists()||!DogExists())return;
+            _followRouteRecoveryUntil=0;
             float side=leashed?-.55f:-.8f;
             float behind=leashed?-.85f:-1.15f;
             float handlerSpeed=handlerSpeedForFollow(handler);
@@ -2682,6 +2730,20 @@ namespace AdvancedK9
             _followMotionSampleReady=true;
             _nextFollowMotionSample=Game.GameTime+1000;
             _followStuckSince=0;
+        }
+
+        private void BeginLongDistanceRecall(Ped handler)
+        {
+            if(handler==null||!handler.Exists()||!DogExists())return;
+            Vector3 destination=handler.GetOffsetPosition(new Vector3(-.8f,-1.4f,0f));
+            _dog.Tasks.Clear();
+            NativeFunction.Natives.TASK_FOLLOW_NAV_MESH_TO_COORD(_dog,destination.X,destination.Y,destination.Z,5.8f,5000,.8f,0,handler.Heading);
+            NativeFunction.Natives.SET_PED_KEEP_TASK(_dog,true);
+            NativeFunction.Natives.SET_ENTITY_MAX_SPEED(_dog,16f);
+            NativeFunction.Natives.SET_PED_MAX_MOVE_BLEND_RATIO(_dog,3f);
+            _followRouteRecoveryUntil=Game.GameTime+3500;
+            _followMotionSamplePosition=_dog.Position;_followMotionSampleReady=true;_nextFollowMotionSample=_followRouteRecoveryUntil+500;_followStuckSince=0;
+            Game.LogTrivial("AdvancedK9 long-distance recall: navigation-mesh approach assigned from "+_dog.DistanceTo(handler).ToString("0.0")+"m before persistent follow handoff.");
         }
 
         private void CaptureHandlerWalkingLine()

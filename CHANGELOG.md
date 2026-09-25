@@ -1,5 +1,13 @@
 # Changelog
 
+## Visible controlled-bite contact
+
+- Gives GTA's native canine combat task more time to render real contact instead of accepting proximity and dropping the suspect after only 1.8 seconds.
+- Uses the native Rottweiler takedown motion during the controlled hold so Rex visibly maintains bite contact without repeatedly damaging or killing the patient.
+- Contains animation lookup/playback failures and retains native combat contact as the safe fallback.
+- Routes long-distance Recall through an initial navigation-mesh approach, then restores persistent handler follow; stuck detection now works even when the handler is standing still.
+- Records that free-patrol EMS disposition remains owned by the installed EMS provider; AdvancedK9 does not override or modify Policing Redefined patient transport.
+
 ## Released-bite hold crash containment
 
 - Prevents the health adjustment that occurs during bite release from being mistaken for completed EMS treatment; healing must occur after a grace period and remain stable before the suspect can stand.
