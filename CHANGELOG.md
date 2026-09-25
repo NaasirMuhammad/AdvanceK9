@@ -6,6 +6,7 @@
 - Uses the native Rottweiler takedown motion during the controlled hold so Rex visibly maintains bite contact without repeatedly damaging or killing the patient.
 - Contains animation lookup/playback failures and retains native combat contact as the safe fallback.
 - Routes long-distance Recall through an initial navigation-mesh approach, then restores persistent handler follow; stuck detection now works even when the handler is standing still.
+- Limits the retracting patrol leash to a realistic 1.85-meter maximum: it shortens as Rex approaches but never visually stretches beyond its fixed maximum, and routine leash follow is reissued when he reaches the end.
 - Records that free-patrol EMS disposition remains owned by the installed EMS provider; AdvancedK9 does not override or modify Policing Redefined patient transport.
 
 ## Released-bite hold crash containment

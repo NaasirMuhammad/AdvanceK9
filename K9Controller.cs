@@ -63,6 +63,8 @@ namespace AdvancedK9
         private uint _nextHeatWarning;
         private int _dogVehicleDoor=3;
         private int _leashRope = -1;
+        private const float PatrolLeashMinimumLength=.55f;
+        private const float PatrolLeashMaximumLength=1.85f;
         private bool _workingLeashed;
         private uint _nextLeashFollow;
         private uint _nextLeashVisualUpdate;
@@ -2337,14 +2339,14 @@ namespace AdvancedK9
             var hand=NativeFunction.Natives.GET_PED_BONE_COORDS<Vector3>(handler,18905,0f,0f,0f);
             var collar=NativeFunction.Natives.GET_PED_BONE_COORDS<Vector3>(_dog,39317,0f,.03f,0f);
             NativeFunction.Natives.ROPE_LOAD_TEXTURES();GameFiber.Wait(100);
-            float length=Math.Max(.65f,Math.Min(6f,VectorDistance(hand,collar)+.12f));
-            _leashRope=NativeFunction.Natives.ADD_ROPE<int>(hand.X,hand.Y,hand.Z,0f,0f,0f,length,4,6f,.45f,0f,false,false,true,1f,false,0);
+            float length=Math.Max(PatrolLeashMinimumLength,Math.Min(PatrolLeashMaximumLength,VectorDistance(hand,collar)+.08f));
+            _leashRope=NativeFunction.Natives.ADD_ROPE<int>(hand.X,hand.Y,hand.Z,0f,0f,0f,length,4,PatrolLeashMaximumLength,PatrolLeashMinimumLength,0f,false,false,true,1f,false,0);
             // Keep a visual hand-to-collar leash without entity-to-entity rope
             // physics, which can freeze animal navigation tasks.
             if(_leashRope>=0)PinLeashEndpoints();
         }
 
-        private void PinLeashEndpoints(){if(_leashRope<0||!DogEntityExists()||Game.GameTime<_nextLeashVisualUpdate)return;_nextLeashVisualUpdate=Game.GameTime+50;try{var handler=Game.LocalPlayer.Character;var hand=NativeFunction.Natives.GET_PED_BONE_COORDS<Vector3>(handler,18905,-.04f,.02f,0f);var collar=NativeFunction.Natives.GET_PED_BONE_COORDS<Vector3>(_dog,39317,0f,.03f,0f);float slack=_workingLeashed?.18f:.08f;float length=Math.Max(.65f,Math.Min(6f,VectorDistance(hand,collar)+slack));NativeFunction.Natives.ROPE_FORCE_LENGTH(_leashRope,length);NativeFunction.Natives.PIN_ROPE_VERTEX(_leashRope,0,hand.X,hand.Y,hand.Z);int vertices=NativeFunction.Natives.GET_ROPE_VERTEX_COUNT<int>(_leashRope);if(vertices>1)NativeFunction.Natives.PIN_ROPE_VERTEX(_leashRope,vertices-1,collar.X,collar.Y,collar.Z);}catch{}}
+        private void PinLeashEndpoints(){if(_leashRope<0||!DogEntityExists()||Game.GameTime<_nextLeashVisualUpdate)return;_nextLeashVisualUpdate=Game.GameTime+50;try{var handler=Game.LocalPlayer.Character;var hand=NativeFunction.Natives.GET_PED_BONE_COORDS<Vector3>(handler,18905,-.04f,.02f,0f);var collar=NativeFunction.Natives.GET_PED_BONE_COORDS<Vector3>(_dog,39317,0f,.03f,0f);float slack=_workingLeashed?.12f:.06f;float separation=VectorDistance(hand,collar);float length=Math.Max(PatrolLeashMinimumLength,Math.Min(PatrolLeashMaximumLength,separation+slack));NativeFunction.Natives.ROPE_FORCE_LENGTH(_leashRope,length);NativeFunction.Natives.PIN_ROPE_VERTEX(_leashRope,0,hand.X,hand.Y,hand.Z);int vertices=NativeFunction.Natives.GET_ROPE_VERTEX_COUNT<int>(_leashRope);if(vertices>1)NativeFunction.Natives.PIN_ROPE_VERTEX(_leashRope,vertices-1,collar.X,collar.Y,collar.Z);if(!_workingLeashed&&separation>PatrolLeashMaximumLength&&Game.GameTime>=_nextLeashFollow){_nextLeashFollow=Game.GameTime+800;IssuePersistentFollow(handler,true);}}catch{}}
 
         private static float VectorDistance(Vector3 a,Vector3 b){float x=a.X-b.X,y=a.Y-b.Y,z=a.Z-b.Z;return (float)Math.Sqrt(x*x+y*y+z*z);}
 
