@@ -945,14 +945,17 @@ namespace AdvancedK9
 
         private Vector3 KennelRestPosition(StationKennel kennel)
         {
-            // Saved heading is the direction the handler faced while looking into
-            // the doorway. The visible opening and exit are behind that heading.
-            return KennelSurfacePosition(kennel,kennel.Position+HeadingOffset(kennel.Heading+180f,.36f));
+            Vector3 surface=KennelSurfacePosition(kennel,kennel.Position+HeadingOffset(kennel.Heading+90f,.36f));
+            // The kennel sleep clip moves the rendered body below the ped origin.
+            // Raise that origin so the sleeping body rests on the kennel floor.
+            return new Vector3(surface.X,surface.Y,surface.Z+.42f);
         }
 
         private Vector3 KennelEntrancePosition(StationKennel kennel)
         {
-            return KennelSurfacePosition(kennel,kennel.Position+HeadingOffset(kennel.Heading+180f,1.05f));
+            // The prop's physical opening is a quarter turn from the
+            // earlier release path, which exited toward Vespucci Avenue.
+            return KennelSurfacePosition(kennel,kennel.Position+HeadingOffset(kennel.Heading+90f,1.05f));
         }
 
         private Vector3 KennelSurfacePosition(StationKennel kennel,Vector3 position)
@@ -984,7 +987,7 @@ namespace AdvancedK9
             try
             {
                 model.LoadAndWait();
-                kennel.Resident=new Ped(model,KennelRestPosition(kennel),NormalizeHeading(kennel.Heading+180f));
+                kennel.Resident=new Ped(model,KennelRestPosition(kennel),NormalizeHeading(kennel.Heading+90f));
                 if(kennel.Resident==null||!kennel.Resident.Exists())return;
                 kennel.ResidentProfileId=_roster.ActiveId;
                 kennel.Resident.IsPersistent=true;kennel.Resident.BlockPermanentEvents=true;
@@ -1024,8 +1027,8 @@ namespace AdvancedK9
                 Vector3 from=i<=15?start:entrance;
                 Vector3 to=i<=15?entrance:rest;
                 float t=(i<=15?i:i-15)/15f;
-                returning.Position=KennelSurfacePosition(kennel,new Vector3(from.X+(to.X-from.X)*t,from.Y+(to.Y-from.Y)*t,rest.Z));
-                returning.Heading=NormalizeHeading(kennel.Heading+180f);
+                returning.Position=new Vector3(from.X+(to.X-from.X)*t,from.Y+(to.Y-from.Y)*t,from.Z+(to.Z-from.Z)*t);
+                returning.Heading=NormalizeHeading(kennel.Heading+90f);
                 GameFiber.Wait(35);
             }
             _dog=null;
@@ -1105,8 +1108,8 @@ namespace AdvancedK9
                 for(int i=1;i<=18&&sleeping.Exists();i++)
                 {
                     float t=i/18f;
-                    sleeping.Position=KennelSurfacePosition(kennel,new Vector3(start.X+(release.X-start.X)*t,start.Y+(release.Y-start.Y)*t,release.Z));
-                    sleeping.Heading=NormalizeHeading(kennel.Heading+180f);
+                    sleeping.Position=new Vector3(start.X+(release.X-start.X)*t,start.Y+(release.Y-start.Y)*t,start.Z+(release.Z-start.Z)*t);
+                    sleeping.Heading=NormalizeHeading(kennel.Heading+90f);
                     GameFiber.Wait(35);
                 }
                 if(!sleeping.Exists())return;
@@ -1271,8 +1274,14 @@ namespace AdvancedK9
             Vector3 doorPosition=vehicle.GetOffsetPosition(new Vector3(seat==1?-1.15f:1.15f,-1.25f,0f));
             _dog.Tasks.Clear();_dog.Tasks.FollowNavigationMeshToPosition(doorPosition,vehicle.Heading,1.6f).WaitForCompletion(4500);
             if(!DogExists()||!vehicle.Exists())return;
+            if(_dog.DistanceTo(doorPosition)>1.8f)
+            {
+                NativeFunction.Natives.SET_VEHICLE_DOOR_SHUT(vehicle,_dogVehicleDoor,false);
+                Game.DisplayNotification("~y~Guide "+_profile.Name+" closer to the selected vehicle door and retry.");
+                Follow();return;
+            }
             NativeFunction.Natives.TASK_TURN_PED_TO_FACE_ENTITY(_dog,vehicle,500);GameFiber.Wait(500);
-            Game.DisplaySubtitle("~b~K9 jumping into the calibrated seat...",700);
+            Game.DisplaySubtitle("~b~K9 entering through the selected door...",700);
             bool visibleJump=PlayDogVehicleJump(vehicle,seat,doorPosition);
             if(!visibleJump)
             {
@@ -1289,30 +1298,24 @@ namespace AdvancedK9
         private bool PlayDogVehicleJump(Vehicle vehicle,int seat,Vector3 doorPosition)
         {
             if(!DogExists()||vehicle==null||!vehicle.Exists())return false;
-            const string dictionary="creatures@rottweiler@move";const string animation="jump";
             try
             {
-                NativeFunction.Natives.REQUEST_ANIM_DICT(dictionary);uint timeout=Game.GameTime+1200;
-                while(!NativeFunction.Natives.HAS_ANIM_DICT_LOADED<bool>(dictionary)&&Game.GameTime<timeout)GameFiber.Yield();
-                if(!NativeFunction.Natives.HAS_ANIM_DICT_LOADED<bool>(dictionary))return false;
                 string boneName=seat==2?"seat_pside_r":seat==1?"seat_dside_r":"seat_pside_f";
                 int bone=NativeFunction.Natives.GET_ENTITY_BONE_INDEX_BY_NAME<int>(vehicle,boneName);if(bone<0)return false;
                 Vector3 seatPosition=NativeFunction.Natives.GET_WORLD_POSITION_OF_ENTITY_BONE<Vector3>(vehicle,bone);
-                Vector3 start=doorPosition;Vector3 apex=new Vector3((start.X+seatPosition.X)*.5f,(start.Y+seatPosition.Y)*.5f,Math.Max(start.Z,seatPosition.Z)+.65f);
+                Vector3 start=_dog.Position;Vector3 apex=new Vector3((start.X+seatPosition.X)*.5f,(start.Y+seatPosition.Y)*.5f,Math.Max(start.Z,seatPosition.Z)+.48f);
                 _dog.Tasks.ClearImmediately();NativeFunction.Natives.SET_ENTITY_COLLISION(_dog,false,false);
-                if(!PlayCanineClip(_dog,"creatures@rottweiler@incar@","get_in",-1,false))
-                    NativeFunction.Natives.TASK_PLAY_ANIM(_dog,dictionary,animation,5f,-3f,800,0,0f,false,false,false);
-                const int frames=18;
+                if(!PlayCanineClip(_dog,"creatures@rottweiler@incar@","get_in",-1,false))return false;
+                const int frames=24;
                 for(int i=1;i<=frames&&DogExists()&&vehicle.Exists();i++)
                 {
                     float t=i/(float)frames;float one=1f-t;
                     float x=one*one*start.X+2f*one*t*apex.X+t*t*seatPosition.X;
                     float y=one*one*start.Y+2f*one*t*apex.Y+t*t*seatPosition.Y;
                     float z=one*one*start.Z+2f*one*t*apex.Z+t*t*(seatPosition.Z+.12f);
-                    NativeFunction.Natives.SET_ENTITY_COORDS_NO_OFFSET(_dog,x,y,z,false,false,false);_dog.Heading=vehicle.Heading;GameFiber.Wait(32);
+                    NativeFunction.Natives.SET_ENTITY_COORDS_NO_OFFSET(_dog,x,y,z,false,false,false);_dog.Heading=vehicle.Heading;GameFiber.Wait(36);
                 }
-                NativeFunction.Natives.REMOVE_ANIM_DICT(dictionary);
-                Game.LogTrivial("AdvancedK9 vehicle load: visible animal jump completed for "+_profile.ModelName+".");
+                Game.LogTrivial("AdvancedK9 vehicle load: get_in through door "+_dogVehicleDoor+" completed for "+_profile.ModelName+".");
                 return DogExists()&&vehicle.Exists();
             }
             catch(Exception ex){Game.LogTrivial("AdvancedK9 vehicle jump fallback: "+ex.Message);return false;}
