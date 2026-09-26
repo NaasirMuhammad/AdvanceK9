@@ -923,7 +923,7 @@ namespace AdvancedK9
             if(!overridden){position=defaultPosition;heading=defaultHeading;}
             // Measured placements retain their X/Y coordinates while nearby collision
             // allows the doghouse to settle onto the surface before it is forced level.
-            StationKennel kennel=retainGrounding&&!overridden?new StationKennel(key,name,position,heading):new StationKennel(key,name,position,heading,false,false,0f,true);
+            StationKennel kennel=new StationKennel(key,name,position,heading,true,true,0f,true);
             kennel.DefaultPosition=defaultPosition;kennel.DefaultHeading=defaultHeading;return kennel;
         }
 
@@ -945,7 +945,7 @@ namespace AdvancedK9
 
         private Vector3 KennelRestPosition(StationKennel kennel)
         {
-            return kennel.Prop.GetOffsetPosition(new Vector3(0f,-.1f,.08f));
+            return kennel.Prop.GetOffsetPosition(new Vector3(0f,.28f,.025f));
         }
 
         private void MaintainKennelResident(StationKennel kennel)
@@ -1022,11 +1022,11 @@ namespace AdvancedK9
                 int collisionAttempts=kennel.PreciseGrounding?12:1;
                 for(int attempt=0;attempt<collisionAttempts;attempt++){NativeFunction.Natives.REQUEST_COLLISION_AT_COORD(configuredPosition.X,configuredPosition.Y,configuredPosition.Z);if(kennel.PreciseGrounding)GameFiber.Yield();}
                 Vector3 spawnPosition=configuredPosition;
-                if(kennel.PreciseGrounding)try
+                if(kennel.PreciseGrounding&&kennel.SnapToGround)try
                 {
                     float groundZ=0f;
                     bool foundGround=NativeFunction.Natives.GET_GROUND_Z_FOR_3D_COORD<bool>(configuredPosition.X,configuredPosition.Y,configuredPosition.Z+25f,out groundZ,false);
-                    if(foundGround&&Math.Abs(groundZ-configuredPosition.Z)<=3f)spawnPosition=new Vector3(configuredPosition.X,configuredPosition.Y,groundZ+kennel.SurfaceLift);
+                    if(foundGround&&Math.Abs(groundZ-configuredPosition.Z)<.5f)spawnPosition=new Vector3(configuredPosition.X,configuredPosition.Y,groundZ+kennel.SurfaceLift);
                 }
                 catch{}
                 kennel.Prop=new Rage.Object(model,spawnPosition);kennel.Prop.Heading=kennel.Heading;kennel.Prop.IsPersistent=true;
@@ -1034,7 +1034,7 @@ namespace AdvancedK9
                 {
                     NativeFunction.Natives.PLACE_OBJECT_ON_GROUND_PROPERLY(kennel.Prop);
                     Vector3 snapped=kennel.Prop.Position;
-                    if(Math.Abs(snapped.Z-configuredPosition.Z)<=3.0f){if(kennel.SurfaceLift>0f)snapped.Z+=kennel.SurfaceLift;kennel.Prop.Position=snapped;kennel.Position=snapped;}
+                    if(Math.Abs(snapped.Z-configuredPosition.Z)<.5f){snapped.Z+=kennel.SurfaceLift;kennel.Prop.Position=snapped;kennel.Position=snapped;}
                     else{kennel.Prop.Position=configuredPosition;Game.LogTrivial("AdvancedK9 kennel ground-snap rejected unsafe Z change for "+kennel.Name+".");}
                 }
                 if(kennel.ForceLevel)NativeFunction.Natives.SET_ENTITY_ROTATION(kennel.Prop,0f,0f,kennel.Heading,2,true);
@@ -1062,22 +1062,25 @@ namespace AdvancedK9
 
         private void Deploy(StationKennel kennel)
         {
-            Vector3 release=kennel.Position+HeadingOffset(kennel.Heading,1.4f);
+            Vector3 release=kennel.Prop.GetOffsetPosition(new Vector3(0f,1.05f,.025f));
             if(kennel.Resident==null||!kennel.Resident.Exists())MaintainKennelResident(kennel);
             Ped sleeping=kennel.Resident;
             if(sleeping!=null&&sleeping.Exists()&&kennel.ResidentProfileId==_roster.ActiveId)
             {
                 sleeping.Tasks.Clear();
                 PlayCanineClip(sleeping,"creatures@rottweiler@amb@sleep_in_kennel@","exit_kennel",1200,false);
-                NativeFunction.Natives.TASK_GO_STRAIGHT_TO_COORD(sleeping,release.X,release.Y,release.Z,1.5f,5000,kennel.Heading,.4f);
-                uint deadline=Game.GameTime+5000;
-                while(sleeping.Exists()&&sleeping.DistanceTo(release)>.7f&&Game.GameTime<deadline)GameFiber.Wait(100);
-                if(!sleeping.Exists()||sleeping.DistanceTo(release)>1.5f)
+                // The doghouse has no navigation mesh inside it. Move the same dog through
+                // its doorway after the exit clip; pathfinding from inside cannot finish.
+                if(!sleeping.Exists())return;
+                Vector3 start=sleeping.Position;
+                for(int i=1;i<=18&&sleeping.Exists();i++)
                 {
-                    Game.DisplayNotification("~y~"+_profile.Name+" could not clear the kennel entrance. Try again from the front.");
-                    if(sleeping.Exists())PlayCanineClip(sleeping,"creatures@rottweiler@amb@sleep_in_kennel@","sleep_in_kennel",-1,true);
-                    return;
+                    float t=i/18f;
+                    sleeping.Position=new Vector3(start.X+(release.X-start.X)*t,start.Y+(release.Y-start.Y)*t,start.Z+(release.Z-start.Z)*t);
+                    sleeping.Heading=kennel.Heading;
+                    GameFiber.Wait(35);
                 }
+                if(!sleeping.Exists())return;
                 NativeFunction.Natives.SET_ENTITY_COLLISION(sleeping,true,true);
                 sleeping.IsInvincible=false;
                 _dog=sleeping;kennel.Resident=null;kennel.ResidentProfileId=null;
