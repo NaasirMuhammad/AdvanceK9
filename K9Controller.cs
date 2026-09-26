@@ -945,7 +945,7 @@ namespace AdvancedK9
 
         private Vector3 KennelRestPosition(StationKennel kennel)
         {
-            Vector3 surface=KennelSurfacePosition(kennel,kennel.Position+HeadingOffset(kennel.Heading+90f,.36f)+HeadingOffset(kennel.Heading,.16f));
+            Vector3 surface=KennelSurfacePosition(kennel,kennel.Position+HeadingOffset(kennel.Heading+90f,.36f)+HeadingOffset(kennel.Heading,-.16f));
             // The kennel sleep clip moves the rendered body below the ped origin.
             // Raise that origin so the sleeping body rests on the kennel floor.
             return new Vector3(surface.X,surface.Y,surface.Z+.42f);
@@ -955,7 +955,7 @@ namespace AdvancedK9
         {
             // The prop's physical opening is a quarter turn from the
             // earlier release path, which exited toward Vespucci Avenue.
-            return KennelSurfacePosition(kennel,kennel.Position+HeadingOffset(kennel.Heading+90f,1.05f)+HeadingOffset(kennel.Heading,.16f));
+            return KennelSurfacePosition(kennel,kennel.Position+HeadingOffset(kennel.Heading+90f,1.05f)+HeadingOffset(kennel.Heading,-.16f));
         }
 
         private Vector3 KennelSurfacePosition(StationKennel kennel,Vector3 position)
@@ -1008,6 +1008,9 @@ namespace AdvancedK9
             if(!DogExists()||kennel.Prop==null||!kennel.Prop.Exists())return;
             Vector3 rest=KennelRestPosition(kennel);
             Vector3 entrance=KennelEntrancePosition(kennel);
+            int safeHealth=_dog.Health;
+            _dog.IsInvincible=true;
+            NativeFunction.Natives.SET_PED_CAN_RAGDOLL(_dog,false);
             DeleteLeashRope();
             ExitRestingPose();
             _dog.Tasks.Clear();
@@ -1015,12 +1018,12 @@ namespace AdvancedK9
             if(!DogExists()||_dog.DistanceTo(entrance)>2.5f)
             {
                 Game.DisplayNotification("~y~Guide "+_profile.Name+" closer to the kennel entrance and try again.");
+                if(DogExists()){_dog.Health=Math.Max(_dog.Health,safeHealth);_dog.IsInvincible=false;NativeFunction.Natives.SET_PED_CAN_RAGDOLL(_dog,true);}
                 if(DogExists())Follow();
                 return;
             }
             Ped returning=_dog;
             returning.Tasks.Clear();
-            NativeFunction.Natives.SET_ENTITY_COLLISION(returning,false,false);
             Vector3 start=KennelSurfacePosition(kennel,returning.Position);
             Vector3 floorRest=KennelSurfacePosition(kennel,rest);
             NativeFunction.Natives.TASK_GO_STRAIGHT_TO_COORD(returning,floorRest.X,floorRest.Y,floorRest.Z,1.1f,1800,NormalizeHeading(kennel.Heading+90f),.3f);
@@ -1031,6 +1034,8 @@ namespace AdvancedK9
             if(returning.DistanceTo(floorRest)>.45f)
             {
                 returning.Tasks.Clear();
+                NativeFunction.Natives.FREEZE_ENTITY_POSITION(returning,true);
+                NativeFunction.Natives.SET_ENTITY_COLLISION(returning,false,false);
                 start=KennelSurfacePosition(kennel,returning.Position);
                 for(int i=1;i<=30&&returning.Exists();i++)
                 {
@@ -1042,12 +1047,14 @@ namespace AdvancedK9
                     GameFiber.Wait(35);
                 }
             }
+            returning.Health=Math.Max(returning.Health,safeHealth);
             _dog=null;
             _roster.UpdateActive(_profile.Name,kennel.Key,_profile.IsRehabilitating?"Rehabilitation":"Available");
             Dismiss(true);
             if(kennel.Resident!=null&&kennel.Resident.Exists())kennel.Resident.Delete();
             kennel.Resident=returning;kennel.ResidentProfileId=_roster.ActiveId;
             returning.IsPersistent=true;returning.IsInvincible=true;returning.BlockPermanentEvents=true;
+            NativeFunction.Natives.FREEZE_ENTITY_POSITION(returning,true);
             NativeFunction.Natives.SET_ENTITY_COLLISION(returning,false,false);
             PlayCanineClip(returning,"creatures@rottweiler@amb@sleep_in_kennel@","sleep_in_kennel",-1,true);
             for(int i=1;i<=12&&returning.Exists();i++)
@@ -1115,7 +1122,6 @@ namespace AdvancedK9
             if(sleeping!=null&&sleeping.Exists()&&kennel.ResidentProfileId==_roster.ActiveId)
             {
                 sleeping.Tasks.Clear();
-                NativeFunction.Natives.FREEZE_ENTITY_POSITION(sleeping,false);
                 PlayCanineClip(sleeping,"creatures@rottweiler@amb@sleep_in_kennel@","exit_kennel",-1,false);
                 // The doghouse has no navigation mesh inside it. Move the same dog through
                 // its doorway after the exit clip; pathfinding from inside cannot finish.
@@ -1130,6 +1136,8 @@ namespace AdvancedK9
                 }
                 if(!sleeping.Exists())return;
                 sleeping.Tasks.Clear();
+                NativeFunction.Natives.SET_ENTITY_COLLISION(sleeping,true,true);
+                NativeFunction.Natives.FREEZE_ENTITY_POSITION(sleeping,false);
                 NativeFunction.Natives.TASK_GO_STRAIGHT_TO_COORD(sleeping,release.X,release.Y,release.Z,1.1f,1800,NormalizeHeading(kennel.Heading+90f),.3f);
                 uint exitDeadline=Game.GameTime+1800;
                 while(sleeping.Exists()&&sleeping.DistanceTo(release)>.35f&&Game.GameTime<exitDeadline)GameFiber.Wait(80);
@@ -1137,6 +1145,8 @@ namespace AdvancedK9
                 if(sleeping.DistanceTo(release)>.45f)
                 {
                     sleeping.Tasks.Clear();
+                    NativeFunction.Natives.FREEZE_ENTITY_POSITION(sleeping,true);
+                    NativeFunction.Natives.SET_ENTITY_COLLISION(sleeping,false,false);
                     floorStart=KennelSurfacePosition(kennel,sleeping.Position);
                     start=floorStart;
                     for(int i=1;i<=18&&sleeping.Exists();i++)
@@ -1148,11 +1158,15 @@ namespace AdvancedK9
                     }
                 }
                 if(!sleeping.Exists())return;
+                sleeping.Position=release;
                 NativeFunction.Natives.SET_ENTITY_COLLISION(sleeping,true,true);
-                sleeping.IsInvincible=false;
+                NativeFunction.Natives.FREEZE_ENTITY_POSITION(sleeping,false);
+                NativeFunction.Natives.SET_PED_CAN_RAGDOLL(sleeping,true);
                 _dog=sleeping;kennel.Resident=null;kennel.ResidentProfileId=null;
                 _profile.PrepareDeployment();
                 _dog.Health=Math.Max(100,(int)(_dog.MaxHealth*_profile.Health/100f));
+                _dog.IsInvincible=true;
+                _medicalProtectionUntil=Game.GameTime+3000;
                 ConfigureK9RelationshipGroup(Game.LocalPlayer.Character);
                 ApplyAnimalPedSafeguards();ConfigureAmbientGunfireImmunity();
                 _blip=_dog.AttachBlip();_blip.Color=Color.DodgerBlue;_blip.Name="K9 "+_profile.Name;
