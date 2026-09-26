@@ -1784,10 +1784,27 @@ namespace AdvancedK9
                 NativeFunction.Natives.TASK_VEHICLE_TEMP_ACTION(_biteMedicalDriver,_biteMedicalVehicle,27,2200);GameFiber.Wait(1700);
                 NativeFunction.Natives.SET_VEHICLE_FORWARD_SPEED(_biteMedicalVehicle,0f);
                 NativeFunction.Natives.TASK_LEAVE_VEHICLE(_biteMedicalDriver,_biteMedicalVehicle,0);
-                NativeFunction.Natives.TASK_LEAVE_VEHICLE(_biteMedicalPartner,_biteMedicalVehicle,0);GameFiber.Wait(1300);
+                NativeFunction.Natives.TASK_LEAVE_VEHICLE(_biteMedicalPartner,_biteMedicalVehicle,0);
+                // The passenger assesses the patient while the driver retrieves equipment.
+                Ped passenger=_biteMedicalPartner;Vehicle respondingAmbulance=_biteMedicalVehicle;
+                GameFiber.StartNew(()=>{
+                    try
+                    {
+                        uint exitDeadline=Game.GameTime+8000;
+                        while(passenger.Exists()&&respondingAmbulance.Exists()&&passenger.IsInVehicle(respondingAmbulance,false)&&Game.GameTime<exitDeadline)GameFiber.Wait(100);
+                        if(passenger.Exists()&&patient.Exists()&&!patient.IsDead)
+                        {
+                            MoveMedicToPatient(passenger,patient,new Vector3(-.8f,0f,0f));
+                            if(passenger.DistanceTo(patient)<3f)
+                                NativeFunction.Natives.TASK_START_SCENARIO_IN_PLACE(passenger,"CODE_HUMAN_MEDIC_TEND_TO_DEAD",0,true);
+                        }
+                    }
+                    catch(Exception ex){Game.LogTrivial("AdvancedK9 EMS passenger assessment contained: "+ex.Message);}
+                },"AdvancedK9.EMSPassengerAssessment");
+                uint driverExitDeadline=Game.GameTime+8000;
+                while(_biteMedicalDriver.Exists()&&_biteMedicalDriver.IsInVehicle(_biteMedicalVehicle,false)&&Game.GameTime<driverExitDeadline)GameFiber.Wait(100);
                 medicalBag=RetrieveMedicalBag(_biteMedicalDriver,_biteMedicalVehicle);
                 MoveMedicToPatient(_biteMedicalDriver,patient,new Vector3(.8f,0f,0f));
-                MoveMedicToPatient(_biteMedicalPartner,patient,new Vector3(-.8f,0f,0f));
                 if(medicalBag!=null&&medicalBag.Exists())
                 {
                     NativeFunction.Natives.DETACH_ENTITY(medicalBag,true,true);
@@ -1796,7 +1813,8 @@ namespace AdvancedK9
                 }
                 Game.DisplayNotification("~b~EMS:~s~ Paramedics have reached the bite patient and begun treatment.");
                 NativeFunction.Natives.TASK_START_SCENARIO_IN_PLACE(_biteMedicalDriver,"CODE_HUMAN_MEDIC_TEND_TO_DEAD",0,true);
-                NativeFunction.Natives.TASK_START_SCENARIO_IN_PLACE(_biteMedicalPartner,"CODE_HUMAN_MEDIC_TEND_TO_DEAD",0,true);
+                if(_biteMedicalPartner.Exists()&&_biteMedicalPartner.DistanceTo(patient)<3f)
+                    NativeFunction.Natives.TASK_START_SCENARIO_IN_PLACE(_biteMedicalPartner,"CODE_HUMAN_MEDIC_TEND_TO_DEAD",0,true);
                 uint treatmentUntil=Game.GameTime+(uint)(_config.BitePatientTreatmentSeconds*1000);
                 while(_biteMedicalResponseActive&&patient.Exists()&&!patient.IsDead&&Game.GameTime<treatmentUntil)GameFiber.Wait(250);
                 if(!patient.Exists()||patient.IsDead)throw new InvalidOperationException("Patient could not be medically stabilized.");
@@ -1886,14 +1904,23 @@ namespace AdvancedK9
             {
                 if(!bagModel.IsValid)return null;bagModel.LoadAndWait();
                 Vector3 rear=ambulance.GetOffsetPosition(new Vector3(0f,-3f,.15f));
+                Vector3 compartment=ambulance.GetOffsetPosition(new Vector3(0f,-1.85f,.62f));
+                NativeFunction.Natives.SET_VEHICLE_DOOR_OPEN(ambulance,2,false,false);
+                NativeFunction.Natives.SET_VEHICLE_DOOR_OPEN(ambulance,3,false,false);
                 var bag=new Rage.Object(bagModel,rear);bagModel.Dismiss();
                 if(bag==null||!bag.Exists())return null;
-                bag.IsPersistent=true;NativeFunction.Natives.PLACE_OBJECT_ON_GROUND_PROPERLY(bag);
+                bag.IsPersistent=true;
+                bag.Position=compartment;
+                NativeFunction.Natives.FREEZE_ENTITY_POSITION(bag,true);
                 medic.Tasks.Clear();NativeFunction.Natives.TASK_GO_STRAIGHT_TO_COORD(medic,rear.X,rear.Y,rear.Z,1.5f,10000,ambulance.Heading,1f);
-                uint deadline=Game.GameTime+12000;while(medic.Exists()&&bag.Exists()&&medic.DistanceTo(bag)>1.6f&&Game.GameTime<deadline)GameFiber.Wait(150);
-                if(medic.DistanceTo(bag)>2.5f)medic.Position=rear;
+                uint deadline=Game.GameTime+12000;while(medic.Exists()&&bag.Exists()&&medic.Position.DistanceTo(rear)>1.6f&&Game.GameTime<deadline)GameFiber.Wait(150);
+                if(medic.Position.DistanceTo(rear)>2.5f){bag.Delete();return null;}
+                NativeFunction.Natives.TASK_TURN_PED_TO_FACE_ENTITY(medic,ambulance,900);GameFiber.Wait(900);
+                NativeFunction.Natives.FREEZE_ENTITY_POSITION(bag,false);
                 int hand=NativeFunction.Natives.GET_PED_BONE_INDEX<int>(medic,57005);
                 NativeFunction.Natives.ATTACH_ENTITY_TO_ENTITY(bag,medic,hand,.42f,-.03f,.03f,-123f,-86f,-4f,false,false,false,true,2,true);
+                NativeFunction.Natives.SET_VEHICLE_DOOR_SHUT(ambulance,2,false);
+                NativeFunction.Natives.SET_VEHICLE_DOOR_SHUT(ambulance,3,false);
                 Game.LogTrivial("AdvancedK9 EMS presentation: medic walked to the ambulance and visibly retrieved the medical bag.");
                 return bag;
             }
@@ -1908,8 +1935,7 @@ namespace AdvancedK9
             bool loaded=LoadPatientWithStretcher(patient);
             if(!loaded){_biteMedicalLoadingPatient=false;NativeFunction.Natives.TASK_HANDS_UP(patient,-1,Game.LocalPlayer.Character,-1,true);return false;}
             ClearReleasedBiteTarget();_biteMedicalLoadingPatient=false;
-            if(_biteMedicalPartner!=null&&_biteMedicalPartner.Exists()){_biteMedicalPartner.Tasks.EnterVehicle(_biteMedicalVehicle,0).WaitForCompletion(6000);if(!_biteMedicalPartner.IsInVehicle(_biteMedicalVehicle,false))NativeFunction.Natives.SET_PED_INTO_VEHICLE(_biteMedicalPartner,_biteMedicalVehicle,0);}
-            _biteMedicalDriver.Tasks.EnterVehicle(_biteMedicalVehicle,-1).WaitForCompletion(6000);if(!_biteMedicalDriver.IsInVehicle(_biteMedicalVehicle,false))NativeFunction.Natives.SET_PED_INTO_VEHICLE(_biteMedicalDriver,_biteMedicalVehicle,-1);
+            if(!BoardMedicalCrew())return false;
             NativeFunction.Natives.SET_ENTITY_MAX_SPEED(_biteMedicalVehicle,25f);NativeFunction.Natives.SET_VEHICLE_SIREN(_biteMedicalVehicle,false);NativeFunction.Natives.TASK_VEHICLE_DRIVE_WANDER(_biteMedicalDriver,_biteMedicalVehicle,18f,786468);
             Vehicle ambulance=_biteMedicalVehicle;Ped driver=_biteMedicalDriver,partner=_biteMedicalPartner;
             _biteMedicalVehicle=null;_biteMedicalDriver=null;_biteMedicalPartner=null;
@@ -1959,9 +1985,32 @@ namespace AdvancedK9
         private void ReturnMedicsToService()
         {
             if(_biteMedicalVehicle==null||!_biteMedicalVehicle.Exists()||_biteMedicalDriver==null||!_biteMedicalDriver.Exists())return;
-            _biteMedicalDriver.Tasks.Clear();_biteMedicalDriver.Tasks.EnterVehicle(_biteMedicalVehicle,-1).WaitForCompletion(6000);if(!_biteMedicalDriver.IsInVehicle(_biteMedicalVehicle,false))NativeFunction.Natives.SET_PED_INTO_VEHICLE(_biteMedicalDriver,_biteMedicalVehicle,-1);
-            if(_biteMedicalPartner!=null&&_biteMedicalPartner.Exists()){_biteMedicalPartner.Tasks.Clear();_biteMedicalPartner.Tasks.EnterVehicle(_biteMedicalVehicle,0).WaitForCompletion(6000);if(!_biteMedicalPartner.IsInVehicle(_biteMedicalVehicle,false))NativeFunction.Natives.SET_PED_INTO_VEHICLE(_biteMedicalPartner,_biteMedicalVehicle,0);}
-            NativeFunction.Natives.SET_ENTITY_MAX_SPEED(_biteMedicalVehicle,25f);NativeFunction.Natives.TASK_VEHICLE_DRIVE_WANDER(_biteMedicalDriver,_biteMedicalVehicle,16f,786468);GameFiber.Wait(4000);
+            if(!BoardMedicalCrew())return;
+            NativeFunction.Natives.SET_ENTITY_MAX_SPEED(_biteMedicalVehicle,25f);NativeFunction.Natives.TASK_VEHICLE_DRIVE_WANDER(_biteMedicalDriver,_biteMedicalVehicle,16f,786468);
+            Vehicle departingAmbulance=_biteMedicalVehicle;Ped departingDriver=_biteMedicalDriver,departingPassenger=_biteMedicalPartner;
+            _biteMedicalVehicle=null;_biteMedicalDriver=null;_biteMedicalPartner=null;
+            GameFiber.StartNew(()=>{
+                GameFiber.Wait(45000);
+                if(departingPassenger.Exists())departingPassenger.Dismiss();
+                if(departingDriver.Exists())departingDriver.Dismiss();
+                if(departingAmbulance.Exists())departingAmbulance.Dismiss();
+            },"AdvancedK9.EMSDepartureCleanup");
+        }
+
+        private bool BoardMedicalCrew()
+        {
+            Ped driver=_biteMedicalDriver,passenger=_biteMedicalPartner;
+            if(driver==null||!driver.Exists()||passenger==null||!passenger.Exists())return false;
+            driver.Tasks.Clear();passenger.Tasks.Clear();
+            // Start both independent entry tasks before waiting for either responder.
+            driver.Tasks.EnterVehicle(_biteMedicalVehicle,-1);
+            passenger.Tasks.EnterVehicle(_biteMedicalVehicle,0);
+            uint deadline=Game.GameTime+16000;
+            while(Game.GameTime<deadline&&driver.Exists()&&passenger.Exists()&&
+                (!driver.IsInVehicle(_biteMedicalVehicle,false)||!passenger.IsInVehicle(_biteMedicalVehicle,false)))GameFiber.Wait(200);
+            bool boarded=driver.Exists()&&passenger.Exists()&&driver.IsInVehicle(_biteMedicalVehicle,false)&&passenger.IsInVehicle(_biteMedicalVehicle,false);
+            if(!boarded)Game.LogTrivial("AdvancedK9 EMS boarding timed out; responders remain visible at the ambulance for retry.");
+            return boarded;
         }
 
         private void CleanupBiteMedicalResponders(bool dismiss)

@@ -557,10 +557,11 @@ namespace AdvancedK9.Callouts
                 Vehicle playerVehicle=Game.LocalPlayer.Character.CurrentVehicle;
                 foreach(Vehicle vehicle in World.GetAllVehicles())
                 {
-                    if(vehicle==null||!vehicle.Exists()||vehicle.DistanceTo(center)>radius||vehicle==SceneVehicle||vehicle==PoliceVehicle||vehicle==playerVehicle)continue;
+                    if(vehicle==null||!vehicle.Exists()||vehicle.DistanceTo(center)>radius||vehicle==SceneVehicle||vehicle==PoliceVehicle||vehicle==PoliceVehicleTwo||vehicle==playerVehicle)continue;
                     Ped driver=vehicle.Driver;
-                    if(driver==null||!driver.Exists())continue;
+                    if(driver==null||!driver.Exists()||IsLawEnforcementPed(driver))continue;
                     NativeFunction.Natives.TASK_VEHICLE_TEMP_ACTION(driver,vehicle,6,5000);
+                    if(vehicle.DistanceTo(Scene)<28f)NativeFunction.Natives.SET_VEHICLE_FORWARD_SPEED(vehicle,0f);
                     float dx=vehicle.Position.X-Scene.X,dy=vehicle.Position.Y-Scene.Y,length=(float)Math.Sqrt(dx*dx+dy*dy);if(length<.1f){dx=1f;length=1f;}
                     Vector3 clear=World.GetNextPositionOnStreet(new Vector3(Scene.X+dx/length*(SceneTrafficClosureRadius+28f),Scene.Y+dy/length*(SceneTrafficClosureRadius+28f),vehicle.Position.Z));
                     NativeFunction.Natives.TASK_VEHICLE_DRIVE_TO_COORD_LONGRANGE(driver,vehicle,clear.X,clear.Y,clear.Z,9f,786603,5f);
@@ -581,6 +582,18 @@ namespace AdvancedK9.Callouts
                     if(HandleOf(vehicle)==0)continue;
                     Ped driver=vehicle.Driver;if(driver==null||!driver.Exists()||HandleOf(driver)==0||IsLawEnforcementPed(driver))continue;
                     NativeFunction.Natives.TASK_VEHICLE_TEMP_ACTION(driver,vehicle,6,5000);
+                    if(vehicle.DistanceTo(Scene)<32f)
+                    {
+                        NativeFunction.Natives.SET_VEHICLE_FORWARD_SPEED(vehicle,0f);
+                        float dx=vehicle.Position.X-Scene.X,dy=vehicle.Position.Y-Scene.Y;
+                        float length=(float)Math.Sqrt(dx*dx+dy*dy);
+                        if(length<.1f){dx=1f;length=1f;}
+                        Vector3 exit=World.GetNextPositionOnStreet(new Vector3(
+                            Scene.X+dx/length*(SceneTrafficClosureRadius+35f),
+                            Scene.Y+dy/length*(SceneTrafficClosureRadius+35f),vehicle.Position.Z));
+                        if(exit.DistanceTo(Scene)>SceneTrafficClosureRadius)
+                            NativeFunction.Natives.TASK_VEHICLE_DRIVE_TO_COORD_LONGRANGE(driver,vehicle,exit.X,exit.Y,exit.Z,7f,786603,6f);
+                    }
                 }
                 foreach(Ped ped in World.GetAllPeds())
                 {
