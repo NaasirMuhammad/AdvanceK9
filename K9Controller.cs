@@ -994,6 +994,22 @@ namespace AdvancedK9
             return 0f;
         }
 
+        private void PlaceKennelWalkingPose(Ped dog,StationKennel kennel,Vector3 target,string phase)
+        {
+            // The canine walk clip shifts its feet roughly 0.46 m below the entity
+            // origin. Measure that shift before moving; correcting after a frame
+            // has rendered is visibly too late.
+            float lift=.48f;
+            int left=NativeFunction.Natives.GET_ENTITY_BONE_INDEX_BY_NAME<int>(dog,"IK_L_Foot");
+            int right=NativeFunction.Natives.GET_ENTITY_BONE_INDEX_BY_NAME<int>(dog,"IK_R_Foot");
+            float lowest=float.MaxValue;
+            if(left>=0)lowest=Math.Min(lowest,NativeFunction.Natives.GET_WORLD_POSITION_OF_ENTITY_BONE<Vector3>(dog,left).Z);
+            if(right>=0)lowest=Math.Min(lowest,NativeFunction.Natives.GET_WORLD_POSITION_OF_ENTITY_BONE<Vector3>(dog,right).Z);
+            if(lowest!=float.MaxValue)lift=Math.Max(.40f,Math.Min(.75f,dog.Position.Z-lowest+.025f));
+            float floor=KennelSurfacePosition(kennel,target).Z;
+            dog.Position=new Vector3(target.X,target.Y,Math.Max(floor, target.Z)+lift);
+        }
+
         private void MaintainKennelResident(StationKennel kennel)
         {
             bool selected=!DogExists()&&kennel.Prop!=null&&kennel.Prop.Exists()&&
@@ -1056,18 +1072,17 @@ namespace AdvancedK9
             returning.Tasks.Clear();
             Vector3 start=KennelSurfacePosition(kennel,returning.Position);
             Vector3 floorRest=KennelSurfacePosition(kennel,rest);
-            float returnLift=0f;
             NativeFunction.Natives.FREEZE_ENTITY_POSITION(returning,true);
             NativeFunction.Natives.SET_ENTITY_COLLISION(returning,false,false);
             PlayCanineClip(returning,"creatures@rottweiler@move","walk",-1,true);
+            PlaceKennelWalkingPose(returning,kennel,start,"return start");
             for(int i=1;i<=30&&returning.Exists();i++)
             {
                 Vector3 from=i<=15?start:entrance;
                 Vector3 to=i<=15?entrance:floorRest;
                 float t=(i<=15?i:i-15)/15f;
-                returning.Position=new Vector3(from.X+(to.X-from.X)*t,from.Y+(to.Y-from.Y)*t,Math.Max(from.Z+(to.Z-from.Z)*t,kennel.Position.Z+.02f)+returnLift);
+                PlaceKennelWalkingPose(returning,kennel,new Vector3(from.X+(to.X-from.X)*t,from.Y+(to.Y-from.Y)*t,Math.Max(from.Z+(to.Z-from.Z)*t,kennel.Position.Z+.02f)),"return");
                 returning.Heading=NormalizeHeading(kennel.Heading+90f);
-                returnLift+=KeepKennelPoseAboveFloor(returning,kennel,"return");
                 GameFiber.Wait(35);
             }
             if(!returning.Exists())return;
@@ -1153,20 +1168,18 @@ namespace AdvancedK9
                 Vector3 start=KennelRestPosition(kennel);
                 Vector3 floorStart=KennelSurfacePosition(kennel,start);
                 sleeping.Tasks.Clear();
-                sleeping.Position=floorStart;
                 PlayCanineClip(sleeping,"creatures@rottweiler@move","walk",-1,true);
-                float deployLift=0f;
+                PlaceKennelWalkingPose(sleeping,kennel,floorStart,"deploy start");
                 for(int i=1;i<=18&&sleeping.Exists();i++)
                 {
                     float t=i/18f;
-                    sleeping.Position=new Vector3(start.X+(release.X-start.X)*t,start.Y+(release.Y-start.Y)*t,Math.Max(floorStart.Z+(release.Z-floorStart.Z)*t,kennel.Position.Z+.02f)+deployLift);
+                    PlaceKennelWalkingPose(sleeping,kennel,new Vector3(start.X+(release.X-start.X)*t,start.Y+(release.Y-start.Y)*t,Math.Max(floorStart.Z+(release.Z-floorStart.Z)*t,kennel.Position.Z+.02f)),"deploy");
                     sleeping.Heading=NormalizeHeading(kennel.Heading+90f);
-                    deployLift+=KeepKennelPoseAboveFloor(sleeping,kennel,"deploy");
                     GameFiber.Wait(35);
                 }
                 if(!sleeping.Exists())return;
                 sleeping.Tasks.Clear();
-                sleeping.Position=release;
+                PlaceKennelWalkingPose(sleeping,kennel,release,"release");
                 NativeFunction.Natives.SET_ENTITY_COLLISION(sleeping,true,true);
                 NativeFunction.Natives.FREEZE_ENTITY_POSITION(sleeping,false);
                 NativeFunction.Natives.SET_PED_CAN_RAGDOLL(sleeping,true);
