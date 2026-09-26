@@ -1055,6 +1055,11 @@ namespace AdvancedK9
         {
             PlayDogAnimation("creatures@rottweiler@amb@world_dog_sitting@base", "base", -1, 1);
             _state = K9State.Sitting;
+            // Keep the retriever seated idle requested for the resting K9.
+            NativeFunction.Natives.REQUEST_ANIM_DICT("creatures@retriever@amb@world_dog_sitting@idle_a");
+            GameFiber.Wait(100);
+            if(DogExists()&&_state==K9State.Sitting)NativeFunction.Natives.TASK_PLAY_ANIM(_dog,
+                "creatures@retriever@amb@world_dog_sitting@idle_a","idle_a",4f,-4f,-1,1,0f,false,false,false);
             Acknowledge("Sitting.");
         }
 
@@ -1193,8 +1198,30 @@ namespace AdvancedK9
         private void Bathroom()
         {
             if(!DogExists()||_state==K9State.InVehicle||_state==K9State.Searching||_state==K9State.Tracking||_state==K9State.Apprehending)return;
-            bool urinate=_bladder<_bowel||(_bladder==_bowel&&_random.Next(2)==0);_dog.Tasks.Clear();_state=K9State.Staying;Vector3 reliefPoint=_dog.GetOffsetPosition(new Vector3(0f,-.35f,0f));
-            if(urinate){PlayDogAnimation("creatures@rottweiler@move","pee",3200,0);try{NativeFunction.Natives.REQUEST_NAMED_PTFX_ASSET("core");GameFiber.Wait(100);NativeFunction.Natives.USE_PARTICLE_FX_ASSET("core");NativeFunction.Natives.START_PARTICLE_FX_NON_LOOPED_AT_COORD("ent_sht_water",reliefPoint.X,reliefPoint.Y,reliefPoint.Z+.12f,0f,0f,0f,.35f,false,false,false);}catch{} _bladder=100;K9IncidentLog.Write(_profile.Name,"Care","Urinated automatically",reliefPoint);}
+            bool urinate=_bladder<_bowel||(_bladder==_bowel&&_random.Next(2)==0);_dog.Tasks.Clear();_state=K9State.Staying;Vector3 reliefPoint=_dog.GetOffsetPosition(new Vector3(-.15f,-.35f,0f));
+            if(urinate)
+            {
+                NativeFunction.Natives.REQUEST_ANIM_DICT("creatures@rottweiler@move");
+                GameFiber.Wait(150);
+                NativeFunction.Natives.TASK_PLAY_ANIM(_dog,"creatures@rottweiler@move","pee_left_idle",4f,-4f,3800,0,0f,false,false,false);
+                try
+                {
+                    NativeFunction.Natives.REQUEST_NAMED_PTFX_ASSET("scr_amb_chop");GameFiber.Wait(150);
+                    for(int i=0;i<5&&DogExists();i++)
+                    {
+                        reliefPoint=_dog.GetOffsetPosition(new Vector3(-.15f,-.35f,-.15f));
+                        float ground;
+                        if(NativeFunction.Natives.GET_GROUND_Z_FOR_3D_COORD<bool>(reliefPoint.X,reliefPoint.Y,reliefPoint.Z+2f,out ground,false))
+                            reliefPoint=new Vector3(reliefPoint.X,reliefPoint.Y,ground+.02f);
+                        NativeFunction.Natives.USE_PARTICLE_FX_ASSET("scr_amb_chop");
+                        NativeFunction.Natives.START_PARTICLE_FX_NON_LOOPED_AT_COORD("ent_anim_dog_peeing",reliefPoint.X,reliefPoint.Y,reliefPoint.Z,0f,90f,_dog.Heading,.5f,false,false,false);
+                        GameFiber.Wait(650);
+                    }
+                }
+                catch(Exception ex){Game.LogTrivial("AdvancedK9 dog relief effect contained: "+ex.Message);}
+                GameFiber.Wait(550);
+                _bladder=100;K9IncidentLog.Write(_profile.Name,"Care","Urinated automatically",reliefPoint);
+            }
             else{PlayDogAnimation("creatures@rottweiler@amb@world_dog_sitting@base","base",3000,0);SpawnDogWaste(reliefPoint);_bowel=100;K9IncidentLog.Write(_profile.Name,"Care","Defecated automatically",reliefPoint);}Follow();
         }
         private void SpawnDogWaste(Vector3 position){try{var model=new Model("prop_big_shit_02");if(!model.IsValid)model=new Model("prop_big_shit_01");if(!model.IsValid)return;model.LoadAndWait();var waste=new Rage.Object(model,position);model.Dismiss();if(waste==null||!waste.Exists())return;waste.IsPersistent=true;GameFiber.StartNew(()=>{GameFiber.Wait(180000);if(waste.Exists())waste.Delete();});}catch(Exception ex){Game.LogTrivial("AdvancedK9 dog waste prop: "+ex.Message);}}
@@ -1848,7 +1875,7 @@ namespace AdvancedK9
             {
                 _biteMedicalResponseActive=false;
                 if(_biteMedicalBlip!=null&&_biteMedicalBlip.Exists())_biteMedicalBlip.Delete();_biteMedicalBlip=null;
-                if(!transported)CleanupBiteMedicalResponders(true);
+                if(!transported)CleanupMedicalCrewAfterPlayerLeaves();
                 if(medicalBag!=null&&medicalBag.Exists())medicalBag.Delete();
                 ambulanceModel.Dismiss();medicModel.Dismiss();
             }
@@ -1903,22 +1930,30 @@ namespace AdvancedK9
             try
             {
                 if(!bagModel.IsValid)return null;bagModel.LoadAndWait();
-                Vector3 rear=ambulance.GetOffsetPosition(new Vector3(0f,-3f,.15f));
-                Vector3 compartment=ambulance.GetOffsetPosition(new Vector3(0f,-1.85f,.62f));
-                NativeFunction.Natives.SET_VEHICLE_DOOR_OPEN(ambulance,2,false,false);
-                NativeFunction.Natives.SET_VEHICLE_DOOR_OPEN(ambulance,3,false,false);
-                var bag=new Rage.Object(bagModel,rear);bagModel.Dismiss();
+                Vector3 rear=ambulance.GetOffsetPosition(new Vector3(0f,-3.2f,.15f));
+                Vector3 compartment=ambulance.GetOffsetPosition(new Vector3(0f,-1.7f,.52f));
+                var bag=new Rage.Object(bagModel,compartment);bagModel.Dismiss();
                 if(bag==null||!bag.Exists())return null;
                 bag.IsPersistent=true;
-                bag.Position=compartment;
+                NativeFunction.Natives.SET_ENTITY_COLLISION(bag,false,false);
                 NativeFunction.Natives.FREEZE_ENTITY_POSITION(bag,true);
                 medic.Tasks.Clear();NativeFunction.Natives.TASK_GO_STRAIGHT_TO_COORD(medic,rear.X,rear.Y,rear.Z,1.5f,10000,ambulance.Heading,1f);
                 uint deadline=Game.GameTime+12000;while(medic.Exists()&&bag.Exists()&&medic.Position.DistanceTo(rear)>1.6f&&Game.GameTime<deadline)GameFiber.Wait(150);
                 if(medic.Position.DistanceTo(rear)>2.5f){bag.Delete();return null;}
+                medic.Tasks.Clear();
                 NativeFunction.Natives.TASK_TURN_PED_TO_FACE_ENTITY(medic,ambulance,900);GameFiber.Wait(900);
+                // Open the rear only after the driver is clear of the door swing.
+                NativeFunction.Natives.SET_VEHICLE_DOOR_OPEN(ambulance,2,false,false);
+                NativeFunction.Natives.SET_VEHICLE_DOOR_OPEN(ambulance,3,false,false);
+                GameFiber.Wait(1200);
                 NativeFunction.Natives.FREEZE_ENTITY_POSITION(bag,false);
                 int hand=NativeFunction.Natives.GET_PED_BONE_INDEX<int>(medic,57005);
                 NativeFunction.Natives.ATTACH_ENTITY_TO_ENTITY(bag,medic,hand,.42f,-.03f,.03f,-123f,-86f,-4f,false,false,false,true,2,true);
+                GameFiber.Wait(750);
+                // Allow the driver and bag to move clear before closing the compartment.
+                Vector3 clear=ambulance.GetOffsetPosition(new Vector3(1f,-4f,0f));
+                NativeFunction.Natives.TASK_GO_STRAIGHT_TO_COORD(medic,clear.X,clear.Y,clear.Z,1.4f,4000,ambulance.Heading,1f);
+                GameFiber.Wait(1100);
                 NativeFunction.Natives.SET_VEHICLE_DOOR_SHUT(ambulance,2,false);
                 NativeFunction.Natives.SET_VEHICLE_DOOR_SHUT(ambulance,3,false);
                 Game.LogTrivial("AdvancedK9 EMS presentation: medic walked to the ambulance and visibly retrieved the medical bag.");
@@ -2009,7 +2044,19 @@ namespace AdvancedK9
             while(Game.GameTime<deadline&&driver.Exists()&&passenger.Exists()&&
                 (!driver.IsInVehicle(_biteMedicalVehicle,false)||!passenger.IsInVehicle(_biteMedicalVehicle,false)))GameFiber.Wait(200);
             bool boarded=driver.Exists()&&passenger.Exists()&&driver.IsInVehicle(_biteMedicalVehicle,false)&&passenger.IsInVehicle(_biteMedicalVehicle,false);
-            if(!boarded)Game.LogTrivial("AdvancedK9 EMS boarding timed out; responders remain visible at the ambulance for retry.");
+            if(!boarded)
+            {
+                // Retry each seat separately. Never place a responder into the seat instantly.
+                if(driver.Exists()&&!driver.IsInVehicle(_biteMedicalVehicle,false))
+                    driver.Tasks.EnterVehicle(_biteMedicalVehicle,-1);
+                if(passenger.Exists()&&!passenger.IsInVehicle(_biteMedicalVehicle,false))
+                    passenger.Tasks.EnterVehicle(_biteMedicalVehicle,0);
+                deadline=Game.GameTime+12000;
+                while(Game.GameTime<deadline&&driver.Exists()&&passenger.Exists()&&
+                    (!driver.IsInVehicle(_biteMedicalVehicle,false)||!passenger.IsInVehicle(_biteMedicalVehicle,false)))GameFiber.Wait(200);
+                boarded=driver.Exists()&&passenger.Exists()&&driver.IsInVehicle(_biteMedicalVehicle,false)&&passenger.IsInVehicle(_biteMedicalVehicle,false);
+            }
+            if(!boarded)Game.LogTrivial("AdvancedK9 EMS boarding timed out after retry; ambulance will remain parked.");
             return boarded;
         }
 
@@ -2018,6 +2065,20 @@ namespace AdvancedK9
             if(_biteMedicalBlip!=null&&_biteMedicalBlip.Exists())_biteMedicalBlip.Delete();_biteMedicalBlip=null;
             if(dismiss){if(_biteMedicalPartner!=null&&_biteMedicalPartner.Exists())_biteMedicalPartner.Dismiss();if(_biteMedicalDriver!=null&&_biteMedicalDriver.Exists())_biteMedicalDriver.Dismiss();if(_biteMedicalVehicle!=null&&_biteMedicalVehicle.Exists())_biteMedicalVehicle.Dismiss();}
             _biteMedicalPartner=null;_biteMedicalDriver=null;_biteMedicalVehicle=null;
+        }
+
+        private void CleanupMedicalCrewAfterPlayerLeaves()
+        {
+            Vehicle ambulance=_biteMedicalVehicle;Ped driver=_biteMedicalDriver,passenger=_biteMedicalPartner;
+            _biteMedicalVehicle=null;_biteMedicalDriver=null;_biteMedicalPartner=null;
+            GameFiber.StartNew(()=>{
+                // A failed boarding attempt must not make the responders disappear on scene.
+                while(ambulance!=null&&ambulance.Exists()&&Game.LocalPlayer.Character.Exists()&&
+                    Game.LocalPlayer.Character.DistanceTo(ambulance)<120f)GameFiber.Wait(1000);
+                if(passenger!=null&&passenger.Exists())passenger.Dismiss();
+                if(driver!=null&&driver.Exists())driver.Dismiss();
+                if(ambulance!=null&&ambulance.Exists())ambulance.Dismiss();
+            },"AdvancedK9.EMSDeferredCleanup");
         }
 
         private void HoldPerimeter()
@@ -2661,7 +2722,37 @@ namespace AdvancedK9
 
         private void UseBowl(bool water)
         {
-            Rage.Object bowl=null;try{var model=new Model("prop_cs_bowl_01");if(!model.IsValid)model=new Model("prop_bowl_crisps");Vector3 bowlPosition=_dog.GetOffsetPosition(new Vector3(0f,.75f,0f));if(model.IsValid){model.LoadAndWait();bowl=new Rage.Object(model,bowlPosition);model.Dismiss();}NativeFunction.Natives.TASK_TURN_PED_TO_FACE_COORD(_dog,bowlPosition.X,bowlPosition.Y,bowlPosition.Z,650);GameFiber.Wait(650);for(int i=0;i<5;i++){PlayDogAnimation("creatures@rottweiler@indication@","indicate_low",650,0);GameFiber.Wait(300);}Sit();}finally{if(bowl!=null&&bowl.Exists())bowl.Delete();}
+            Rage.Object bowl=null;try
+            {
+                var model=new Model("prop_cs_bowl_01");if(!model.IsValid)model=new Model("prop_bowl_crisps");
+                Vector3 bowlPosition=_dog.GetOffsetPosition(new Vector3(0f,.65f,0f));
+                float bowlGround;
+                if(NativeFunction.Natives.GET_GROUND_Z_FOR_3D_COORD<bool>(bowlPosition.X,bowlPosition.Y,bowlPosition.Z+2f,out bowlGround,false))
+                    bowlPosition=new Vector3(bowlPosition.X,bowlPosition.Y,bowlGround+.03f);
+                if(model.IsValid){model.LoadAndWait();bowl=new Rage.Object(model,bowlPosition);model.Dismiss();}
+                NativeFunction.Natives.TASK_TURN_PED_TO_FACE_COORD(_dog,bowlPosition.X,bowlPosition.Y,bowlPosition.Z,650);GameFiber.Wait(650);
+                if(water)
+                {
+                    // A stationary low head and water ripples distinguish drinking from feeding.
+                    _state=K9State.Staying;
+                    try{NativeFunction.Natives.REQUEST_NAMED_PTFX_ASSET("core");GameFiber.Wait(100);}catch{}
+                    for(int i=0;i<6&&DogExists();i++)
+                    {
+                        PlayDogAnimation("creatures@rottweiler@indication@","indicate_low",550,0);
+                        try
+                        {
+                            NativeFunction.Natives.USE_PARTICLE_FX_ASSET("core");
+                            NativeFunction.Natives.START_PARTICLE_FX_NON_LOOPED_AT_COORD("ent_sht_water",
+                                bowlPosition.X,bowlPosition.Y,bowlPosition.Z+.04f,0f,0f,0f,.09f,false,false,false);
+                        }
+                        catch(Exception ex){Game.LogTrivial("AdvancedK9 water-bowl ripple contained: "+ex.Message);}
+                        GameFiber.Wait(180);
+                    }
+                }
+                else for(int i=0;i<5&&DogExists();i++){PlayDogAnimation("creatures@rottweiler@indication@","indicate_low",650,0);GameFiber.Wait(300);}
+                Sit();
+            }
+            finally{if(bowl!=null&&bowl.Exists())bowl.Delete();}
         }
 
         private void ToggleLeash()
