@@ -1048,15 +1048,8 @@ namespace AdvancedK9
             returning.IsPersistent=true;returning.IsInvincible=true;returning.BlockPermanentEvents=true;
             NativeFunction.Natives.FREEZE_ENTITY_POSITION(returning,true);
             NativeFunction.Natives.SET_ENTITY_COLLISION(returning,false,false);
-            returning.Tasks.Clear();
-            PlayCanineClip(returning,"creatures@rottweiler@amb@sleep_in_kennel@","sleep_in_kennel",-1,true);
-            for(int i=1;i<=12&&returning.Exists();i++)
-            {
-                float t=i/12f;
-                returning.Position=new Vector3(rest.X,rest.Y,floorRest.Z+(rest.Z-floorRest.Z)*t);
-                GameFiber.Wait(55);
-            }
             returning.Position=rest;
+            PlayCanineClip(returning,"creatures@rottweiler@amb@sleep_in_kennel@","sleep_in_kennel",-1,true);
             NativeFunction.Natives.FREEZE_ENTITY_POSITION(returning,true);
         }
 
@@ -1114,21 +1107,15 @@ namespace AdvancedK9
             Ped sleeping=kennel.Resident;
             if(sleeping!=null&&sleeping.Exists()&&kennel.ResidentProfileId==_roster.ActiveId)
             {
-                sleeping.Tasks.Clear();
-                PlayCanineClip(sleeping,"creatures@rottweiler@amb@sleep_in_kennel@","exit_kennel",-1,false);
+                sleeping.Position=KennelRestPosition(kennel);
+                PlayCanineClip(sleeping,"creatures@rottweiler@amb@sleep_in_kennel@","exit_kennel",1300,false);
                 // The doghouse has no navigation mesh inside it. Move the same dog through
                 // its doorway after the exit clip; pathfinding from inside cannot finish.
                 if(!sleeping.Exists())return;
                 Vector3 start=KennelRestPosition(kennel);
                 Vector3 floorStart=KennelSurfacePosition(kennel,start);
-                for(int i=1;i<=18&&sleeping.Exists();i++)
-                {
-                    float t=i/18f;
-                    sleeping.Position=new Vector3(start.X,start.Y,start.Z+(floorStart.Z-start.Z)*t);
-                    GameFiber.Wait(55);
-                }
-                if(!sleeping.Exists())return;
                 sleeping.Tasks.Clear();
+                sleeping.Position=floorStart;
                 PlayCanineClip(sleeping,"creatures@rottweiler@move","walk",-1,true);
                 for(int i=1;i<=18&&sleeping.Exists();i++)
                 {
