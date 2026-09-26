@@ -945,7 +945,27 @@ namespace AdvancedK9
 
         private Vector3 KennelRestPosition(StationKennel kennel)
         {
-            return kennel.Prop.GetOffsetPosition(new Vector3(0f,.28f,.025f));
+            // Saved heading is the direction the handler faced while looking into
+            // the doorway. The visible opening and exit are behind that heading.
+            return KennelSurfacePosition(kennel,kennel.Position+HeadingOffset(kennel.Heading+180f,.36f));
+        }
+
+        private Vector3 KennelEntrancePosition(StationKennel kennel)
+        {
+            return KennelSurfacePosition(kennel,kennel.Position+HeadingOffset(kennel.Heading+180f,1.05f));
+        }
+
+        private Vector3 KennelSurfacePosition(StationKennel kennel,Vector3 position)
+        {
+            float groundZ;
+            try
+            {
+                if(NativeFunction.Natives.GET_GROUND_Z_FOR_3D_COORD<bool>(position.X,position.Y,kennel.Position.Z+2f,out groundZ,false)
+                    &&Math.Abs(groundZ-kennel.Position.Z)<.7f)
+                    return new Vector3(position.X,position.Y,groundZ+.08f);
+            }
+            catch{}
+            return new Vector3(position.X,position.Y,kennel.Position.Z+.08f);
         }
 
         private void MaintainKennelResident(StationKennel kennel)
@@ -964,14 +984,17 @@ namespace AdvancedK9
             try
             {
                 model.LoadAndWait();
-                kennel.Resident=new Ped(model,KennelRestPosition(kennel),kennel.Heading);
+                kennel.Resident=new Ped(model,KennelRestPosition(kennel),NormalizeHeading(kennel.Heading+180f));
                 if(kennel.Resident==null||!kennel.Resident.Exists())return;
                 kennel.ResidentProfileId=_roster.ActiveId;
                 kennel.Resident.IsPersistent=true;kennel.Resident.BlockPermanentEvents=true;
                 kennel.Resident.IsInvincible=true;
                 _profile.Apply(kennel.Resident);
                 NativeFunction.Natives.SET_ENTITY_COLLISION(kennel.Resident,false,false);
-                PlayCanineClip(kennel.Resident,"creatures@rottweiler@amb@sleep_in_kennel@","sleep_in_kennel",-1,true);
+                bool sleeping=PlayCanineClip(kennel.Resident,"creatures@rottweiler@amb@sleep_in_kennel@","sleep_in_kennel",-1,true);
+                kennel.Resident.Position=KennelRestPosition(kennel);
+                NativeFunction.Natives.FREEZE_ENTITY_POSITION(kennel.Resident,true);
+                Game.LogTrivial("AdvancedK9 kennel resident: "+_profile.Name+" at "+kennel.Resident.Position+", entrance "+KennelEntrancePosition(kennel)+", heading "+kennel.Heading+", sleep clip "+sleeping+".");
             }
             catch(Exception ex){Game.LogTrivial("AdvancedK9 kennel resident presentation contained: "+ex.Message);}
             finally{model.Dismiss();}
@@ -981,7 +1004,7 @@ namespace AdvancedK9
         {
             if(!DogExists()||kennel.Prop==null||!kennel.Prop.Exists())return;
             Vector3 rest=KennelRestPosition(kennel);
-            Vector3 entrance=kennel.Prop.GetOffsetPosition(new Vector3(0f,1.05f,0f));
+            Vector3 entrance=KennelEntrancePosition(kennel);
             DeleteLeashRope();
             ExitRestingPose();
             _dog.Tasks.Clear();
@@ -995,12 +1018,14 @@ namespace AdvancedK9
             Ped returning=_dog;
             returning.Tasks.Clear();
             NativeFunction.Natives.SET_ENTITY_COLLISION(returning,false,false);
-            Vector3 start=returning.Position;
-            for(int i=1;i<=20&&returning.Exists();i++)
+            Vector3 start=KennelSurfacePosition(kennel,returning.Position);
+            for(int i=1;i<=30&&returning.Exists();i++)
             {
-                float t=i/20f;
-                returning.Position=new Vector3(start.X+(rest.X-start.X)*t,start.Y+(rest.Y-start.Y)*t,start.Z+(rest.Z-start.Z)*t);
-                returning.Heading=kennel.Heading;
+                Vector3 from=i<=15?start:entrance;
+                Vector3 to=i<=15?entrance:rest;
+                float t=(i<=15?i:i-15)/15f;
+                returning.Position=KennelSurfacePosition(kennel,new Vector3(from.X+(to.X-from.X)*t,from.Y+(to.Y-from.Y)*t,rest.Z));
+                returning.Heading=NormalizeHeading(kennel.Heading+180f);
                 GameFiber.Wait(35);
             }
             _dog=null;
@@ -1011,6 +1036,8 @@ namespace AdvancedK9
             returning.IsPersistent=true;returning.IsInvincible=true;returning.BlockPermanentEvents=true;
             NativeFunction.Natives.SET_ENTITY_COLLISION(returning,false,false);
             PlayCanineClip(returning,"creatures@rottweiler@amb@sleep_in_kennel@","sleep_in_kennel",-1,true);
+            returning.Position=rest;
+            NativeFunction.Natives.FREEZE_ENTITY_POSITION(returning,true);
         }
 
         private void SpawnNearbyKennelProp(StationKennel kennel)
@@ -1062,7 +1089,7 @@ namespace AdvancedK9
 
         private void Deploy(StationKennel kennel)
         {
-            Vector3 release=kennel.Prop.GetOffsetPosition(new Vector3(0f,1.05f,.025f));
+            Vector3 release=KennelEntrancePosition(kennel);
             if(kennel.Resident==null||!kennel.Resident.Exists())MaintainKennelResident(kennel);
             Ped sleeping=kennel.Resident;
             if(sleeping!=null&&sleeping.Exists()&&kennel.ResidentProfileId==_roster.ActiveId)
@@ -1072,12 +1099,14 @@ namespace AdvancedK9
                 // The doghouse has no navigation mesh inside it. Move the same dog through
                 // its doorway after the exit clip; pathfinding from inside cannot finish.
                 if(!sleeping.Exists())return;
-                Vector3 start=sleeping.Position;
+                NativeFunction.Natives.FREEZE_ENTITY_POSITION(sleeping,false);
+                Vector3 start=KennelRestPosition(kennel);
+                sleeping.Position=start;
                 for(int i=1;i<=18&&sleeping.Exists();i++)
                 {
                     float t=i/18f;
-                    sleeping.Position=new Vector3(start.X+(release.X-start.X)*t,start.Y+(release.Y-start.Y)*t,start.Z+(release.Z-start.Z)*t);
-                    sleeping.Heading=kennel.Heading;
+                    sleeping.Position=KennelSurfacePosition(kennel,new Vector3(start.X+(release.X-start.X)*t,start.Y+(release.Y-start.Y)*t,release.Z));
+                    sleeping.Heading=NormalizeHeading(kennel.Heading+180f);
                     GameFiber.Wait(35);
                 }
                 if(!sleeping.Exists())return;
