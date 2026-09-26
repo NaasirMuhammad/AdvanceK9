@@ -971,6 +971,29 @@ namespace AdvancedK9
             return new Vector3(position.X,position.Y,kennel.Position.Z+.08f);
         }
 
+        private float KeepKennelPoseAboveFloor(Ped dog,StationKennel kennel,string phase)
+        {
+            if(dog==null||!dog.Exists())return 0f;
+            float floor=KennelSurfacePosition(kennel,dog.Position).Z;
+            float lowest=float.MaxValue;
+            foreach(string boneName in new[]{"SKEL_L_Foot","SKEL_R_Foot","IK_L_Foot","IK_R_Foot"})
+            {
+                int bone=NativeFunction.Natives.GET_ENTITY_BONE_INDEX_BY_NAME<int>(dog,boneName);
+                if(bone<0)continue;
+                Vector3 foot=NativeFunction.Natives.GET_WORLD_POSITION_OF_ENTITY_BONE<Vector3>(dog,bone);
+                lowest=Math.Min(lowest,foot.Z);
+            }
+            if(lowest==float.MaxValue)return 0f;
+            if(lowest<floor-.015f)
+            {
+                float correction=Math.Min(.85f,floor-lowest+.015f);
+                dog.Position=new Vector3(dog.Position.X,dog.Position.Y,dog.Position.Z+correction);
+                Game.LogTrivial("AdvancedK9 kennel pose floor correction "+phase+": "+correction.ToString("0.000")+"m, foot Z "+lowest.ToString("0.000")+", floor Z "+floor.ToString("0.000")+".");
+                return correction;
+            }
+            return 0f;
+        }
+
         private void MaintainKennelResident(StationKennel kennel)
         {
             bool selected=!DogExists()&&kennel.Prop!=null&&kennel.Prop.Exists()&&
@@ -980,7 +1003,12 @@ namespace AdvancedK9
                 if(kennel.Resident!=null&&kennel.Resident.Exists())kennel.Resident.Delete();
                 kennel.Resident=null;kennel.ResidentProfileId=null;
             }
-            if(!selected||kennel.Resident!=null&&kennel.Resident.Exists())return;
+            if(!selected)return;
+            if(kennel.Resident!=null&&kennel.Resident.Exists())
+            {
+                KeepKennelPoseAboveFloor(kennel.Resident,kennel,"sleep maintenance");
+                return;
+            }
             Model model=new Model(_profile.ModelName);
             if(!model.IsValid)model=new Model(_profile.FallbackModelName);
             if(!model.IsValid)return;
@@ -997,6 +1025,8 @@ namespace AdvancedK9
                 bool sleeping=PlayCanineClip(kennel.Resident,"creatures@rottweiler@amb@sleep_in_kennel@","sleep_in_kennel",-1,true);
                 kennel.Resident.Position=KennelRestPosition(kennel);
                 NativeFunction.Natives.FREEZE_ENTITY_POSITION(kennel.Resident,true);
+                KeepKennelPoseAboveFloor(kennel.Resident,kennel,"resident");
+                Game.LogTrivial("AdvancedK9 kennel foot bones: L="+NativeFunction.Natives.GET_ENTITY_BONE_INDEX_BY_NAME<int>(kennel.Resident,"SKEL_L_Foot")+", R="+NativeFunction.Natives.GET_ENTITY_BONE_INDEX_BY_NAME<int>(kennel.Resident,"SKEL_R_Foot")+", IK-L="+NativeFunction.Natives.GET_ENTITY_BONE_INDEX_BY_NAME<int>(kennel.Resident,"IK_L_Foot")+", IK-R="+NativeFunction.Natives.GET_ENTITY_BONE_INDEX_BY_NAME<int>(kennel.Resident,"IK_R_Foot")+".");
                 Game.LogTrivial("AdvancedK9 kennel resident: "+_profile.Name+" at "+kennel.Resident.Position+", entrance "+KennelEntrancePosition(kennel)+", heading "+kennel.Heading+", sleep clip "+sleeping+".");
             }
             catch(Exception ex){Game.LogTrivial("AdvancedK9 kennel resident presentation contained: "+ex.Message);}
@@ -1026,6 +1056,7 @@ namespace AdvancedK9
             returning.Tasks.Clear();
             Vector3 start=KennelSurfacePosition(kennel,returning.Position);
             Vector3 floorRest=KennelSurfacePosition(kennel,rest);
+            float returnLift=0f;
             NativeFunction.Natives.FREEZE_ENTITY_POSITION(returning,true);
             NativeFunction.Natives.SET_ENTITY_COLLISION(returning,false,false);
             PlayCanineClip(returning,"creatures@rottweiler@move","walk",-1,true);
@@ -1034,8 +1065,9 @@ namespace AdvancedK9
                 Vector3 from=i<=15?start:entrance;
                 Vector3 to=i<=15?entrance:floorRest;
                 float t=(i<=15?i:i-15)/15f;
-                returning.Position=new Vector3(from.X+(to.X-from.X)*t,from.Y+(to.Y-from.Y)*t,Math.Max(from.Z+(to.Z-from.Z)*t,kennel.Position.Z+.02f));
+                returning.Position=new Vector3(from.X+(to.X-from.X)*t,from.Y+(to.Y-from.Y)*t,Math.Max(from.Z+(to.Z-from.Z)*t,kennel.Position.Z+.02f)+returnLift);
                 returning.Heading=NormalizeHeading(kennel.Heading+90f);
+                returnLift+=KeepKennelPoseAboveFloor(returning,kennel,"return");
                 GameFiber.Wait(35);
             }
             if(!returning.Exists())return;
@@ -1050,6 +1082,7 @@ namespace AdvancedK9
             NativeFunction.Natives.SET_ENTITY_COLLISION(returning,false,false);
             returning.Position=rest;
             PlayCanineClip(returning,"creatures@rottweiler@amb@sleep_in_kennel@","sleep_in_kennel",-1,true);
+            KeepKennelPoseAboveFloor(returning,kennel,"sleep");
             NativeFunction.Natives.FREEZE_ENTITY_POSITION(returning,true);
         }
 
@@ -1108,7 +1141,12 @@ namespace AdvancedK9
             if(sleeping!=null&&sleeping.Exists()&&kennel.ResidentProfileId==_roster.ActiveId)
             {
                 sleeping.Position=KennelRestPosition(kennel);
-                PlayCanineClip(sleeping,"creatures@rottweiler@amb@sleep_in_kennel@","exit_kennel",1300,false);
+                PlayCanineClip(sleeping,"creatures@rottweiler@amb@sleep_in_kennel@","exit_kennel",-1,false);
+                for(int i=0;i<26&&sleeping.Exists();i++)
+                {
+                    KeepKennelPoseAboveFloor(sleeping,kennel,"exit clip");
+                    GameFiber.Wait(50);
+                }
                 // The doghouse has no navigation mesh inside it. Move the same dog through
                 // its doorway after the exit clip; pathfinding from inside cannot finish.
                 if(!sleeping.Exists())return;
@@ -1117,14 +1155,17 @@ namespace AdvancedK9
                 sleeping.Tasks.Clear();
                 sleeping.Position=floorStart;
                 PlayCanineClip(sleeping,"creatures@rottweiler@move","walk",-1,true);
+                float deployLift=0f;
                 for(int i=1;i<=18&&sleeping.Exists();i++)
                 {
                     float t=i/18f;
-                    sleeping.Position=new Vector3(start.X+(release.X-start.X)*t,start.Y+(release.Y-start.Y)*t,Math.Max(floorStart.Z+(release.Z-floorStart.Z)*t,kennel.Position.Z+.02f));
+                    sleeping.Position=new Vector3(start.X+(release.X-start.X)*t,start.Y+(release.Y-start.Y)*t,Math.Max(floorStart.Z+(release.Z-floorStart.Z)*t,kennel.Position.Z+.02f)+deployLift);
                     sleeping.Heading=NormalizeHeading(kennel.Heading+90f);
+                    deployLift+=KeepKennelPoseAboveFloor(sleeping,kennel,"deploy");
                     GameFiber.Wait(35);
                 }
                 if(!sleeping.Exists())return;
+                sleeping.Tasks.Clear();
                 sleeping.Position=release;
                 NativeFunction.Natives.SET_ENTITY_COLLISION(sleeping,true,true);
                 NativeFunction.Natives.FREEZE_ENTITY_POSITION(sleeping,false);
