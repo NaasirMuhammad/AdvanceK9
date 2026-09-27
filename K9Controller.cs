@@ -980,7 +980,7 @@ namespace AdvancedK9
             {
                 // Keep the proven doghouse resting spot when only the large cage
                 // rotates. Mission Row therefore remains at its original X/Y.
-                Vector3 floor=KennelSurfacePosition(kennel,kennel.Position+HeadingOffset(kennel.DefaultHeading+90f,.36f)+HeadingOffset(kennel.DefaultHeading,-.16f));
+                Vector3 floor=KennelSurfacePosition(kennel,kennel.Position+HeadingOffset(kennel.DefaultHeading+90f,.36f)+HeadingOffset(kennel.DefaultHeading,-.16f)-HeadingOffset(kennel.Heading-90f,.20f));
                 return new Vector3(floor.X,floor.Y,floor.Z+.42f);
             }
             Vector3 surface=KennelSurfacePosition(kennel,kennel.Position+HeadingOffset(kennel.Heading+90f,.36f)+HeadingOffset(kennel.Heading,-.16f));
