@@ -3153,7 +3153,7 @@ namespace AdvancedK9
         {
             DeleteLeashRope();
             var handler=Game.LocalPlayer.Character;
-            var hand=NativeFunction.Natives.GET_PED_BONE_COORDS<Vector3>(handler,18905,0f,0f,0f);
+            var hand=HandLeashPoint(handler);
             var collar=VestLeashPoint();
             NativeFunction.Natives.ROPE_LOAD_TEXTURES();GameFiber.Wait(100);
             float length=Math.Max(PatrolLeashMinimumLength,Math.Min(PatrolLeashMaximumLength,VectorDistance(hand,collar)+.08f));
@@ -3170,12 +3170,12 @@ namespace AdvancedK9
                 // The model pivot is at the straight end, while its loop must
                 // sit in the left hand. Reverse the lead and bring the loop to
                 // the grip instead of letting it extend behind the handler.
-                _leashHandLead=AttachLeashPart("prop_cs_dog_lead_2a",handler,18905,
-                    NativeFunction.Natives.GET_PED_BONE_COORDS<Vector3>(handler,18905,-.04f,.02f,0f),-.04f,.36f,.02f,0f,0f,180f);
+                _leashHandLead=AttachLeashPart("prop_cs_dog_lead_2a",handler,26611,
+                    HandLeashPoint(handler),0f,.16f,0f,0f,0f,180f);
                 // This K9 wears a vest, not a collar. Place the clasp low and
                 // flat over the rear half of the vest instead of at the neck.
                 _leashCollarClip=AttachLeashPart("prop_cs_dog_lead_2b",_dog,0,
-                    VestLeashPoint(),0f,-.08f,.53f,90f,0f,180f);
+                    VestLeashPoint(),0f,.16f,.55f,90f,0f,180f);
             }
             catch(Exception ex){Game.LogTrivial("AdvancedK9 leash hardware unavailable: "+ex.Message);DeleteLeashHardware();}
         }
@@ -3206,7 +3206,15 @@ namespace AdvancedK9
             _leashHandLead=null;_leashCollarClip=null;
         }
 
-        private Vector3 VestLeashPoint(){return _dog.GetOffsetPosition(new Vector3(0f,-.08f,.53f));}
+        private static Vector3 HandLeashPoint(Ped handler)
+        {
+            Vector3 hand=NativeFunction.Natives.GET_PED_BONE_COORDS<Vector3>(handler,18905,0f,0f,0f);
+            Vector3 finger=NativeFunction.Natives.GET_PED_BONE_COORDS<Vector3>(handler,26611,0f,0f,0f);
+            if(VectorDistance(hand,finger)>.3f)return hand;
+            return new Vector3((hand.X+finger.X)*.5f,(hand.Y+finger.Y)*.5f,(hand.Z+finger.Z)*.5f);
+        }
+
+        private Vector3 VestLeashPoint(){return _dog.GetOffsetPosition(new Vector3(0f,.16f,.55f));}
 
         private void PinLeashEndpoints()
         {
@@ -3215,7 +3223,7 @@ namespace AdvancedK9
             try
             {
                 var handler=Game.LocalPlayer.Character;
-                Vector3 hand=NativeFunction.Natives.GET_PED_BONE_COORDS<Vector3>(handler,18905,-.04f,.02f,0f);
+                Vector3 hand=HandLeashPoint(handler);
                 Vector3 vest=VestLeashPoint();
                 // The rope is the single flexible span between the two rigid
                 // GTA leash pieces. Pin to their free ends, not a second
