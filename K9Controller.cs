@@ -3118,25 +3118,9 @@ namespace AdvancedK9
                     bowlPosition=new Vector3(bowlPosition.X,bowlPosition.Y,bowlGround+.03f);
                 if(model.IsValid){model.LoadAndWait();bowl=new Rage.Object(model,bowlPosition);model.Dismiss();}
                 NativeFunction.Natives.TASK_TURN_PED_TO_FACE_COORD(_dog,bowlPosition.X,bowlPosition.Y,bowlPosition.Z,650);GameFiber.Wait(650);
-                if(water)
-                {
-                    // A stationary low head and water ripples distinguish drinking from feeding.
-                    _state=K9State.Staying;
-                    try{NativeFunction.Natives.REQUEST_NAMED_PTFX_ASSET("core");GameFiber.Wait(100);}catch{}
-                    for(int i=0;i<6&&DogExists();i++)
-                    {
-                        PlayDogAnimation("creatures@rottweiler@indication@","indicate_low",550,0);
-                        try
-                        {
-                            NativeFunction.Natives.USE_PARTICLE_FX_ASSET("core");
-                            NativeFunction.Natives.START_PARTICLE_FX_NON_LOOPED_AT_COORD("ent_sht_water",
-                                bowlPosition.X,bowlPosition.Y,bowlPosition.Z+.04f,0f,0f,0f,.09f,false,false,false);
-                        }
-                        catch(Exception ex){Game.LogTrivial("AdvancedK9 water-bowl ripple contained: "+ex.Message);}
-                        GameFiber.Wait(180);
-                    }
-                }
-                else for(int i=0;i<5&&DogExists();i++){PlayDogAnimation("creatures@rottweiler@indication@","indicate_low",650,0);GameFiber.Wait(300);}
+                // Restore the earlier bowl presentation until a real water bowl
+                // and suitable canine drinking clip can be supplied.
+                for(int i=0;i<5&&DogExists();i++){PlayDogAnimation("creatures@rottweiler@indication@","indicate_low",650,0);GameFiber.Wait(300);}
                 Sit();
             }
             finally{if(bowl!=null&&bowl.Exists())bowl.Delete();}
