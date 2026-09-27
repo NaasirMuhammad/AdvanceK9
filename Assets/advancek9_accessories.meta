@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<AdvanceK9AccessoryMetadata version="1.0">
+  <Prop model="advancek9_leash" tintVariations="16">
+    <Pivot x="0.00000" y="0.00000" z="0.00000" />
+    <HandlerSide label="HANDLER_SIDE_HAND_LOOP">
+      <LoopCenter x="1.15700" y="0.00000" z="0.02800" />
+      <EndAnchor x="1.18600" y="0.00000" z="0.02800" />
+    </HandlerSide>
+    <DogSide label="DOG_SIDE_VEST_LATCH">
+      <LatchAnchor x="-0.59700" y="0.00000" z="0.02800" />
+      <AttachmentDirection x="-1.00000" y="0.00000" z="0.00000" />
+    </DogSide>
+  </Prop>
+  <Prop model="advancek9_dual_bowl" tintVariations="16">
+    <Pivot x="0.00000" y="0.00000" z="0.00000" />
+    <WaterSide label="WATER_SIDE_ACTUAL_WATER">
+      <Center x="-0.13940" y="0.00000" z="0.05440" />
+    </WaterSide>
+    <FoodSide label="FOOD_SIDE_KIBBLE">
+      <Center x="0.13940" y="0.00000" z="0.06460" />
+    </FoodSide>
+  </Prop>
+</AdvanceK9AccessoryMetadata>

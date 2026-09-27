@@ -68,7 +68,7 @@ jobs:
           if (-not $lemon) { throw 'LemonUI.RagePluginHook.dll was not found.' }
           if (-not $naudioCore) { throw 'Required AI voice runtime NAudio.Core.dll was not found.' }
           if (-not $naudioWinMM) { throw 'Required AI voice runtime NAudio.WinMM.dll was not found.' }
-          if ([System.Reflection.AssemblyName]::GetAssemblyName($main.FullName).Version -ne [Version]'0.24.0.60') { throw 'AdvancedK9.dll version is not 0.24.0.60.' }
+          if ([System.Reflection.AssemblyName]::GetAssemblyName($main.FullName).Version -ne [Version]'0.24.0.61') { throw 'AdvancedK9.dll version is not 0.24.0.61.' }
           if ([System.Reflection.AssemblyName]::GetAssemblyName($api.FullName).Version -ne [Version]'0.24.0.0') { throw 'AdvancedK9.API.dll version is not 0.24.0.0.' }
           if ([System.Reflection.AssemblyName]::GetAssemblyName($bridge).Version -ne [Version]'0.24.0.1') { throw 'AdvancedK9.LSPDFRBridge.dll version is not 0.24.0.1.' }
           if ([System.Reflection.AssemblyName]::GetAssemblyName($callouts).Version -ne [Version]'0.24.0.52') { throw 'AdvancedK9.Callouts.dll version is not 0.24.0.52.' }
@@ -93,6 +93,7 @@ jobs:
           $kennelDlc = Join-Path $package 'mods/update/x64/dlcpacks/mw_ak9kennel'
           New-Item -ItemType Directory -Force -Path $kennelDlc | Out-Null
           Copy-Item 'Assets/mw_ak9kennel/dlc.rpf' $kennelDlc
+          Copy-Item 'Assets/advancek9_accessories.meta' (Join-Path $configRoot 'advancek9_accessories.meta')
           $forbidden = Get-ChildItem $package -Recurse -File | Where-Object {
             $_.Name -match '^(Microsoft\.Win32\.Registry|System\.Security).*\.dll$' -or
             $_.FullName -match '(?i)(Policing.?Redefined|CommonDataFramework|NexusMDT|NPCI|Stop.?The.?Ped)'

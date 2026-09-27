@@ -440,7 +440,16 @@ namespace AdvancedK9
             CloseSeatCalibrationDoor();_menuMode="profile"; RefreshProfileMenu();
         }
 
-        private void RefreshProfileMenu(){_menu.Update("K9 PROFILE — "+_profile.Name,new[]{L("Language")+": "+Localization.LanguageName,"K9 Roster ("+_roster.Entries.Count+")",L("Identity & Appearance"),L("HUD & Display"),L("Kennel Location Editor"),L("Vehicle Seat Configuration"),L("Profile, Health & Certifications"),VoiceMenuLabel()});}
+        private void RefreshProfileMenu(){_menu.Update("K9 PROFILE — "+_profile.Name,new[]{L("Language")+": "+Localization.LanguageName,"K9 Roster ("+_roster.Entries.Count+")",L("Identity & Appearance"),L("HUD & Display"),L("Kennel Location Editor"),L("Vehicle Seat Configuration"),L("Profile, Health & Certifications"),"Accessory colors",VoiceMenuLabel()});}
+        private void OpenAccessoryColors(){_menuMode="accessory_colors";_menu.Open("K9 ACCESSORY COLORS",new[]{"Leash: "+(_config.LeashPropColor+1)+" / 16","Dual bowl: "+(_config.BowlPropColor+1)+" / 16","← Back to K9 Profile"});}
+        private void AdjustAccessoryColor(int index,int delta)
+        {
+            if(index!=0&&index!=1)return;
+            int old=index==0?_config.LeashPropColor:_config.BowlPropColor;
+            try{_config.SaveAccessoryColor(index==0?"Leash":"DualBowl",(old+delta+16)%16);}
+            catch(Exception ex){Game.LogTrivial("AdvancedK9 accessory color save: "+ex.Message);Game.DisplayNotification("~r~Unable to save accessory color.");}
+            OpenAccessoryColors();
+        }
         private void OpenAppearanceMenu(){_menuMode="profile_appearance";_menu.Open("K9 PROFILE — "+L("Appearance").ToUpperInvariant(),new[]{L("Edit name")+": "+_profile.Name,L("Breed/model")+": "+_profile.Breed,L("Skin/coat")+": "+(_profile.CoatVariation+1),L("Equipment/vest")+": "+_profile.Vest,L("Vest texture")+": "+_profile.VestTextureName(_dog),"← "+L("Back to K9 Profile")});}
         private void OpenCalloutMenu(){_menuMode="callouts";_menu.Open("ADVANCED K9 — CALLOUTS",new[]{"Missing Vulnerable Teen","Fugitive Trail from an Abandoned Vehicle","Bank Robbery K9 Response","Log current player coordinates","← "+L("Back to Command Categories")});}
         private void OpenFugitiveFullTestMenu()
@@ -501,6 +510,7 @@ namespace AdvancedK9
             }
             if(_menuMode!=null&&_menuMode.StartsWith("commands_group_")){int group;if(!int.TryParse(_menuMode.Substring(15),out group)||group<0||group>=CommandGroups.Length)return;if(index>=0&&index<CommandGroups[group].Length){_menu.Close();Execute(CommandGroups[group][index]);}else ShowCommandMenu();return;}
             if(_menuMode=="hud_config"){HandleHudMenu(index);return;}
+            if(_menuMode=="accessory_colors"){if(index==0||index==1)AdjustAccessoryColor(index,1);else{_menuMode="profile";RefreshProfileMenu();}return;}
             if(_menuMode=="kennel_list"){HandleKennelList(index);return;}
             if(_menuMode=="kennel_edit"){HandleKennelEditMenu(index);return;}
             if(_menuMode=="seat_config"){HandleSeatMenu(index);return;}
@@ -512,7 +522,7 @@ namespace AdvancedK9
                 OpenAppearanceMenu();return;
             }
             if(_menuMode!="profile")return;
-            if(index==0){ChangeLanguage(1);return;}if(index==1)OpenRosterMenu();else if(index==2)OpenAppearanceMenu();else if(index==3)OpenHudConfiguration();else if(index==4)OpenKennelLocationMenu();else if(index==5)OpenSeatConfiguration();else if(index==6)Inspect();else if(index==7)ToggleVoice();
+            if(index==0){ChangeLanguage(1);return;}if(index==1)OpenRosterMenu();else if(index==2)OpenAppearanceMenu();else if(index==3)OpenHudConfiguration();else if(index==4)OpenKennelLocationMenu();else if(index==5)OpenSeatConfiguration();else if(index==6)Inspect();else if(index==7)OpenAccessoryColors();else if(index==8)ToggleVoice();
         }
 
         private void OpenRosterMenu()
@@ -555,7 +565,7 @@ namespace AdvancedK9
         private string VoiceMenuLabel()=>"Voice microphone: "+(_voice==null||!_voice.IsAvailable?"UNAVAILABLE — add ApiKey in INI":_voiceActive?"ON — hold "+_config.PushToTalkKey:"OFF — select to activate");
         private void ToggleVoice(){if(_voice==null)InitializeVoice();if(!_voice.IsAvailable){Game.DisplayNotification("~r~Voice cannot activate.~s~~n~Add your provider key after ~y~ApiKey=~s~ in AdvancedK9.ini, then reload the plugin.");return;}_voiceActive=!_voiceActive;if(_voiceActive){_voiceStatus="Ready (hold V)";ActionNotification("~g~K9 push-to-talk activated.~s~ Hold "+_config.PushToTalkKey+" while speaking.");}else{_voice.StopListening();_voiceStatus="Off";ActionNotification("~y~K9 voice microphone disabled.");}}
 
-        private void OnMenuAdjusted(int index,int delta){if(_menuMode=="profile"&&index==0){ChangeLanguage(delta);return;}if(_menuMode=="hud_config"){AdjustHudMenu(index,delta);return;}if(_menuMode=="kennel_edit"){AdjustKennel(index,delta);return;}if(_menuMode=="seat_config"){AdjustSeat(index,delta);return;}if(_menuMode!="profile_appearance")return;if(index==1)PreviewBreed(delta);else if(index==2)_profile.AdjustSkin(_dog,delta);else if(index==3)_profile.AdjustEquipment(_dog,delta);else if(index==4)_profile.AdjustEquipmentTexture(_dog,delta);else return;OpenAppearanceMenu();}
+        private void OnMenuAdjusted(int index,int delta){if(_menuMode=="profile"&&index==0){ChangeLanguage(delta);return;}if(_menuMode=="accessory_colors"){AdjustAccessoryColor(index,delta);return;}if(_menuMode=="hud_config"){AdjustHudMenu(index,delta);return;}if(_menuMode=="kennel_edit"){AdjustKennel(index,delta);return;}if(_menuMode=="seat_config"){AdjustSeat(index,delta);return;}if(_menuMode!="profile_appearance")return;if(index==1)PreviewBreed(delta);else if(index==2)_profile.AdjustSkin(_dog,delta);else if(index==3)_profile.AdjustEquipment(_dog,delta);else if(index==4)_profile.AdjustEquipmentTexture(_dog,delta);else return;OpenAppearanceMenu();}
 
         private static string OnOff(bool value)=>value?"ON":"OFF";
         private void OpenHudConfiguration(){_menuMode="hud_config";RefreshHudMenu();}
@@ -3142,15 +3152,29 @@ namespace AdvancedK9
         {
             Rage.Object bowl=null;try
             {
-                var model=new Model("prop_cs_bowl_01");if(!model.IsValid)model=new Model("prop_bowl_crisps");
-                Vector3 bowlPosition=_dog.GetOffsetPosition(new Vector3(0f,.65f,0f));
+                var model=new Model("advancek9_dual_bowl");
+                bool dualBowl=model.IsValid;
+                if(!dualBowl){model=new Model("prop_cs_bowl_01");if(!model.IsValid)model=new Model("prop_bowl_crisps");}
+                Vector3 bowlPosition=_dog.GetOffsetPosition(new Vector3(0f,.78f,0f));
                 float bowlGround;
                 if(NativeFunction.Natives.GET_GROUND_Z_FOR_3D_COORD<bool>(bowlPosition.X,bowlPosition.Y,bowlPosition.Z+2f,out bowlGround,false))
                     bowlPosition=new Vector3(bowlPosition.X,bowlPosition.Y,bowlGround+.03f);
                 if(model.IsValid){model.LoadAndWait();bowl=new Rage.Object(model,bowlPosition);model.Dismiss();}
-                NativeFunction.Natives.TASK_TURN_PED_TO_FACE_COORD(_dog,bowlPosition.X,bowlPosition.Y,bowlPosition.Z,650);GameFiber.Wait(650);
-                // Restore the earlier bowl presentation until a real water bowl
-                // and suitable canine drinking clip can be supplied.
+                Vector3 target=bowlPosition;
+                if(bowl!=null&&bowl.Exists())
+                {
+                    bowl.Heading=_dog.Heading;
+                    if(dualBowl)
+                    {
+                        try{NativeFunction.Natives._SET_OBJECT_TEXTURE_VARIATION(bowl,_config.BowlPropColor);}
+                        catch(Exception ex){Game.LogTrivial("AdvancedK9 dual bowl tint unavailable: "+ex.Message);}
+                        target=bowl.GetOffsetPosition(new Vector3(water?-.1394f:.1394f,0f,water?.0544f:.0646f));
+                    }
+                }
+                NativeFunction.Natives.TASK_TURN_PED_TO_FACE_COORD(_dog,target.X,target.Y,target.Z,650);GameFiber.Wait(650);
+                // The separate water and food surfaces are built into this
+                // prop. Keep the head-low care pose until a verified drinking
+                // animation is available for every supported dog model.
                 for(int i=0;i<5&&DogExists();i++){PlayDogAnimation("creatures@rottweiler@indication@","indicate_low",650,0);GameFiber.Wait(300);}
                 Sit();
             }

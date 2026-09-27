@@ -40,6 +40,8 @@ namespace AdvancedK9
         public int VestStyle = 1;
         public int VestColor = 0;
         public int VestComponent = -1;
+        public int LeashPropColor = 0;
+        public int BowlPropColor = 0;
         public float PositiveChance = 0.28f;
         public float SearchRadius = 12f;
         public float TrackRadius = 80f;
@@ -125,6 +127,8 @@ namespace AdvancedK9
             result.VestStyle = ini.ReadInt32("Dog", "VestStyle", result.VestStyle);
             result.VestColor = ini.ReadInt32("Dog", "VestColor", result.VestColor);
             result.VestComponent = ini.ReadInt32("Dog", "VestComponent", result.VestComponent);
+            result.LeashPropColor = Clamp(ini.ReadInt32("AccessoryColors", "Leash", 0),0,15);
+            result.BowlPropColor = Clamp(ini.ReadInt32("AccessoryColors", "DualBowl", 0),0,15);
             result.PositiveChance = Clamp(ini.ReadSingle("Search", "FallbackPositiveChance", result.PositiveChance), 0f, 1f);
             result.SearchRadius = Math.Max(3f, ini.ReadSingle("Search", "Radius", result.SearchRadius));
             result.TrackRadius = Math.Max(20f, ini.ReadSingle("Tracking", "AcquisitionRadius", result.TrackRadius));
@@ -232,6 +236,25 @@ namespace AdvancedK9
             string[] parts=value.Split(',');
             large=parts.Length>0&&parts[0].Trim().Equals("Large",StringComparison.OrdinalIgnoreCase);
             int parsed;if(parts.Length>1&&int.TryParse(parts[1],out parsed))color=Math.Max(0,Math.Min(15,parsed));
+        }
+
+        public void SaveAccessoryColor(string key,int color)
+        {
+            if(key!="Leash"&&key!="DualBowl")throw new ArgumentException("Unknown accessory color",nameof(key));
+            color=Math.Max(0,Math.Min(15,color));
+            var lines=File.Exists(_configPath)?new List<string>(File.ReadAllLines(_configPath)):new List<string>();
+            int section=-1,end=lines.Count,keyLine=-1;
+            for(int i=0;i<lines.Count;i++)
+            {
+                string trimmed=lines[i].Trim();
+                if(trimmed.Equals("[AccessoryColors]",StringComparison.OrdinalIgnoreCase)){section=i;continue;}
+                if(section>=0&&i>section&&trimmed.StartsWith("[")&&trimmed.EndsWith("]")){end=i;break;}
+                if(section>=0&&i>section&&trimmed.StartsWith(key+"=",StringComparison.OrdinalIgnoreCase))keyLine=i;
+            }
+            if(section<0){if(lines.Count>0&&lines[lines.Count-1].Length>0)lines.Add("");lines.Add("[AccessoryColors]");end=lines.Count;}
+            if(keyLine>=0)lines[keyLine]=key+"="+color;else lines.Insert(end,key+"="+color);
+            string temporary=_configPath+".tmp";File.WriteAllLines(temporary,lines);File.Copy(temporary,_configPath,true);File.Delete(temporary);
+            if(key=="Leash")LeashPropColor=color;else BowlPropColor=color;
         }
 
         public void SaveKennelAppearance(string key,bool large,int color)
