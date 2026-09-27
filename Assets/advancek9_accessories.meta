@@ -16,6 +16,11 @@
       <Part name="SWIVEL_LATCH" bone="dog_side" pivotX="-0.59700" pivotY="0.00000" pivotZ="0.02800" />
       <StrapBones>strap_00 strap_01 strap_02 strap_03 strap_04 strap_05 strap_06 strap_07 strap_08</StrapBones>
     </Rig>
+    <AnimationDictionary name="advancek9_leash">
+      <Clip name="leash_retract" durationSeconds="1.00000" normalizedControl="true"
+            extendedDistance="2.30000" retractedDistance="0.48000"
+            rootMotion="false" fixedBone="dog_side" movingBone="handler_side" />
+    </AnimationDictionary>
   </Prop>
   <Prop model="advancek9_dual_bowl" tintVariations="16">
     <Pivot x="0.00000" y="0.00000" z="0.00000" />

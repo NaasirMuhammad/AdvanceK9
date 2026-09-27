@@ -1,3 +1,6 @@
+Warning: truncated output (original token count: 79885)
+Total output lines: 4187
+
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -64,6 +67,8 @@ namespace AdvancedK9
         private int _dogVehicleDoor=3;
         private int _leashRope = -1;
         private Rage.Object _leashCollarClip;
+        private Rage.Object _animatedLeash;
+        private bool LeashActive=>_leashRope>=0||(_animatedLeash!=null&&_animatedLeash.Exists());
         private const float PatrolLeashMinimumLength=.48f;
         private const float PatrolLeashMaximumLength=2.3f;
         private bool _workingLeashed;
@@ -759,12 +764,12 @@ namespace AdvancedK9
                 }
                 if(_searchInProgress&&!IsSearchCommand(command))CancelActiveSearch(command);
                 _hudCommand=CommandLabel(command);
-                bool leashed=_leashRope>=0;
+                bool leashed=LeashActive;
                 if(leashed&&RequiresLeashRelease(command)){DeleteLeashRope();_state=K9State.Following;leashed=false;ActionNotification("~b~Leash automatically released for "+CommandLabel(command)+".");}
                 _workingLeashed=leashed&&IsWorkingLeashCommand(command);
-                if(_leashRope>=0&&(command==K9Command.Training||command==K9Command.TrainNarcotics||command==K9Command.TrainExplosives||command==K9Command.TrainWeapons)){Game.DisplayNotification("~y~Remove the leash before traveling to the academy.");return;}
+                if(LeashActive&&(command==K9Command.Training||command==K9Command.TrainNarcotics||command==K9Command.TrainExplosives||command==K9Command.TrainWeapons)){Game.DisplayNotification("~y~Remove the leash before traveling to the academy.");return;}
                 if((_profile.Health<=25||_profile.IsRehabilitating) && command!=K9Command.Inspect && command!=K9Command.FirstAid && command!=K9Command.Restock && command!=K9Command.CarryK9 && command!=K9Command.EmergencyLoadK9 && command!=K9Command.VeterinaryTransport && command!=K9Command.Rehabilitation && command!=K9Command.VeterinaryCare && command!=K9Command.SpawnDismiss){Game.DisplayNotification("~r~K9 REMOVED FROM SERVICE~s~~n~Serious injury or rehabilitation prevents patrol work. Earned certifications remain saved.");return;}
-                if (RequiresTrustCheck(command) && _leashRope<0 && !(command==K9Command.Apprehend&&_immediateApprehendInput) && !TrustAllowsCommand(command)) return;
+                if (RequiresTrustCheck(command) && !LeashActive && !(command==K9Command.Apprehend&&_immediateApprehendInput) && !TrustAllowsCommand(command)) return;
                 if(leashed)Game.LogTrivial("AdvancedK9 leash: executing "+CommandLabel(command)+" while visual leash remains attached.");
                 switch (command)
                 {
@@ -888,7 +893,7 @@ namespace AdvancedK9
             }
             // A handler holding the leash has direct physical control. Routine
             // leashed field commands must not be discarded by random hesitation.
-            if(_leashRope>=0)return true;
+            if(LeashActive)return true;
             bool trained=_profile.IsTrainedFor(command);bool fit=_profile.Health>=70&&_profile.Stamina>=35&&_profile.Food>=20&&_profile.Water>=20;
             if(trained&&fit&&_trust.Level>=90&&_profile.Confidence>=80)return true;
             int delay=trained?Math.Max(80,_trust.ResponseDelay/2):_trust.ResponseDelay+250;GameFiber.Wait(delay);
@@ -1369,7 +1374,7 @@ namespace AdvancedK9
             return true;
         }
 
-        private void PreviewBreed(int delta){if(!DogExists()){_profile.AdjustBreed(delta);return;}Vector3 position=_dog.Position;float heading=_dog.Heading;K9State previous=_state;if(_blip!=null&&_blip.Exists())_blip.Delete();_dog.Delete();_dog=null;_profile.AdjustBreed(delta);if(!CreateDogAt(position,heading))return;if(previous==K9State.Leashed)_state=K9State.Leashed;else{IssuePersistentFollow(Game.LocalPlayer.Character,false);_state=K9State.Following;}}
+        private void PreviewBreed(int delta){if(!DogExists()){_profile.AdjustBreed(delta);return;}Vector3 position=_dog.Position;float heading=_dog.Heading;bool wasLeashed=LeashActive;DeleteLeashRope();if(_blip!=null&&_blip.Exists())_blip.Delete();_dog.Delete();_dog=null;_profile.AdjustBreed(delta);if(!CreateDogAt(position,heading))return;if(wasLeashed){CreateLeashRope();IssuePersistentFollow(Game.LocalPlayer.Character,true);_state=K9State.Leashed;}else{IssuePersistentFollow(Game.LocalPlayer.Character,false);_state=K9State.Following;}}
 
         private void Follow()
         {
@@ -1383,9 +1388,9 @@ namespace AdvancedK9
             _lastHandlerNavigationPosition=handler.Position;
             _handlerNavigationPositionReady=true;
             _dog.Tasks.Clear();
-            if(_leashRope<0&&_dog.DistanceTo(handler)>18f)BeginLongDistanceRecall(handler);
-            else IssuePersistentFollow(handler,_leashRope>=0);
-            _state = _leashRope >= 0 ? K9State.Leashed : K9State.Following;
+            if(!LeashActive&&_dog.DistanceTo(handler)>18f)BeginLongDistanceRecall(handler);
+            else IssuePersistentFollow(handler,LeashActive);
+            _state = LeashActive ? K9State.Leashed : K9State.Following;
             Acknowledge("Following.");
         }
 
@@ -1671,929 +1676,7 @@ namespace AdvancedK9
             {
                 if(!vehicleModel.IsValid||!vetModel.IsValid)throw new InvalidOperationException("Mobile veterinary response models unavailable.");
                 vehicleModel.LoadAndWait();vetModel.LoadAndWait();
-                Vector3 target=_dog.Position;
-                Vector3 spawn=World.GetNextPositionOnStreet(target+HeadingOffset(Game.LocalPlayer.Character.Heading+180f,70f));
-                _mobileVetVehicle=new Vehicle(vehicleModel,spawn,Game.LocalPlayer.Character.Heading);
-                _mobileVet=new Ped(vetModel,spawn,Game.LocalPlayer.Character.Heading);
-                vehicleModel.Dismiss();vetModel.Dismiss();
-                if(_mobileVetVehicle==null||!_mobileVetVehicle.Exists()||_mobileVet==null||!_mobileVet.Exists())throw new InvalidOperationException("Mobile veterinary unit could not spawn.");
-                _mobileVetVehicle.IsPersistent=true;_mobileVet.IsPersistent=true;_mobileVet.BlockPermanentEvents=true;
-                NativeFunction.Natives.SET_PED_INTO_VEHICLE(_mobileVet,_mobileVetVehicle,-1);
-                _mobileVetBlip=_mobileVetVehicle.AttachBlip();_mobileVetBlip.Name="Mobile K9 Veterinarian";_mobileVetBlip.Color=Color.DodgerBlue;
-                NativeFunction.Natives.TASK_VEHICLE_DRIVE_TO_COORD_LONGRANGE(_mobileVet,_mobileVetVehicle,target.X,target.Y,target.Z,22f,786603,7f);
-                uint deadline=Game.GameTime+75000;
-                while(_mobileVetActive&&DogEntityExists()&&_mobileVetVehicle.Exists()&&_mobileVet.Exists()&&Game.GameTime<deadline&&_mobileVetVehicle.DistanceTo(_dog)>14f)GameFiber.Wait(250);
-                if(!DogEntityExists()||!_mobileVet.Exists())throw new InvalidOperationException("The K9 was unavailable when the veterinarian arrived.");
-                if(_mobileVetVehicle.Exists())
-                {
-                    NativeFunction.Natives.TASK_VEHICLE_TEMP_ACTION(_mobileVet,_mobileVetVehicle,27,1500);GameFiber.Wait(900);
-                    NativeFunction.Natives.TASK_LEAVE_VEHICLE(_mobileVet,_mobileVetVehicle,0);GameFiber.Wait(1400);
-                }
-                NativeFunction.Natives.TASK_GO_TO_ENTITY(_mobileVet,_dog,-1,1.25f,2f,0f,0);deadline=Game.GameTime+20000;
-                while(_mobileVet.Exists()&&DogEntityExists()&&Game.GameTime<deadline&&_mobileVet.DistanceTo(_dog)>2.1f)GameFiber.Wait(200);
-                if(_mobileVet.DistanceTo(_dog)>3.5f){_mobileVet.Position=_dog.GetOffsetPosition(new Vector3(1.2f,0f,0f));Game.LogTrivial("AdvancedK9 mobile vet used close-scene pathing fallback.");}
-                NativeFunction.Natives.TASK_TURN_PED_TO_FACE_ENTITY(_mobileVet,_dog,800);GameFiber.Wait(800);
-                _mobileVet.Tasks.PlayAnimation("amb@medic@standing@kneel@base","base",4f,AnimationFlags.Loop);Game.DisplayNotification("~b~Mobile veterinarian treating "+_profile.Name+"...~s~");GameFiber.Wait(6500);
-                if(_downed)RecreateDogAfterFieldTreatment(70);else RestoreDogAfterTreatment(Math.Max(70,_profile.Health));
-                _profile.VeterinaryTreat();_downed=false;_state=K9State.Injured;_roster.UpdateActive(_profile.Name,null,"Rehabilitation");LieDown();
-                K9IncidentLog.Write(_profile.Name,"Medical","Mobile veterinary treatment complete",_dog.Position);
-                Game.DisplayNotification("~g~Mobile veterinary treatment complete.~s~~n~"+_profile.Name+" is stable. Rehabilitation can continue from the Care & Medical menu.");
-            }
-            catch(Exception ex){Game.LogTrivial("AdvancedK9 mobile veterinarian response failed: "+ex);Game.DisplayNotification("~r~Mobile veterinarian could not complete the response.~s~~n~Veterinary Transport remains available as the fallback.");}
-            finally
-            {
-                _mobileVetActive=false;if(_mobileVetBlip!=null&&_mobileVetBlip.Exists())_mobileVetBlip.Delete();_mobileVetBlip=null;
-                if(_mobileVet!=null&&_mobileVet.Exists())_mobileVet.Dismiss();if(_mobileVetVehicle!=null&&_mobileVetVehicle.Exists())_mobileVetVehicle.Dismiss();
-                _mobileVet=null;_mobileVetVehicle=null;vehicleModel.Dismiss();vetModel.Dismiss();
-            }
-        }
-
-        private void RestoreDogAfterTreatment(int healthPercent)
-        {
-            if(!DogEntityExists())return;
-            Vector3 recoveryPosition=_dog.Position;float recoveryHeading=_dog.Heading;
-            NativeFunction.Natives.FREEZE_ENTITY_POSITION(_dog,false);NativeFunction.Natives.DETACH_ENTITY(_dog,true,true);
-            if(_dog.IsDead||NativeFunction.Natives.IS_PED_DEAD_OR_DYING<bool>(_dog,true))NativeFunction.Natives.RESURRECT_PED(_dog);
-            NativeFunction.Natives.SET_ENTITY_COORDS_NO_OFFSET(_dog,recoveryPosition.X,recoveryPosition.Y,recoveryPosition.Z,false,false,false);_dog.Heading=recoveryHeading;
-            NativeFunction.Natives.REVIVE_INJURED_PED(_dog);NativeFunction.Natives.CLEAR_PED_TASKS_IMMEDIATELY(_dog);
-            int health=Math.Max(1,(int)(_dog.MaxHealth*Math.Max(1,Math.Min(100,healthPercent))/100f));
-            _dog.Health=health;NativeFunction.Natives.SET_ENTITY_HEALTH(_dog,health);NativeFunction.Natives.SET_ENTITY_COLLISION(_dog,true,true);NativeFunction.Natives.SET_PED_CAN_RAGDOLL(_dog,true);
-            // Treatment can occur in the middle of an active firefight. Keep the
-            // revived ped protected long enough for the death state and combat
-            // damage queued on the prior frame to clear.
-            _dog.IsInvincible=true;_medicalProtectionUntil=Game.GameTime+12000;_dog.BlockPermanentEvents=true;ConfigureAmbientGunfireImmunity();
-            GameFiber.Wait(150);
-            if(DogEntityExists()&&(_dog.IsDead||NativeFunction.Natives.IS_PED_DEAD_OR_DYING<bool>(_dog,true)))
-            {
-                NativeFunction.Natives.RESURRECT_PED(_dog);NativeFunction.Natives.SET_ENTITY_COORDS_NO_OFFSET(_dog,recoveryPosition.X,recoveryPosition.Y,recoveryPosition.Z,false,false,false);
-                _dog.Health=health;NativeFunction.Natives.SET_ENTITY_HEALTH(_dog,health);NativeFunction.Natives.CLEAR_PED_TASKS_IMMEDIATELY(_dog);
-            }
-        }
-
-        private void ToggleCarryK9()
-        {
-            if(_carryingDog){SetDownCarriedK9(true);return;}
-            if(!DogEntityExists()){Game.DisplayNotification("~y~No deployed K9 is available to carry.");return;}
-            var handler=Game.LocalPlayer.Character;
-            if(_dog.DistanceTo(handler)>3f){Game.DisplayNotification("~y~Move closer to "+_profile.Name+" before carrying.");return;}
-            _carriedForAccess=!_downed&&_state!=K9State.Injured;
-            DeleteLeashRope();ReleaseVehicleSeat();
-            NativeFunction.Natives.FREEZE_ENTITY_POSITION(_dog,false);
-            NativeFunction.Natives.SET_PED_CAN_RAGDOLL(_dog,false);
-            _dog.IsInvincible=true;_dog.Tasks.ClearImmediately();
-            handler.Tasks.PlayAnimation("anim@heists@box_carry@","idle",4f,AnimationFlags.Loop|AnimationFlags.UpperBodyOnly|AnimationFlags.SecondaryTask);
-            _carryingDog=true;
-            NativeFunction.Natives.SET_ENTITY_COLLISION(_dog,false,false);
-            ApplyCarryAttachment();
-            PlayDogAnimation("creatures@rottweiler@amb@sleep_in_kennel@","sleep_in_kennel",-1,1);
-            NativeFunction.Natives.SET_PED_CAN_SWITCH_WEAPON(handler,false);
-            _state=K9State.Injured;
-            K9IncidentLog.Write(_profile.Name,_carriedForAccess?"Access carry":"Medical","Handler began K9 carry",handler.Position);
-            Game.DisplayNotification("~b~Carrying "+_profile.Name+".~s~~n~Use this for stairs, obstacles, or inaccessible terrain. Select Carry / Set Down K9 again to place him down.");
-        }
-
-        private void SetDownCarriedK9(bool notify)
-        {
-            if(!_carryingDog)return;
-            var handler=Game.LocalPlayer.Character;NativeFunction.Natives.CLEAR_PED_SECONDARY_TASK(handler);
-            NativeFunction.Natives.SET_PED_CAN_SWITCH_WEAPON(handler,true);
-            NativeFunction.Natives.DETACH_ENTITY(_dog,true,true);
-            NativeFunction.Natives.SET_ENTITY_COLLISION(_dog,true,true);
-            NativeFunction.Natives.FREEZE_ENTITY_POSITION(_dog,false);
-            _dog.Position=handler.GetOffsetPosition(new Vector3(.65f,1.1f,0f));
-            _carryingDog=false;
-            bool accessCarry=_carriedForAccess;_carriedForAccess=false;
-            if(_downed)PlaceDogInDownedPose();
-            else
-            {
-                _dog.IsInvincible=false;NativeFunction.Natives.SET_PED_CAN_RAGDOLL(_dog,true);
-                if(accessCarry){_state=K9State.Following;Follow();}
-                else{LieDown();_state=K9State.Injured;}
-            }
-            K9IncidentLog.Write(_profile.Name,accessCarry?"Access carry":"Medical","Handler set carried K9 down",_dog.Position);
-            if(notify)Game.DisplayNotification("~b~"+_profile.Name+" placed down safely."+ (accessCarry?" He is ready to continue working.":""));
-        }
-
-        private void EmergencyLoadK9()
-        {
-            if(!DogEntityExists()){Game.DisplayNotification("~y~No K9 is available for emergency loading.");return;}
-            if(!_carryingDog){Game.DisplayNotification("~y~Carry the injured K9 before emergency loading.");return;}
-            var handler=Game.LocalPlayer.Character;var vehicle=World.GetAllVehicles().Where(v=>v.Exists()&&v.DistanceTo(handler)<=6f&&v.Speed<1.5f).OrderBy(v=>v.DistanceTo(handler)).FirstOrDefault();
-            if(vehicle==null){Game.DisplayNotification("~y~Move beside a stopped emergency or patrol vehicle.");return;}
-            handler.Tasks.Clear();NativeFunction.Natives.DETACH_ENTITY(_dog,true,true);_carryingDog=false;_dogVehicle=vehicle;_dogVehicleDoor=3;
-            NativeFunction.Natives.SET_VEHICLE_DOOR_OPEN(vehicle,_dogVehicleDoor,false,false);int bone=NativeFunction.Natives.GET_ENTITY_BONE_INDEX_BY_NAME<int>(vehicle,"seat_pside_r");if(bone<0)bone=NativeFunction.Natives.GET_ENTITY_BONE_INDEX_BY_NAME<int>(vehicle,"seat_dside_r");
-            if(bone<0){_dog.Position=vehicle.GetOffsetPosition(new Vector3(1.4f,-1.3f,0f));PlaceDogInDownedPose();Game.DisplayNotification("~r~This vehicle has no safe rear-seat loading point.");return;}
-            Vector3 seat=NativeFunction.Natives.GET_WORLD_POSITION_OF_ENTITY_BONE<Vector3>(vehicle,bone);NativeFunction.Natives.SET_ENTITY_COORDS_NO_OFFSET(_dog,seat.X,seat.Y,seat.Z,false,false,false);NativeFunction.Natives.SET_ENTITY_COLLISION(_dog,false,false);NativeFunction.Natives.ATTACH_ENTITY_TO_ENTITY(_dog,vehicle,bone,0f,-.28f,.32f,0f,90f,90f,false,false,false,false,2,true);PlayDogAnimation("creatures@rottweiler@move","dead_left",-1,1);NativeFunction.Natives.SET_VEHICLE_DOOR_SHUT(vehicle,_dogVehicleDoor,false);
-            _dogSeatAttached=true;_emergencyTransport=true;_state=K9State.InVehicle;K9IncidentLog.Write(_profile.Name,"Medical","Emergency loaded flat into "+_seatProfiles.VehicleName(vehicle),vehicle.Position);Game.DisplayNotification("~g~K9 emergency-loaded safely.~s~~n~Use Veterinary Transport to route to the clinic.");
-        }
-
-        private void BeginVeterinaryTransport()
-        {
-            if(!DogEntityExists()||(!_emergencyTransport&&!_carryingDog&&!_profile.IsRehabilitating&&_profile.Health>=95&&_state!=K9State.Injured)){Game.DisplayNotification("~y~Veterinary transport requires an injured, carried, or emergency-loaded K9.");return;}
-            if(_carryingDog){Game.DisplayNotification("~y~Emergency-load the K9 into a stopped vehicle first.");return;}
-            _veterinaryTransportActive=true;if(_veterinaryBlip!=null&&_veterinaryBlip.Exists())_veterinaryBlip.Delete();_veterinaryBlip=new Blip(_veterinaryHospital){Color=Color.Red,Name="K9 Veterinary Emergency"};try{NativeFunction.Natives.SET_BLIP_ROUTE(_veterinaryBlip,true);NativeFunction.Natives.SET_BLIP_ROUTE_COLOUR(_veterinaryBlip,1);}catch{}
-            K9IncidentLog.Write(_profile.Name,"Medical","Veterinary transport started",Game.LocalPlayer.Character.Position);Game.DisplayNotification("~b~Veterinary route active.~s~~n~Transport "+_profile.Name+" to the marked clinic. Arrival is detected automatically.");
-        }
-
-        private void MaintainVeterinaryTransport()
-        {
-            if(!_veterinaryTransportActive)return;var handler=Game.LocalPlayer.Character;if(handler==null||!handler.Exists())return;if(handler.Position.DistanceTo(_veterinaryHospital)>18f)return;
-            Vehicle vehicle=handler.CurrentVehicle;if(vehicle!=null&&vehicle.Exists()&&vehicle.Speed>1.5f){Game.DisplayHelp("Stop the vehicle to complete K9 veterinary intake.");return;}
-            CompleteVeterinaryIntake();
-        }
-
-        private void CompleteVeterinaryIntake()
-        {
-            if(!DogEntityExists())return;if(_carryingDog)SetDownCarriedK9(false);_veterinaryTransportActive=false;if(_veterinaryBlip!=null&&_veterinaryBlip.Exists())_veterinaryBlip.Delete();_veterinaryBlip=null;
-            NativeFunction.Natives.DO_SCREEN_FADE_OUT(350);GameFiber.Wait(450);ReleaseVehicleSeat();_emergencyTransport=false;RestoreDogAfterTreatment(Math.Max(70,_profile.Health));_dog.Position=Game.LocalPlayer.Character.GetOffsetPosition(new Vector3(1f,0f,0f));_profile.VeterinaryTreat();_downed=false;_roster.UpdateActive(_profile.Name,null,"Rehabilitation");LieDown();_state=K9State.Injured;GameFiber.Wait(450);NativeFunction.Natives.DO_SCREEN_FADE_IN(350);
-            K9IncidentLog.Write(_profile.Name,"Medical","Veterinary intake complete; rehabilitation started",_veterinaryHospital);Game.DisplayNotification("~g~Veterinary intake complete.~s~~n~"+_profile.Name+" is stable and begins rehabilitation at 0%. Certifications remain saved.");
-        }
-
-        private void RehabilitationSession()
-        {
-            if(!_profile.IsRehabilitating){Game.DisplayNotification("~g~"+_profile.Name+" has full veterinary clearance.");return;}
-            if(Game.GameTime<_nextRehabilitationSession){Game.DisplayNotification("~y~The K9 needs recovery time before another rehabilitation session.");return;}
-            _nextRehabilitationSession=Game.GameTime+60000;int gain=_random.Next(24,39);int progress=_profile.AdvanceRehabilitation(gain);_roster.UpdateActive(_profile.Name,null,_profile.IsRehabilitating?"Rehabilitation":"Available");
-            if(_profile.IsRehabilitating){LieDown();_state=K9State.Injured;Game.DisplayNotification("~b~Rehabilitation session complete.~s~~n~Progress "+progress+"% • health "+_profile.Health+"% • stamina "+_profile.Stamina+"%.");}
-            else{RestoreDogAfterTreatment(100);Game.DisplayNotification("~g~Veterinary clearance complete.~s~~n~"+_profile.Name+" may return to patrol.");Follow();}
-            K9IncidentLog.Write(_profile.Name,"Rehabilitation","Progress "+progress+"%",Game.LocalPlayer.Character.Position);
-        }
-        private void Restock(){var handler=Game.LocalPlayer.Character;var vehicle=World.GetAllVehicles().Where(v=>v.Exists()&&v.DistanceTo(handler)<5f).FirstOrDefault();if(vehicle==null){Game.DisplayNotification("~y~Stand beside a patrol vehicle to restock.");return;}_profile.Restock();K9IncidentLog.Write(_profile.Name,"Equipment","Restocked",handler.Position);Game.DisplayNotification("~g~K9 duty equipment restocked.");}
-        private void WhistleRecall(){NativeFunction.Natives.PLAY_SOUND_FRONTEND(-1,"NAV_UP_DOWN","HUD_FRONTEND_DEFAULT_SOUNDSET",true);Game.DisplaySubtitle("~b~Handler whistle recall",1200);Follow();}
-        private void HandSignal(){var handler=Game.LocalPlayer.Character;NativeFunction.Natives.REQUEST_ANIM_DICT("gestures@m@standing@casual");GameFiber.Wait(150);handler.Tasks.PlayAnimation("gestures@m@standing@casual","gesture_come_here_soft",4f,AnimationFlags.None);GameFiber.Wait(700);Follow();}
-
-        private void CaptureScentTrails()
-        {
-            if(!_deployed||Game.GameTime<_nextTrailCapture)return;_nextTrailCapture=Game.GameTime+2500;var handler=Game.LocalPlayer.Character;uint cutoff=Game.GameTime>1200000?Game.GameTime-1200000:0;int captured=0;
-            foreach(var ped in World.GetAllPeds())
-            {
-                if(ped==null||!ped.Exists()||ped==handler||ped==_dog||ped.IsDead||ped.DistanceTo(handler)>200f||LspdfrBridge.IsPedCop(ped))continue;
-                List<ScentTrailPoint> trail;if(!_recordedTrails.TryGetValue(ped.Handle,out trail)){trail=new List<ScentTrailPoint>();_recordedTrails[ped.Handle]=trail;}
-                if(trail.Count==0||trail[trail.Count-1].Position.DistanceTo(ped.Position)>=3f)trail.Add(new ScentTrailPoint(ped.Position,Game.GameTime));
-                trail.RemoveAll(p=>p.Time<cutoff);if(trail.Count>500)trail.RemoveRange(0,trail.Count-500);
-                if(++captured>=96)break;
-            }
-        }
-
-        private void UpdateCompatibilityPursuit()
-        {
-            if(Game.GameTime<_nextPursuitProbe)return;_nextPursuitProbe=Game.GameTime+1000;var suspect=CurrentPursuitSuspect();
-            if(suspect==null||!suspect.Exists()||suspect.IsDead)
-            {
-                if(_compatibilityPursuitSuspect!=null){if(_scentTarget==_compatibilityPursuitSuspect){_scentTarget=null;_activeScentSample=null;_activeScentSource="None";_trailLost=false;}if(DogExists()&&(_state==K9State.Tracking||_state==K9State.Containing||_state==K9State.Apprehending))Follow();Game.LogTrivial("AdvancedK9 pursuit cleanup: pursuit ended or subject unavailable; track, containment and target references cleared.");}
-                _compatibilityPursuitSuspect=null;_pursuitLastVehicle=null;_pursuitTrackStarted=false;_pursuitLostVisualTrackStarted=false;_pursuitLastVisualAt=0;_automaticTrackRequested=false;return;
-            }
-            if(IsProtectedOperationalPed(suspect)){if(_scentTarget==suspect){_scentTarget=null;_activeScentSample=null;}_compatibilityPursuitSuspect=null;_pursuitLastVehicle=null;_pursuitTrackStarted=false;_pursuitLostVisualTrackStarted=false;if(DogExists())Follow();Game.LogTrivial("AdvancedK9 pursuit cleanup: suspect arrested/restrained; K9 recalled.");return;}
-            if(_compatibilityPursuitSuspect!=suspect){_compatibilityPursuitSuspect=suspect;_pursuitLastVehicle=suspect.CurrentVehicle;_pursuitTrackStarted=false;_pursuitLostVisualTrackStarted=false;_pursuitLastVisualAt=Game.GameTime;Game.LogTrivial("AdvancedK9 pursuit integration: suspect assigned without requiring a PR/STP stop.");}
-            var current=suspect.CurrentVehicle;
-            if(current!=null&&current.Exists()){if(_pursuitLastVehicle!=null&&_pursuitLastVehicle.Exists()&&_pursuitLastVehicle.Handle!=current.Handle)Game.LogTrivial("AdvancedK9 pursuit cleanup: suspect changed vehicles; stale vehicle scent reference replaced.");_pursuitLastVehicle=current;}
-            else if(_pursuitLastVehicle!=null&&_pursuitLastVehicle.Exists()&&_scentTarget!=suspect)
-            {
-                _scentTarget=suspect;_scentCollectedAt=Game.GameTime;_scentRainAtCollection=NativeFunction.Natives.GET_RAIN_LEVEL<float>();_activeScentSample=NewScentSample(ScentArticleType.VehicleDoor,"pursuit vehicle bailout","last occupied door");_activeScentSource="Pursuit vehicle bailout";_trailLost=false;
-                Game.DisplayNotification("~b~K9 pursuit update:~s~ suspect bailed out.~n~Vehicle scent and recorded foot trail assigned.");
-                K9IncidentLog.Write(_profile.Name,"Pursuit scent","Vehicle bailout assigned",suspect.Position);
-                if(DogExists()&&!_downed&&_state!=K9State.Apprehending&&_state!=K9State.Academy&&!_pursuitTrackStarted&&_lastAutomaticPursuitHandle!=suspect.Handle)
-                {
-                    _pursuitTrackStarted=true;_lastAutomaticPursuitHandle=suspect.Handle;
-                    Game.DisplayNotification("~o~Automatic pursuit deployment:~s~ "+_profile.Name+" is taking the bailout trail.");
-                    GameFiber.StartNew(StartAutomaticPursuitTrack,"AdvancedK9 automatic pursuit track");
-                }
-            }
-            bool hasVisual=false;try{hasVisual=NativeFunction.Natives.HAS_ENTITY_CLEAR_LOS_TO_ENTITY<bool>(Game.LocalPlayer.Character,suspect,17);}catch{}
-            if(hasVisual){_pursuitLastVisualAt=Game.GameTime;_pursuitLostVisualTrackStarted=false;}
-            else if(_config.PursuitAutoTrackLostVisual&&current==null&&DogExists()&&!_downed&&!_pursuitLostVisualTrackStarted&&_pursuitLastVisualAt>0&&Game.GameTime-_pursuitLastVisualAt>=(uint)(_config.PursuitLostVisualSeconds*1000))
-            {
-                bool hidden=false;try{hidden=NativeFunction.Natives.IS_PED_IN_COVER<bool>(suspect,false)||NativeFunction.Natives.IS_PED_STEALTH_MOVEMENT<bool>(suspect);}catch{}
-                _pursuitLostVisualTrackStarted=true;_scentTarget=suspect;_scentCollectedAt=_pursuitLastVisualAt;_scentRainAtCollection=NativeFunction.Natives.GET_RAIN_LEVEL<float>();
-                _activeScentSample=NewScentSample(ScentArticleType.LastKnownLocationPad,hidden?"hidden pursuit suspect":"lost-visual pursuit","last confirmed visual position");_activeScentSource=hidden?"Hidden pursuit subject":"Pursuit lost visual";_trailLost=false;
-                Game.DisplayNotification("~o~K9 PURSUIT LOST VISUAL~s~~n~"+(hidden?"Hidden-subject behavior detected. ":"")+"Last-known scent assigned; "+_profile.Name+" is beginning a recorded trail.");
-                K9IncidentLog.Write(_profile.Name,"Pursuit scent",hidden?"Hidden suspect track assigned":"Lost-visual track assigned",suspect.Position);
-                GameFiber.StartNew(StartAutomaticPursuitTrack,"AdvancedK9 lost-visual pursuit track");
-            }
-        }
-        private Ped CurrentPursuitSuspect(){var handler=Game.LocalPlayer.Character;return (_config.CompatibilityUseActiveTargets?_pr.GetPursuitSuspect(handler):null)??LspdfrBridge.GetPursuitSuspect(handler);}
-        private void StartAutomaticPursuitTrack()
-        {
-            if(_state==K9State.InVehicle)
-            {
-                uint timeout=Game.GameTime+15000;while(_running&&DogExists()&&_state==K9State.InVehicle&&_dogVehicle!=null&&_dogVehicle.Exists()&&_dogVehicle.Speed>2f&&Game.GameTime<timeout)GameFiber.Yield();
-                if(_state==K9State.InVehicle)DoorPop(false);
-                if(_state==K9State.InVehicle){_pursuitTrackStarted=false;Game.DisplayNotification("~y~Automatic K9 track held for safety.~s~~n~Stop the patrol vehicle, then command TRACK.");return;}
-            }
-            _automaticTrackRequested=true;try{BeginTrack();}finally{_automaticTrackRequested=false;}
-        }
-        private void CollectScent()
-        {
-            var handler=Game.LocalPlayer.Character;
-            Ped target=GetValidAimedSuspect(false);
-            ScentSample assignedCalloutSample=null;
-            if(target==null&&_pendingCalloutScentTarget!=null&&_pendingCalloutScentTarget.Exists()&&!_pendingCalloutScentTarget.IsDead&&
-                handler.DistanceTo(_pendingCalloutScentPosition)<=18f)
-            {
-                target=_pendingCalloutScentTarget;
-                assignedCalloutSample=NewScentSample(ScentArticleType.VehicleSeat,"callout abandoned vehicle","preserved driver-seat scent");
-            }
-            Vehicle sourceVehicle=null;
-            Rage.Object sourceArticle=null;
-            ScentSample sample=assignedCalloutSample;
-            if(target==null)
-            {
-                var aimedEntity=Game.LocalPlayer.GetFreeAimingTarget() as Entity;
-                sourceVehicle=aimedEntity as Vehicle;
-                sourceArticle=aimedEntity as Rage.Object;
-                if(sourceArticle==null&&(sourceVehicle==null||!sourceVehicle.Exists()||sourceVehicle.DistanceTo(handler)>25f))
-                    sourceVehicle=World.GetAllVehicles().Where(v=>v.Exists()&&v.DistanceTo(handler)<=6f).OrderBy(v=>v.DistanceTo(handler)).FirstOrDefault();
-                if(sourceVehicle!=null){target=FindVehicleScentSubject(sourceVehicle);sample=BuildVehicleScentSample(sourceVehicle,handler);}
-                if(target==null&&sourceArticle!=null&&sourceArticle.Exists()&&sourceArticle.DistanceTo(handler)<=12f)
-                {target=FindArticleScentSubject(sourceArticle);var type=ScentSample.ClassifyObject(sourceArticle.Model.Name);sample=NewScentSample(type,"article "+sourceArticle.Model.Name,ScentSample.Label(type));}
-            }
-            if(target==null)
-            {
-                var bloodOwner=World.GetAllPeds().Where(p=>p!=null&&p.Exists()&&p!=handler&&p!=_dog&&!LspdfrBridge.IsPedCop(p)&&p.DistanceTo(handler)<=8f&&p.Health<p.MaxHealth).OrderBy(p=>p.DistanceTo(handler)).FirstOrDefault();
-                if(bloodOwner!=null){target=bloodOwner;sample=NewScentSample(ScentArticleType.Blood,"blood evidence","fresh blood at last-known location");}
-            }
-            if(target==null)
-            {
-                var pursuit=CurrentPursuitSuspect();if(pursuit!=null&&pursuit.Exists()&&!pursuit.IsDead){target=pursuit;sample=NewScentSample(ScentArticleType.LastKnownLocationPad,"last-known location",handler.Position.DistanceTo(pursuit.Position)<12f?"current last-known point":"handler-placed location pad");}
-            }
-            if(target==null)
-            {
-                Game.DisplayNotification("~y~No unique track subject identified.~s~~n~Aim at the suspect, their recently occupied vehicle, or an owner-associated article, then collect scent.");
-                return;
-            }
-            if(!_profile.UseScentBag()){Game.DisplayNotification("~r~No clean scent bags. Restock equipment.");return;}
-            _scentTarget=target;_scentCollectedAt=Game.GameTime;_scentRainAtCollection=NativeFunction.Natives.GET_RAIN_LEVEL<float>();
-            if(sample==null)sample=NewScentSample(ScentArticleType.DirectPerson,"person","direct person scent");_activeScentSample=sample;_activeScentSource=sample.Source+" — "+sample.CollectionZone;_trailLost=false;
-            K9IncidentLog.Write(_profile.Name,"Scent article","Collected "+ScentSample.Label(sample.Type)+" from "+sample.CollectionZone+"; base quality "+sample.BaseQuality+"%",target.Position);
-            Game.DisplayNotification("~g~"+ScentSample.Label(sample.Type)+" bagged.~s~~n~Source: "+sample.CollectionZone+" • base quality "+sample.BaseQuality+"%~n~Track subject locked for "+_profile.Name+".");
-        }
-
-        private ScentSample NewScentSample(ScentArticleType type,string source,string zone){return new ScentSample{Type=type,Source=source,CollectionZone=zone,BaseQuality=ScentSample.QualityFor(type),CollectedAt=Game.GameTime,RainAtCollection=NativeFunction.Natives.GET_RAIN_LEVEL<float>()};}
-
-        private ScentSample BuildVehicleScentSample(Vehicle vehicle,Ped handler)
-        {
-            string[] bones={"door_dside_f","door_pside_f","door_dside_r","door_pside_r"};string[] labels={"driver-front","passenger-front","driver-rear","passenger-rear"};int[] doors={0,1,2,3};
-            int best=-1;float distance=float.MaxValue;for(int i=0;i<bones.Length;i++){int bone=NativeFunction.Natives.GET_ENTITY_BONE_INDEX_BY_NAME<int>(vehicle,bones[i]);if(bone<0)continue;Vector3 p=NativeFunction.Natives.GET_WORLD_POSITION_OF_ENTITY_BONE<Vector3>(vehicle,bone);float d=p.DistanceTo(handler.Position);if(d<distance){distance=d;best=i;}}
-            if(best<0)best=0;float doorAngle=0f;try{doorAngle=NativeFunction.Natives.GET_VEHICLE_DOOR_ANGLE_RATIO<float>(vehicle,doors[best]);}catch{}
-            bool seat=doorAngle>.12f;var type=seat?ScentArticleType.VehicleSeat:ScentArticleType.VehicleDoor;string zone=labels[best]+(seat?" seat":" exterior door/handle");return NewScentSample(type,"vehicle "+vehicle.Model.Name,zone);
-        }
-
-        private Ped FindArticleScentSubject(Rage.Object article)
-        {
-            if(article==null||!article.Exists())return null;
-            var handler=Game.LocalPlayer.Character;
-            var pursuit=CurrentPursuitSuspect();
-            if(pursuit!=null&&pursuit.Exists()&&!pursuit.IsDead)return pursuit;
-            var candidates=World.GetAllPeds().Where(p=>p.Exists()&&p!=handler&&p!=_dog&&!p.IsDead&&!LspdfrBridge.IsPedCop(p)&&p.DistanceTo(article)<=8f).OrderBy(p=>p.DistanceTo(article)).Take(2).ToList();
-            if(candidates.Count==1)return candidates[0];
-            if(candidates.Count>1)Game.DisplayNotification("~y~The article carries mixed nearby scent.~s~~n~Aim at the correct person, or collect it after the area clears.");
-            else Game.DisplayNotification("~y~No subject can be associated with that article.~s~~n~Use an article near its owner or during an active pursuit.");
-            return null;
-        }
-
-        private Ped FindVehicleScentSubject(Vehicle vehicle)
-        {
-            if(vehicle==null||!vehicle.Exists())return null;
-            var handler=Game.LocalPlayer.Character;
-            var candidates=new List<Ped>();
-            foreach(var ped in World.GetAllPeds())
-            {
-                if(ped==null||!ped.Exists()||ped==handler||ped==_dog||ped.IsDead||LspdfrBridge.IsPedCop(ped))continue;
-                try
-                {
-                    var lastVehicle=NativeFunction.Natives.GET_VEHICLE_PED_IS_IN<Vehicle>(ped,true);
-                    if(lastVehicle!=null&&lastVehicle.Exists()&&lastVehicle.Handle==vehicle.Handle)candidates.Add(ped);
-                }
-                catch{}
-            }
-            if(candidates.Count==1)return candidates[0];
-            if(candidates.Count>1)
-            {
-                Game.DisplayNotification("~y~Multiple recent occupants detected.~s~~n~Aim directly at the person to identify the correct track subject.");
-                return null;
-            }
-            Game.DisplayNotification("~y~No recent non-officer occupant is available for that vehicle.~s~~n~Collect vehicle scent before the fleeing ped despawns.");
-            return null;
-        }
-
-        private void Search(int generation,bool vehicleOnly=false,DetectionSpecialty specialty=DetectionSpecialty.General)
-        {
-            if(!SearchSessionActive(generation))return;
-            if(specialty!=DetectionSpecialty.General&&!_profile.HasSpecialty(specialty)){Game.DisplayNotification("~y~K9 is not certified for "+SpecialtyLabel(specialty)+" detection.~s~~n~Complete that specialty course at the academy.");return;}
-            var officer = Game.LocalPlayer.Character;
-            Entity target = FindCompatibilitySearchTarget(officer,vehicleOnly);
-            if (target == null)
-            {
-                Game.DisplayNotification("~y~No nearby pedestrian or vehicle to search.");
-                return;
-            }
-            if(_config.ExplosiveSearchLockout&&_explosiveSearchLockouts.Contains(target.Handle)){Game.DisplayNotification("~r~Explosive safety lockout active.~s~~n~Do not redeploy the K9 near the marked device. Maintain the perimeter and request bomb squad.");return;}
-            _lastSearchAlertPosition=target.Position;_lastSearchAlertZone=target is Vehicle?"vehicle exterior":"subject / search center";
-            _state = K9State.Searching;
-            _hudSearchLabel=target is Vehicle?"VEHICLE SEARCH":"AREA SEARCH";
-            _hudSearchProgress=0;
-            _dog.Tasks.Clear();
-            if(target is Vehicle)
-            {
-                if(!SearchVehiclePerimeter((Vehicle)target,generation)){if(SearchSessionActive(generation))Follow();return;}
-            }
-            else
-            {
-                _dog.Tasks.FollowNavigationMeshToPosition(target.GetOffsetPosition(new Vector3(0f,-1f,0f)),target.Heading,2f).WaitForCompletion(9000);
-                if(!SearchSessionActive(generation)||!target.Exists()){if(SearchSessionActive(generation))Follow();return;}
-                for(var i=0;i<3;i++)
-                {
-                    if(!SearchSessionActive(generation))return;
-                    _hudSearchProgress=(i*100)/3;
-                    var sniffPoint=target.GetOffsetPosition(new Vector3(i==0?-.8f:i==1?.8f:0f,-.45f,0f));
-                    _dog.Tasks.FollowNavigationMeshToPosition(sniffPoint,target.Heading,1.2f).WaitForCompletion(2500);
-                    _lastSearchAlertPosition=sniffPoint;_lastSearchAlertZone=i==0?"left side":i==1?"right side":"rear / center";
-                    PlayDogAnimation("creatures@rottweiler@indication@","indicate_low",650,0);
-                    GameFiber.Wait(700);
-                }
-            }
-            var compatibility=_pr.GetSearchResult(target,specialty,_profile.NarcoticsCertified,_profile.ExplosivesCertified,_profile.WeaponsCertified);
-            if(compatibility!=null&&compatibility.Inconclusive){SetHudAlert("INCONCLUSIVE — INVENTORY UNAVAILABLE");Sit();_hudSearchProgress=100;_hudSearchLabel="";Game.LogTrivial("AdvancedK9 search result: inconclusive on "+TargetLabel(target)+"; no positive or negative K9 indication was recorded.");return;}
-            var positive=compatibility!=null?compatibility.Positive:(_pr.IsAvailable?false:_random.NextDouble()<_config.PositiveChance);
-            var resultSpecialty=compatibility!=null&&compatibility.Specialty!=DetectionSpecialty.General?compatibility.Specialty:positive&&specialty==DetectionSpecialty.General?CertifiedGeneralSearchSpecialty():specialty;
-            var presentedOdors=compatibility!=null&&compatibility.Odors.Count>0?compatibility.Odors.Distinct().ToList():positive&&resultSpecialty!=DetectionSpecialty.General?new List<DetectionSpecialty>{resultSpecialty}:new List<DetectionSpecialty>();
-            if (positive && _random.NextDouble() > _trust.DetectionReliability)
-            {
-                Game.DisplayNotification("~o~Uncertain K9 response.~s~ Build trust and repeat the search.");
-                Follow();
-                return;
-            }
-            if (positive)
-            {
-                string odorPresentation=string.Join(" + ",presentedOdors.Select(s=>SpecialtyLabel(s).ToUpperInvariant()));
-                SetHudAlert(odorPresentation);
-                Sit();
-                bool explosivePresent=presentedOdors.Contains(DetectionSpecialty.Explosives);
-                if(explosivePresent)
-                {
-                    if(_config.ExplosiveSearchLockout)_explosiveSearchLockouts.Add(target.Handle);
-                    _dog.Tasks.Clear();
-                    if(_config.ExplosiveAutoRecall){NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(_dog,Game.LocalPlayer.Character,-.8f,-_config.ExplosiveSafetyDistance,0f,3.2f,-1,1f,true);GameFiber.Wait(1600);}
-                    Sit();
-                    Game.DisplayNotification("~r~MULTI-ODOR ALERT — EXPLOSIVE SAFETY.~s~~n~Detected: "+odorPresentation+"~n~"+(_config.ExplosiveAutoRecall?"K9 recalled "+_config.ExplosiveSafetyDistance.ToString("0")+"m silently. ":"Silent indication held. ")+(_config.ExplosiveSearchLockout?"Search lockout enabled. ":"")+" Establish a perimeter and request bomb squad.");
-                }
-                else
-                {
-                    Bark(3);
-                    Game.DisplayNotification("~r~K9 POSITIVE ALERT~s~~n~Detected trained odors: "+odorPresentation);
-                }
-                _trust.Change(1, "successful detection");
-                _profile.RecordSearch();
-                AwardOperationalXp("Certified odor detection",8,20,1,3);
-                foreach(var detectedOdor in presentedOdors)
-                {
-                    _pr.RecordK9Indication(target,true,detectedOdor,_profile.Name);
-                    _evidenceMarkers.Add(_profile.Name,TargetLabel(target),SpecialtyLabel(detectedOdor),_lastSearchAlertZone,_lastSearchAlertPosition);
-                }
-                Game.LogTrivial("AdvancedK9 search result: simultaneous positive indications ["+string.Join(",",presentedOdors)+"] on "+TargetLabel(target)+" at "+_lastSearchAlertZone+"; "+(explosivePresent?"silent recall and lockout":"three-bark alert")+" authorized.");
-            }
-            else
-            {
-                SetHudAlert("NEGATIVE — NO "+(specialty==DetectionSpecialty.General?"CERTIFIED ODOR":SpecialtyLabel(specialty).ToUpperInvariant()));
-                Sit();
-                _pr.RecordK9Indication(target,false,specialty,_profile.Name);
-                Game.LogTrivial("AdvancedK9 search result: negative indication on "+TargetLabel(target)+"; K9 remains silent.");
-            }
-            _hudSearchProgress=100;
-            _hudSearchLabel="";
-        }
-
-        private void BeginSearch(bool vehicleOnly,DetectionSpecialty specialty)
-        {
-            if(_searchInProgress){Game.DisplayNotification("~y~K9 search already in progress.");return;}
-            var handler=Game.LocalPlayer.Character;
-            if(!vehicleOnly&&specialty==DetectionSpecialty.General&&_pendingCalloutScentTarget!=null&&
-                _pendingCalloutScentTarget.Exists()&&!_pendingCalloutScentTarget.IsDead&&
-                !string.IsNullOrWhiteSpace(_pendingCalloutScentDetails)&&
-                _pendingCalloutScentDetails.IndexOf("LiveHumanOdor",StringComparison.OrdinalIgnoreCase)>=0&&
-                handler.DistanceTo(_pendingCalloutScentPosition)<=30f)
-            {
-                _scentTarget=_pendingCalloutScentTarget;_scentCollectedAt=Game.GameTime;
-                _scentRainAtCollection=NativeFunction.Natives.GET_RAIN_LEVEL<float>();
-                _activeScentSample=NewScentSample(ScentArticleType.LastKnownLocationPad,"occupied-bank human odor","fresh human trail at the bank threshold");
-                _activeScentSource="Live human odor from occupied bank";_trailLost=false;
-                Game.DisplayNotification("~g~Human trail detected.~s~~n~Rex isolated a fresh occupied-bank scent from the entrance and is following it inside.");
-                Game.LogTrivial("AdvancedK9 area search: live callout human odor isolated without a physical clothing article; recorded interior trail assigned.");
-                BeginTrack();return;
-            }
-            int generation=++_searchGeneration;_searchInProgress=true;_state=K9State.Searching;_hudSearchLabel=vehicleOnly?"VEHICLE SEARCH":"AREA SEARCH";_hudSearchProgress=0;
-            if(_workingLeashed)ActionNotification("~b~Working leash retained.~s~ Follow the K9 as it leads the search.");
-            GameFiber.StartNew(()=>{try{Search(generation,vehicleOnly,specialty);}catch(Exception ex){Game.LogTrivial("AdvancedK9 asynchronous search failed: "+ex);Game.DisplayNotification("~r~K9 search failed.~s~ See RagePluginHook.log.");if(SearchSessionActive(generation))Follow();}finally{if(generation==_searchGeneration){_hudSearchLabel="";_searchInProgress=false;}}},"AdvancedK9 Search");
-        }
-
-        private void BeginBuildingSearch()
-        {
-            if(_searchInProgress){Game.DisplayNotification("~y~K9 search already in progress.");return;}
-            int generation=++_searchGeneration;_searchInProgress=true;_state=K9State.Searching;_hudSearchLabel="BUILDING SEARCH";_hudSearchProgress=0;
-            GameFiber.StartNew(()=>{try{SearchBuilding(generation);}catch(Exception ex){Game.LogTrivial("AdvancedK9 asynchronous building search failed: "+ex);Game.DisplayNotification("~r~K9 building search failed.~s~ See RagePluginHook.log.");if(SearchSessionActive(generation))Follow();}finally{if(generation==_searchGeneration){_hudSearchLabel="";_searchInProgress=false;}}},"AdvancedK9 Building Search");
-        }
-
-        private void SearchBuilding(int generation)
-        {
-            if(!SearchSessionActive(generation))return;var handler=Game.LocalPlayer.Character;
-            Ped assignedTarget=(_config.CompatibilityUseActiveTargets?_pr.GetActivePed(handler,60f):null)??CurrentPursuitSuspect();
-            _state=K9State.Searching;_dog.Tasks.Clear();
-            var sweepOffsets=new[]{new Vector3(-1.8f,2.4f,0f),new Vector3(1.8f,2.8f,0f),new Vector3(-1.4f,3.3f,0f),new Vector3(1.4f,3.6f,0f),new Vector3(-.8f,4f,0f),new Vector3(.8f,4.2f,0f)};
-            Game.DisplayNotification("~b~Building search started.~s~~n~Move through the structure; the K9 will sweep ahead and across your live route.");
-            for(int i=0;i<sweepOffsets.Length;i++)
-            {
-                if(!SearchSessionActive(generation))return;
-                Game.DisplaySubtitle("~b~Building sector "+(i+1)+"/6~s~ — advance with your K9",1300);
-                Vector3 offset=sweepOffsets[i];
-                // Entity-relative movement follows the handler's actual path through doors and
-                // corridors. Fixed world/navmesh points can collapse onto one portal node or an
-                // unreachable glass-side corner in custom interiors.
-                NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(_dog,handler,offset.X,offset.Y,0f,2.0f,-1,1.15f,true);
-                Vector3 start=_dog.Position;uint until=Game.GameTime+2600;
-                while(Game.GameTime<until)
-                {
-                    if(!SearchSessionActive(generation))return;
-                    Ped located=VisibleBuildingSubject(assignedTarget);
-                    if(located!=null){CompleteBuildingAlert(located);return;}
-                    GameFiber.Yield();
-                }
-                Game.LogTrivial("AdvancedK9 building sweep sector "+(i+1)+": moved "+_dog.DistanceTo(start).ToString("0.0")+"m; handler distance "+_dog.DistanceTo(handler).ToString("0.0")+"m.");
-            }
-            if(!SearchSessionActive(generation))return;
-            Sit();K9DeploymentReport.Write("Player",_profile.Name,"Building search","Handler-led dynamic structure clearance","None",false,0f,0,0,"None","None","No subject located",handler.Position);Game.DisplayNotification("~g~Building search complete.~s~ No subject located along the cleared route.");
-        }
-
-        private bool SearchSessionActive(int generation)=>generation==_searchGeneration&&_searchInProgress&&DogExists()&&_state==K9State.Searching;
-        private static bool IsSearchCommand(K9Command command)=>command==K9Command.SearchArea||command==K9Command.SearchBuilding||command==K9Command.SearchVehicle||command==K9Command.SearchNarcotics||command==K9Command.SearchExplosives||command==K9Command.SearchWeapons;
-        private void CancelActiveSearch(K9Command replacement)
-        {
-            _searchGeneration++;_searchInProgress=false;_hudSearchLabel="";_hudSearchProgress=0;
-            if(DogEntityExists())NativeFunction.Natives.CLEAR_PED_TASKS_IMMEDIATELY(_dog);
-            Game.LogTrivial("AdvancedK9 search cancelled immediately by "+replacement+"; stale search fiber generation invalidated.");
-        }
-        private Ped VisibleBuildingSubject(Ped assigned)
-        {
-            if(assigned!=null&&assigned.Exists()&&!assigned.IsDead&&_dog.DistanceTo(assigned)<=6f&&NativeFunction.Natives.HAS_ENTITY_CLEAR_LOS_TO_ENTITY<bool>(_dog,assigned,17))return assigned;
-            return World.GetAllPeds().Where(p=>p!=null&&p.Exists()&&p!=Game.LocalPlayer.Character&&p!=_dog&&!p.IsDead&&!LspdfrBridge.IsPedCop(p)&&p.DistanceTo(_dog)<=5f&&NativeFunction.Natives.HAS_ENTITY_CLEAR_LOS_TO_ENTITY<bool>(_dog,p,17)).OrderBy(p=>p.DistanceTo(_dog)).FirstOrDefault();
-        }
-        private void CompleteBuildingAlert(Ped target)
-        {
-            _dog.Tasks.Clear();Bark(2);Sit();AwardOperationalXp("Building subject locate",8,18,1,2);_pr.RecordLocatedSuspect(target);K9IncidentLog.Write(_profile.Name,"Building search","Visible subject located; alert and hold",target.Position);K9DeploymentReport.Write("Player",_profile.Name,"Building search","Handler-led dynamic structure clearance","None",false,0f,0,0,"Located","None","Alert bark and hold",target.Position);Game.DisplayNotification("~g~Building search: subject located.~s~~n~K9 is sitting and holding; Apprehend requires a separate aimed command.");
-        }
-
-        private void K9Warning()
-        {
-            if(!DogExists())return;var handler=Game.LocalPlayer.Character;var target=GetValidAimedSuspect(false)??(_voiceAimedTarget!=null&&_voiceAimedTarget.Exists()?_voiceAimedTarget:null)??(_config.CompatibilityUseActiveTargets?_pr.GetActivePed(handler,250f):null)??CurrentPursuitSuspect();_voiceAimedTarget=null;
-            if(target==null||!target.Exists()||target.IsDead){Game.DisplayNotification("~y~No suspect identified for the K9 warning.~s~~n~Aim at the suspect or use the active PR/STP target.");return;}
-            Follow();GameFiber.Wait(350);Bark(1);_warningGiven=true;_warnedTarget=target;_warningSurrendered=false;Game.DisplaySubtitle("~r~POLICE K9! SHOW ME YOUR HANDS! COME OUT NOW OR THE DOG WILL BE RELEASED!",4200);NativeFunction.Natives.PLAY_SOUND_FRONTEND(-1,"TIMER_STOP","HUD_MINI_GAME_SOUNDSET",true);
-            int roll=_random.Next(100);string outcome;
-            if(roll<48){NativeFunction.Natives.TASK_HANDS_UP(target,20000,handler,-1,true);_warningSurrendered=true;Sit();outcome="Surrendered";Game.DisplayNotification("~g~Suspect surrendered following the K9 warning.~s~~n~K9 is holding; move in for arrest.");}
-            else if(roll<73){NativeFunction.Natives.TASK_SMART_FLEE_PED(target,handler,180f,-1,false,false);outcome="Fled";Game.DisplayNotification("~o~Suspect fled following the K9 warning.~s~~n~Aim and command Apprehend, or collect/assign scent and Track.");}
-            else if(roll<92){NativeFunction.Natives.TASK_STAND_STILL(target,7000);Sit();outcome="Froze";Game.DisplayNotification("~y~Suspect froze but has not surrendered.~s~ Maintain cover and issue lawful commands.");}
-            else{NativeFunction.Natives.TASK_COMBAT_PED(target,handler,0,16);outcome="Attacked handler";Game.DisplayNotification("~r~Suspect attacked following the K9 warning.");}
-            K9IncidentLog.Write(_profile.Name,"K9 warning",outcome,target.Position);
-        }
-
-        private bool IsProtectedOperationalPed(Ped ped)=>_pr.IsProtectedPed(ped)||_operations.IsProtected(ped);
-
-        private Ped CompatibilitySubject()
-        {
-            var handler=Game.LocalPlayer.Character;return GetValidAimedSuspect(false)??(_config.CompatibilityUseActiveTargets?_pr.GetActivePed(handler,250f)??_operations.GetActivePed():null)??CurrentPursuitSuspect()??(_scentTarget!=null&&_scentTarget.Exists()?_scentTarget:null);
-        }
-        private void CompatibilityArrestHandoff()
-        {
-            var target=CompatibilitySubject();if(target==null){Game.DisplayNotification("~y~No suspect identified for PR/STP arrest handoff.");return;}
-            if(_pr.TryArrestHandoff(target)){Game.DisplayNotification("~g~Suspect handed to "+_pr.ModeLabel+" arrest workflow.");K9IncidentLog.Write(_profile.Name,"Compatibility","Arrest handoff to "+_pr.ModeLabel,target.Position);}
-            else Game.DisplayNotification("~y~"+_pr.ModeLabel+" does not expose a compatible arrest handoff API.~s~~n~Use that plugin's normal interaction key on the located suspect.");
-        }
-        private void CompatibilityService(string service)
-        {
-            if(service=="Medical"&&_config.UseAdvancedK9BiteMedicalResponse&&_releasedBiteTarget!=null&&_releasedBiteTarget.Exists()&&!_releasedBiteTarget.IsDead)
-            {
-                BeginBitePatientMedicalResponse();
-                return;
-            }
-            var target=CompatibilitySubject();if(_pr.TryRequestService(service,target)){Game.DisplayNotification("~g~"+service+" request sent through "+_pr.ModeLabel+".");K9IncidentLog.Write(_profile.Name,"Compatibility",service+" requested",target!=null?target.Position:Game.LocalPlayer.Character.Position);}
-            else Game.DisplayNotification("~y~"+service+" service is unavailable through the detected "+_pr.ModeLabel+" API.~s~~n~Use the external plugin's normal backup/service menu.");
-        }
-
-        private void BeginBitePatientMedicalResponse()
-        {
-            if(_biteMedicalResponseActive){Game.DisplayNotification("~y~AdvancedK9 EMS is already responding to the bite patient.");return;}
-            if(_releasedBiteTarget==null||!_releasedBiteTarget.Exists()||_releasedBiteTarget.IsDead){Game.DisplayNotification("~y~No living released K9 bite patient is available for AdvancedK9 EMS.");return;}
-            _biteMedicalResponseActive=true;
-            Game.DisplayNotification("~b~Dispatch:~s~ AdvancedK9 EMS is responding to the bite patient's live location.");
-            K9IncidentLog.Write(_profile.Name,"Medical","AdvancedK9 EMS requested for released bite patient",_releasedBiteTarget.Position);
-            Game.LogTrivial("AdvancedK9 medical ownership: PR EMS request suppressed for bite patient "+ApiHandleOf(_releasedBiteTarget)+"; AdvancedK9 responder assigned.");
-            GameFiber.StartNew(BitePatientMedicalResponse,"AdvancedK9.BitePatientMedicalResponse");
-        }
-
-        private void BitePatientMedicalResponse()
-        {
-            Model ambulanceModel=new Model("ambulance"),medicModel=new Model("s_m_m_paramedic_01");
-            Rage.Object medicalBag=null;
-            Ped patient=_releasedBiteTarget;
-            bool transported=false;
-            try
-            {
-                if(patient==null||!patient.Exists()||patient.IsDead)throw new InvalidOperationException("Bite patient became unavailable before EMS dispatch.");
-                if(!ambulanceModel.IsValid||!medicModel.IsValid)throw new InvalidOperationException("Ambulance or paramedic model is unavailable.");
-                ambulanceModel.LoadAndWait();medicModel.LoadAndWait();
-                Vector3 spawn=FindMedicalVehicleSpawn(patient.Position);
-                _biteMedicalVehicle=new Vehicle(ambulanceModel,spawn,HeadingToward(spawn,patient.Position));
-                _biteMedicalDriver=new Ped(medicModel,spawn,0f);
-                _biteMedicalPartner=new Ped(medicModel,spawn,0f);
-                ambulanceModel.Dismiss();medicModel.Dismiss();
-                if(_biteMedicalVehicle==null||!_biteMedicalVehicle.Exists()||_biteMedicalDriver==null||!_biteMedicalDriver.Exists()||_biteMedicalPartner==null||!_biteMedicalPartner.Exists())throw new InvalidOperationException("AdvancedK9 EMS entities could not be created.");
-                _biteMedicalVehicle.IsPersistent=true;_biteMedicalDriver.IsPersistent=true;_biteMedicalPartner.IsPersistent=true;
-                _biteMedicalDriver.BlockPermanentEvents=true;_biteMedicalPartner.BlockPermanentEvents=true;
-                NativeFunction.Natives.SET_PED_INTO_VEHICLE(_biteMedicalDriver,_biteMedicalVehicle,-1);
-                NativeFunction.Natives.SET_PED_INTO_VEHICLE(_biteMedicalPartner,_biteMedicalVehicle,0);
-                NativeFunction.Natives.SET_VEHICLE_SIREN(_biteMedicalVehicle,true);
-                _biteMedicalBlip=_biteMedicalVehicle.AttachBlip();_biteMedicalBlip.Name="AdvancedK9 EMS";_biteMedicalBlip.Color=Color.Red;
-                Vector3 medicalStage=FindSafeMedicalStaging(patient.Position,_biteMedicalVehicle.Position);
-                NativeFunction.Natives.TASK_VEHICLE_DRIVE_TO_COORD_LONGRANGE(_biteMedicalDriver,_biteMedicalVehicle,medicalStage.X,medicalStage.Y,medicalStage.Z,13f,786468,8f);
-                uint deadline=Game.GameTime+75000;
-                bool finalApproach=false;
-                while(_biteMedicalResponseActive&&patient.Exists()&&!patient.IsDead&&_biteMedicalVehicle.Exists()&&_biteMedicalDriver.Exists()&&Game.GameTime<deadline&&_biteMedicalVehicle.Position.DistanceTo(medicalStage)>8f)
-                {
-                    float remaining=_biteMedicalVehicle.Position.DistanceTo(medicalStage);
-                    if(!finalApproach&&remaining<=30f)
-                    {
-                        finalApproach=true;
-                        NativeFunction.Natives.SET_DRIVE_TASK_CRUISE_SPEED(_biteMedicalDriver,5.5f);
-                        NativeFunction.Natives.SET_ENTITY_MAX_SPEED(_biteMedicalVehicle,7f);
-                        NativeFunction.Natives.TASK_VEHICLE_DRIVE_TO_COORD_LONGRANGE(_biteMedicalDriver,_biteMedicalVehicle,medicalStage.X,medicalStage.Y,medicalStage.Z,5.5f,786468,5f);
-                        Game.LogTrivial("AdvancedK9 EMS final approach: ambulance reduced to a controlled crawl for the last "+remaining.ToString("0.0")+"m.");
-                    }
-                    GameFiber.Wait(200);
-                }
-                if(!patient.Exists()||patient.IsDead)throw new InvalidOperationException("Bite patient is no longer available for treatment.");
-                if(_biteMedicalVehicle.Position.DistanceTo(medicalStage)>14f)
-                {
-                    _biteMedicalVehicle.Position=medicalStage;NativeFunction.Natives.SET_VEHICLE_ON_GROUND_PROPERLY(_biteMedicalVehicle);
-                    NativeFunction.Natives.SET_PED_INTO_VEHICLE(_biteMedicalDriver,_biteMedicalVehicle,-1);NativeFunction.Natives.SET_PED_INTO_VEHICLE(_biteMedicalPartner,_biteMedicalVehicle,0);
-                    Game.LogTrivial("AdvancedK9 EMS used the validated roadside staging fallback after the original route did not reach it.");
-                }
-                NativeFunction.Natives.SET_VEHICLE_SIREN(_biteMedicalVehicle,false);
-                NativeFunction.Natives.TASK_VEHICLE_TEMP_ACTION(_biteMedicalDriver,_biteMedicalVehicle,27,2200);GameFiber.Wait(1700);
-                NativeFunction.Natives.SET_VEHICLE_FORWARD_SPEED(_biteMedicalVehicle,0f);
-                NativeFunction.Natives.TASK_LEAVE_VEHICLE(_biteMedicalDriver,_biteMedicalVehicle,0);
-                NativeFunction.Natives.TASK_LEAVE_VEHICLE(_biteMedicalPartner,_biteMedicalVehicle,0);
-                // The passenger assesses the patient while the driver retrieves equipment.
-                Ped passenger=_biteMedicalPartner;Vehicle respondingAmbulance=_biteMedicalVehicle;
-                GameFiber.StartNew(()=>{
-                    try
-                    {
-                        uint exitDeadline=Game.GameTime+8000;
-                        while(passenger.Exists()&&respondingAmbulance.Exists()&&passenger.IsInVehicle(respondingAmbulance,false)&&Game.GameTime<exitDeadline)GameFiber.Wait(100);
-                        if(passenger.Exists()&&patient.Exists()&&!patient.IsDead)
-                        {
-                            MoveMedicToPatient(passenger,patient,new Vector3(-.8f,0f,0f));
-                            if(passenger.DistanceTo(patient)<3f)
-                                NativeFunction.Natives.TASK_START_SCENARIO_IN_PLACE(passenger,"CODE_HUMAN_MEDIC_TEND_TO_DEAD",0,true);
-                        }
-                    }
-                    catch(Exception ex){Game.LogTrivial("AdvancedK9 EMS passenger assessment contained: "+ex.Message);}
-                },"AdvancedK9.EMSPassengerAssessment");
-                uint driverExitDeadline=Game.GameTime+8000;
-                while(_biteMedicalDriver.Exists()&&_biteMedicalDriver.IsInVehicle(_biteMedicalVehicle,false)&&Game.GameTime<driverExitDeadline)GameFiber.Wait(100);
-                medicalBag=RetrieveMedicalBag(_biteMedicalDriver,_biteMedicalVehicle);
-                MoveMedicToPatient(_biteMedicalDriver,patient,new Vector3(.8f,0f,0f));
-                if(medicalBag!=null&&medicalBag.Exists())
-                {
-                    NativeFunction.Natives.DETACH_ENTITY(medicalBag,true,true);
-                    medicalBag.Position=patient.GetOffsetPosition(new Vector3(.7f,.25f,0f));
-                    NativeFunction.Natives.PLACE_OBJECT_ON_GROUND_PROPERLY(medicalBag);
-                }
-                Game.DisplayNotification("~b~EMS:~s~ Paramedics have reached the bite patient and begun treatment.");
-                NativeFunction.Natives.TASK_START_SCENARIO_IN_PLACE(_biteMedicalDriver,"CODE_HUMAN_MEDIC_TEND_TO_DEAD",0,true);
-                if(_biteMedicalPartner.Exists()&&_biteMedicalPartner.DistanceTo(patient)<3f)
-                    NativeFunction.Natives.TASK_START_SCENARIO_IN_PLACE(_biteMedicalPartner,"CODE_HUMAN_MEDIC_TEND_TO_DEAD",0,true);
-                uint treatmentUntil=Game.GameTime+(uint)(_config.BitePatientTreatmentSeconds*1000);
-                while(_biteMedicalResponseActive&&patient.Exists()&&!patient.IsDead&&Game.GameTime<treatmentUntil)GameFiber.Wait(250);
-                if(!patient.Exists()||patient.IsDead)throw new InvalidOperationException("Patient could not be medically stabilized.");
-                if(medicalBag!=null&&medicalBag.Exists()){medicalBag.Delete();medicalBag=null;}
-                patient.Health=Math.Min(patient.MaxHealth,Math.Max(patient.Health+35,75));
-                _releasedBiteHealth=patient.Health;_releasedBiteTreated=true;_pr.RecordTreatedCustody(patient);
-                bool transport=_random.Next(100)<_config.BitePatientTransportChance;
-                if(transport)
-                {
-                    transported=TransportBitePatient(patient);
-                    if(transported)
-                    {
-                        Game.DisplayNotification("~b~EMS:~s~ The patient requires hospital care and has been transported. Medical custody transferred to EMS.");
-                        K9IncidentLog.Write(_profile.Name,"Medical","Bite patient treated and transported by AdvancedK9 EMS",patient.Position);
-                    }
-                }
-                if(!transported)
-                {
-                    NativeFunction.Natives.TASK_HANDS_UP(patient,-1,Game.LocalPlayer.Character,-1,true);
-                    Game.DisplayNotification("~g~EMS:~s~ Treatment is complete. The suspect is medically cleared and remains for PR/LSPDFR arrest.");
-                    K9IncidentLog.Write(_profile.Name,"Medical","Bite patient treated on scene and returned to police custody",patient.Position);
-                    ReturnMedicsToService();
-                }
-            }
-            catch(Exception ex)
-            {
-                Game.LogTrivial("AdvancedK9 bite-patient EMS response contained: "+ex);
-                Game.DisplayNotification("~r~AdvancedK9 EMS could not complete treatment.~s~~n~The patient remains held for another medical request.");
-            }
-            finally
-            {
-                _biteMedicalResponseActive=false;
-                if(_biteMedicalBlip!=null&&_biteMedicalBlip.Exists())_biteMedicalBlip.Delete();_biteMedicalBlip=null;
-                if(!transported)CleanupMedicalCrewAfterPlayerLeaves();
-                if(medicalBag!=null&&medicalBag.Exists())medicalBag.Delete();
-                ambulanceModel.Dismiss();medicModel.Dismiss();
-            }
-        }
-
-        private Vector3 FindMedicalVehicleSpawn(Vector3 patient)
-        {
-            float[] distances={85f,65f,105f,45f};float[] headings={180f,90f,270f,0f};
-            foreach(float distance in distances)foreach(float heading in headings)
-            {
-                Vector3 candidate=World.GetNextPositionOnStreet(patient+HeadingOffset(heading,distance));
-                if(candidate.DistanceTo(patient)>25f)return candidate;
-            }
-            return World.GetNextPositionOnStreet(patient+new Vector3(45f,45f,0f));
-        }
-
-        private static Vector3 FindSafeMedicalStaging(Vector3 patient,Vector3 approachFrom)
-        {
-            Vector3 best=World.GetNextPositionOnStreet(patient+new Vector3(12f,0f,0f));float bestScore=float.MaxValue;
-            for(int i=0;i<16;i++)
-            {
-                float angle=i*22.5f;Vector3 sample=patient+HeadingOffset(angle,12f);Vector3 roadCenter=World.GetNextPositionOnStreet(sample);
-                float dx=patient.X-roadCenter.X,dy=patient.Y-roadCenter.Y,horizontal=(float)Math.Sqrt(dx*dx+dy*dy);
-                if(horizontal<.1f)continue;
-                // Pull the destination from the lane center toward the patient's side of
-                // the road.  The ambulance still has a driveable approach, but stages at
-                // the curb/shoulder instead of leaving medics exposed in a live lane.
-                Vector3 curb=new Vector3(roadCenter.X+dx/horizontal*3.1f,roadCenter.Y+dy/horizontal*3.1f,roadCenter.Z);
-                float patientDistance=curb.DistanceTo(patient);if(patientDistance<7f||patientDistance>19f)continue;
-                float score=curb.DistanceTo(approachFrom)*.2f+Math.Abs(patientDistance-10f)*5f;
-                if(score<bestScore){bestScore=score;best=curb;}
-            }
-            return best;
-        }
-
-        private static float HeadingToward(Vector3 from,Vector3 to)=>(float)(Math.Atan2(to.Y-from.Y,to.X-from.X)*180.0/Math.PI)-90f;
-
-        private static void MoveMedicToPatient(Ped medic,Ped patient,Vector3 offset)
-        {
-            if(medic==null||!medic.Exists()||patient==null||!patient.Exists())return;
-            NativeFunction.Natives.TASK_GO_TO_ENTITY(medic,patient,-1,1.5f,2.1f,0f,0);uint deadline=Game.GameTime+18000;
-            while(medic.Exists()&&patient.Exists()&&medic.DistanceTo(patient)>2.8f&&Game.GameTime<deadline)GameFiber.Wait(200);
-            if(medic.Exists()&&patient.Exists()&&medic.DistanceTo(patient)>3.5f)medic.Position=patient.GetOffsetPosition(offset);
-            if(medic.Exists()&&patient.Exists())NativeFunction.Natives.TASK_TURN_PED_TO_FACE_ENTITY(medic,patient,750);
-        }
-
-        private static Rage.Object RetrieveMedicalBag(Ped medic,Vehicle ambulance)
-        {
-            if(medic==null||!medic.Exists()||ambulance==null||!ambulance.Exists())return null;
-            Model bagModel=new Model("xm_prop_x17_bag_med_01a");
-            if(!bagModel.IsValid)bagModel=new Model("prop_cs_heist_bag_02");
-            try
-            {
-                if(!bagModel.IsValid)return null;bagModel.LoadAndWait();
-                Vector3 rear=ambulance.GetOffsetPosition(new Vector3(0f,-3.2f,.15f));
-                Vector3 compartment=ambulance.GetOffsetPosition(new Vector3(0f,-1.7f,.52f));
-                var bag=new Rage.Object(bagModel,compartment);bagModel.Dismiss();
-                if(bag==null||!bag.Exists())return null;
-                bag.IsPersistent=true;
-                NativeFunction.Natives.SET_ENTITY_COLLISION(bag,false,false);
-                NativeFunction.Natives.FREEZE_ENTITY_POSITION(bag,true);
-                medic.Tasks.Clear();NativeFunction.Natives.TASK_GO_STRAIGHT_TO_COORD(medic,rear.X,rear.Y,rear.Z,1.5f,10000,ambulance.Heading,1f);
-                uint deadline=Game.GameTime+12000;while(medic.Exists()&&bag.Exists()&&medic.Position.DistanceTo(rear)>1.6f&&Game.GameTime<deadline)GameFiber.Wait(150);
-                if(medic.Position.DistanceTo(rear)>2.5f){bag.Delete();return null;}
-                medic.Tasks.Clear();
-                NativeFunction.Natives.TASK_TURN_PED_TO_FACE_ENTITY(medic,ambulance,900);GameFiber.Wait(900);
-                // Open the rear only after the driver is clear of the door swing.
-                NativeFunction.Natives.SET_VEHICLE_DOOR_OPEN(ambulance,2,false,false);
-                NativeFunction.Natives.SET_VEHICLE_DOOR_OPEN(ambulance,3,false,false);
-                GameFiber.Wait(1200);
-                NativeFunction.Natives.FREEZE_ENTITY_POSITION(bag,false);
-                int hand=NativeFunction.Natives.GET_PED_BONE_INDEX<int>(medic,57005);
-                NativeFunction.Natives.ATTACH_ENTITY_TO_ENTITY(bag,medic,hand,.42f,-.03f,.03f,-123f,-86f,-4f,false,false,false,true,2,true);
-                GameFiber.Wait(750);
-                // Allow the driver and bag to move clear before closing the compartment.
-                Vector3 clear=ambulance.GetOffsetPosition(new Vector3(1f,-4f,0f));
-                NativeFunction.Natives.TASK_GO_STRAIGHT_TO_COORD(medic,clear.X,clear.Y,clear.Z,1.4f,4000,ambulance.Heading,1f);
-                GameFiber.Wait(1100);
-                NativeFunction.Natives.SET_VEHICLE_DOOR_SHUT(ambulance,2,false);
-                NativeFunction.Natives.SET_VEHICLE_DOOR_SHUT(ambulance,3,false);
-                Game.LogTrivial("AdvancedK9 EMS presentation: medic walked to the ambulance and visibly retrieved the medical bag.");
-                return bag;
-            }
-            catch(Exception ex){bagModel.Dismiss();Game.LogTrivial("AdvancedK9 EMS medical-bag fallback contained: "+ex.Message);return null;}
-        }
-
-        private bool TransportBitePatient(Ped patient)
-        {
-            if(patient==null||!patient.Exists()||_biteMedicalVehicle==null||!_biteMedicalVehicle.Exists()||_biteMedicalDriver==null||!_biteMedicalDriver.Exists())return false;
-            _biteMedicalLoadingPatient=true;
-            if(_releasedBiteFrozen){NativeFunction.Natives.FREEZE_ENTITY_POSITION(patient,false);_releasedBiteFrozen=false;}
-            bool loaded=LoadPatientWithStretcher(patient);
-            if(!loaded){_biteMedicalLoadingPatient=false;NativeFunction.Natives.TASK_HANDS_UP(patient,-1,Game.LocalPlayer.Character,-1,true);return false;}
-            ClearReleasedBiteTarget();_biteMedicalLoadingPatient=false;
-            if(!BoardMedicalCrew())return false;
-            NativeFunction.Natives.SET_ENTITY_MAX_SPEED(_biteMedicalVehicle,25f);NativeFunction.Natives.SET_VEHICLE_SIREN(_biteMedicalVehicle,false);NativeFunction.Natives.TASK_VEHICLE_DRIVE_WANDER(_biteMedicalDriver,_biteMedicalVehicle,18f,786468);
-            Vehicle ambulance=_biteMedicalVehicle;Ped driver=_biteMedicalDriver,partner=_biteMedicalPartner;
-            _biteMedicalVehicle=null;_biteMedicalDriver=null;_biteMedicalPartner=null;
-            GameFiber.StartNew(()=>{GameFiber.Wait(45000);if(patient.Exists())patient.Dismiss();if(partner!=null&&partner.Exists())partner.Dismiss();if(driver!=null&&driver.Exists())driver.Dismiss();if(ambulance!=null&&ambulance.Exists())ambulance.Dismiss();},"AdvancedK9.EMSTransportCleanup");
-            return true;
-        }
-
-        private bool LoadPatientWithStretcher(Ped patient)
-        {
-            Rage.Object stretcher=null;Model stretcherModel=new Model("prop_amb_stretcher");
-            bool loaded=false;
-            if(!stretcherModel.IsValid)stretcherModel=new Model("prop_amb_stretcher_01");
-            try
-            {
-                if(!stretcherModel.IsValid){Game.LogTrivial("AdvancedK9 EMS stretcher model unavailable; hospital transport cancelled so custody remains on scene.");return false;}
-                stretcherModel.LoadAndWait();Vector3 rear=_biteMedicalVehicle.GetOffsetPosition(new Vector3(0f,-3.2f,0f));
-                stretcher=new Rage.Object(stretcherModel,rear);stretcherModel.Dismiss();
-                if(stretcher==null||!stretcher.Exists())return false;stretcher.IsPersistent=true;
-                Game.DisplayNotification("~b~EMS:~s~ Hospital transport required. Paramedics are retrieving the stretcher.");
-                Ped carrier=_biteMedicalPartner!=null&&_biteMedicalPartner.Exists()?_biteMedicalPartner:_biteMedicalDriver;
-                carrier.Tasks.Clear();NativeFunction.Natives.TASK_GO_STRAIGHT_TO_COORD(carrier,rear.X,rear.Y,rear.Z,1.7f,10000,_biteMedicalVehicle.Heading,1f);GameFiber.Wait(2200);
-                int pelvis=NativeFunction.Natives.GET_PED_BONE_INDEX<int>(carrier,11816);
-                NativeFunction.Natives.ATTACH_ENTITY_TO_ENTITY(stretcher,carrier,pelvis,0f,-1.05f,-.72f,0f,0f,0f,false,false,false,true,2,true);
-                NativeFunction.Natives.TASK_GO_TO_ENTITY(carrier,patient,-1,1.8f,1.6f,0f,0);uint deadline=Game.GameTime+18000;
-                while(carrier.Exists()&&patient.Exists()&&carrier.DistanceTo(patient)>2.4f&&Game.GameTime<deadline)GameFiber.Wait(200);
-                NativeFunction.Natives.DETACH_ENTITY(stretcher,true,true);stretcher.Position=patient.GetOffsetPosition(new Vector3(0f,.45f,0f));NativeFunction.Natives.PLACE_OBJECT_ON_GROUND_PROPERLY(stretcher);
-                patient.Tasks.Clear();NativeFunction.Natives.SET_PED_CAN_RAGDOLL(patient,false);patient.Position=stretcher.Position+new Vector3(0f,0f,.72f);
-                NativeFunction.Natives.ATTACH_ENTITY_TO_ENTITY(patient,stretcher,0,0f,0f,.72f,0f,0f,90f,false,false,false,true,2,true);
-                NativeFunction.Natives.ATTACH_ENTITY_TO_ENTITY(stretcher,carrier,pelvis,0f,-1.05f,-.72f,0f,0f,0f,false,false,false,true,2,true);
-                NativeFunction.Natives.TASK_GO_STRAIGHT_TO_COORD(carrier,rear.X,rear.Y,rear.Z,1.35f,18000,_biteMedicalVehicle.Heading,1f);deadline=Game.GameTime+20000;
-                while(carrier.Exists()&&patient.Exists()&&carrier.Position.DistanceTo(rear)>2.6f&&Game.GameTime<deadline)GameFiber.Wait(200);
-                NativeFunction.Natives.DETACH_ENTITY(stretcher,true,true);NativeFunction.Natives.DETACH_ENTITY(patient,true,true);
-                NativeFunction.Natives.SET_PED_CAN_RAGDOLL(patient,true);NativeFunction.Natives.SET_PED_INTO_VEHICLE(patient,_biteMedicalVehicle,2);
-                loaded=patient.IsInVehicle(_biteMedicalVehicle,false);
-                if(stretcher.Exists())stretcher.Delete();
-                if(loaded)Game.LogTrivial("AdvancedK9 EMS presentation: patient moved from scene to ambulance on a visible stretcher before vehicle loading.");
-                return loaded;
-            }
-            catch(Exception ex){Game.LogTrivial("AdvancedK9 EMS stretcher sequence contained: "+ex);return false;}
-            finally
-            {
-                try{if(!loaded&&patient!=null&&patient.Exists())NativeFunction.Natives.DETACH_ENTITY(patient,true,true);}catch{}
-                if(stretcher!=null&&stretcher.Exists())stretcher.Delete();stretcherModel.Dismiss();
-            }
-        }
-
-        private void ReturnMedicsToService()
-        {
-            if(_biteMedicalVehicle==null||!_biteMedicalVehicle.Exists()||_biteMedicalDriver==null||!_biteMedicalDriver.Exists())return;
-            if(!BoardMedicalCrew())return;
-            NativeFunction.Natives.SET_ENTITY_MAX_SPEED(_biteMedicalVehicle,25f);NativeFunction.Natives.TASK_VEHICLE_DRIVE_WANDER(_biteMedicalDriver,_biteMedicalVehicle,16f,786468);
-            Vehicle departingAmbulance=_biteMedicalVehicle;Ped departingDriver=_biteMedicalDriver,departingPassenger=_biteMedicalPartner;
-            _biteMedicalVehicle=null;_biteMedicalDriver=null;_biteMedicalPartner=null;
-            GameFiber.StartNew(()=>{
-                GameFiber.Wait(45000);
-                if(departingPassenger.Exists())departingPassenger.Dismiss();
-                if(departingDriver.Exists())departingDriver.Dismiss();
-                if(departingAmbulance.Exists())departingAmbulance.Dismiss();
-            },"AdvancedK9.EMSDepartureCleanup");
-        }
-
-        private bool BoardMedicalCrew()
-        {
-            Ped driver=_biteMedicalDriver,passenger=_biteMedicalPartner;
-            if(driver==null||!driver.Exists()||passenger==null||!passenger.Exists())return false;
-            driver.Tasks.Clear();passenger.Tasks.Clear();
-            // Start both independent entry tasks before waiting for either responder.
-            driver.Tasks.EnterVehicle(_biteMedicalVehicle,-1);
-            passenger.Tasks.EnterVehicle(_biteMedicalVehicle,0);
-            uint deadline=Game.GameTime+16000;
-            while(Game.GameTime<deadline&&driver.Exists()&&passenger.Exists()&&
-                (!driver.IsInVehicle(_biteMedicalVehicle,false)||!passenger.IsInVehicle(_biteMedicalVehicle,false)))GameFiber.Wait(200);
-            bool boarded=driver.Exists()&&passenger.Exists()&&driver.IsInVehicle(_biteMedicalVehicle,false)&&passenger.IsInVehicle(_biteMedicalVehicle,false);
-            if(!boarded)
-            {
-                // Retry each seat separately. Never place a responder into the seat instantly.
-                if(driver.Exists()&&!driver.IsInVehicle(_biteMedicalVehicle,false))
-                    driver.Tasks.EnterVehicle(_biteMedicalVehicle,-1);
-                if(passenger.Exists()&&!passenger.IsInVehicle(_biteMedicalVehicle,false))
-                    passenger.Tasks.EnterVehicle(_biteMedicalVehicle,0);
-                deadline=Game.GameTime+12000;
-                while(Game.GameTime<deadline&&driver.Exists()&&passenger.Exists()&&
-                    (!driver.IsInVehicle(_biteMedicalVehicle,false)||!passenger.IsInVehicle(_biteMedicalVehicle,false)))GameFiber.Wait(200);
-                boarded=driver.Exists()&&passenger.Exists()&&driver.IsInVehicle(_biteMedicalVehicle,false)&&passenger.IsInVehicle(_biteMedicalVehicle,false);
-            }
-            if(!boarded)Game.LogTrivial("AdvancedK9 EMS boarding timed out after retry; ambulance will remain parked.");
-            return boarded;
-        }
-
-        private void CleanupBiteMedicalResponders(bool dismiss)
-        {
-            if(_biteMedicalBlip!=null&&_biteMedicalBlip.Exists())_biteMedicalBlip.Delete();_biteMedicalBlip=null;
-            if(dismiss){if(_biteMedicalPartner!=null&&_biteMedicalPartner.Exists())_biteMedicalPartner.Dismiss();if(_biteMedicalDriver!=null&&_biteMedicalDriver.Exists())_biteMedicalDriver.Dismiss();if(_biteMedicalVehicle!=null&&_biteMedicalVehicle.Exists())_biteMedicalVehicle.Dismiss();}
-            _biteMedicalPartner=null;_biteMedicalDriver=null;_biteMedicalVehicle=null;
-        }
-
-        private void CleanupMedicalCrewAfterPlayerLeaves()
-        {
-            Vehicle ambulance=_biteMedicalVehicle;Ped driver=_biteMedicalDriver,passenger=_biteMedicalPartner;
-            _biteMedicalVehicle=null;_biteMedicalDriver=null;_biteMedicalPartner=null;
-            GameFiber.StartNew(()=>{
-                // A failed boarding attempt must not make the responders disappear on scene.
-                while(ambulance!=null&&ambulance.Exists()&&Game.LocalPlayer.Character.Exists()&&
-                    Game.LocalPlayer.Character.DistanceTo(ambulance)<120f)GameFiber.Wait(1000);
-                if(passenger!=null&&passenger.Exists())passenger.Dismiss();
-                if(driver!=null&&driver.Exists())driver.Dismiss();
-                if(ambulance!=null&&ambulance.Exists())ambulance.Dismiss();
-            },"AdvancedK9.EMSDeferredCleanup");
-        }
-
-        private void HoldPerimeter()
-        {
-            if(!DogExists())return;
-            Vector3 handlerPosition=Game.LocalPlayer.Character.Position;var saved=_containmentPositions.Nearest(handlerPosition,18f);_perimeterCenter=saved==null?handlerPosition:saved.Position;_perimeterRadius=saved==null?(_leashRope>=0?5.5f:8f):saved.Radius;if(saved==null)saved=_containmentPositions.SaveOrUpdate(_perimeterCenter,_perimeterRadius);_perimeterPoint=0;_nextPerimeterMove=0;_containTarget=null;_state=K9State.Containing;
-            Game.DisplayNotification("~b~K9 perimeter "+(saved.Position.DistanceTo(handlerPosition)<1f?"saved":"restored")+".~s~~n~"+saved.Name+" • "+_profile.Name+" will patrol a "+_perimeterRadius.ToString("0.0")+"-meter containment ring until recalled."+(_leashRope>=0?" The working leash remains attached.":""));
-            K9IncidentLog.Write(_profile.Name,"Containment","Handler perimeter established",_perimeterCenter);
-        }
-
-        private void ContainSuspect()
-        {
-            if(!DogExists())return;
-            var target=CompatibilitySubject();
-            if(target==null||!target.Exists()||target.IsDead){Game.DisplayNotification("~y~No valid suspect identified for containment.~s~~n~Aim at the suspect or use the active pursuit target.");return;}
-            if(IsProtectedOperationalPed(target)){Game.DisplayNotification("~y~That suspect is already restrained or surrendering.~s~ K9 containment is unnecessary.");return;}
-            _containTarget=target;_perimeterCenter=target.Position;_perimeterRadius=_leashRope>=0?4f:5f;_perimeterPoint=0;_nextPerimeterMove=0;_state=K9State.Containing;
-            Game.DisplayNotification("~o~K9 containment active.~s~~n~"+_profile.Name+" will block and alert without biting. APPREHEND remains a separate aimed command.");
-            K9IncidentLog.Write(_profile.Name,"Containment","Suspect containment started",target.Position);
-        }
-
-        private void SaveContainmentPosition()
-        {
-            if(!DogExists())return;
-            Vector3 position=Game.LocalPlayer.Character.Position;float radius=_leashRope>=0?5.5f:8f;
-            var saved=_containmentPositions.SaveOrUpdate(position,radius);
-            _containmentPositionIndex=Math.Max(0,_containmentPositions.Positions.ToList().IndexOf(saved));
-            Game.DisplayNotification("~g~Containment position saved.~s~~n~"+saved.Name+" • "+radius.ToString("0.0")+"m ring. Up to 24 positions persist between shifts.");
-            K9IncidentLog.Write(_profile.Name,"Containment","Saved "+saved.Name,position);
-        }
-
-        private void SendContainmentPosition(bool advance)
-        {
-            if(!DogExists())return;
-            var positions=_containmentPositions.Positions;
-            if(positions.Count==0){Game.DisplayNotification("~y~No saved containment positions.~s~~n~Stand at a perimeter point and use Save Containment Position.");return;}
-            if(advance)_containmentPositionIndex=(_containmentPositionIndex+1)%positions.Count;
-            else
-            {
-                var nearest=_containmentPositions.Nearest(Game.LocalPlayer.Character.Position,250f);
-                int nearestIndex=nearest==null?-1:positions.ToList().IndexOf(nearest);
-                if(nearestIndex>=0)_containmentPositionIndex=nearestIndex;
-                else if(_containmentPositionIndex>=positions.Count)_containmentPositionIndex=0;
-            }
-            var saved=positions[_containmentPositionIndex];
-            _containTarget=null;_perimeterCenter=saved.Position;_perimeterRadius=saved.Radius;_perimeterPoint=0;_nextPerimeterMove=0;_state=K9State.Containing;
-            Game.DisplayNotification("~b~K9 sent to "+saved.Name+".~s~~n~Position "+(_containmentPositionIndex+1)+"/"+positions.Count+" • "+saved.Radius.ToString("0.0")+"m ring"+(_leashRope>=0?" • working leash retained":""));
-            K9IncidentLog.Write(_profile.Name,"Containment","Deployed to saved "+saved.Name,saved.Position);
-        }
-
-        private void ClearContainmentPosition()
-        {
-            Vector3 position=Game.LocalPlayer.Character.Position;
-            if(!_containmentPositions.RemoveNearest(position,25f)){Game.DisplayNotification("~y~No saved containment position within 25 meters.");return;}
-            if(_containmentPositionIndex>=_containmentPositions.Positions.Count)_containmentPositionIndex=0;
-            Game.DisplayNotification("~g~Nearest saved containment position removed.");
-            K9IncidentLog.Write(_profile.Name,"Containment","Nearest saved position removed",position);
-        }
-
-        private void MaintainContainment()
-        {
-            if(_state!=K9State.Containing||!DogExists())return;
-            if(_containTarget!=null&&(!_containTarget.Exists()||_containTarget.IsDead||IsProtectedOperationalPed(_containTarget))){Sit();_containTarget=null;Game.DisplayNotification("~g~K9 containment complete.~s~ Suspect is no longer an active threat.");return;}
-            if(_containTarget!=null)_perimeterCenter=_containTarget.Position;
-            if(Game.GameTime<_nextPerimeterMove)return;
-            if(_containTarget!=null&&!string.IsNullOrWhiteSpace(_activeSharedApiContextId))
-            {
-                _nextPerimeterMove=Game.GameTime+(uint)_random.Next(1500,2201);
-                NativeFunction.Natives.TASK_TURN_PED_TO_FACE_ENTITY(_dog,_containTarget,700);
-                Bark(1);
-                return;
-            }
-            _nextPerimeterMove=Game.GameTime+3500;
-            double angle=_perimeterPoint++*(Math.PI/2.0);var point=new Vector3(_perimeterCenter.X+(float)Math.Cos(angle)*_perimeterRadius,_perimeterCenter.Y+(float)Math.Sin(angle)*_perimeterRadius,_perimeterCenter.Z);
-            _dog.Tasks.FollowNavigationMeshToPosition(point,_containTarget!=null?_containTarget.Heading:_dog.Heading,2.8f);
-            if(_containTarget!=null&&_dog.DistanceTo(_containTarget)<3.5f){NativeFunction.Natives.TASK_TURN_PED_TO_FACE_ENTITY(_dog,_containTarget,900);Bark(1);}
-        }
-
-        private Entity FindCompatibilitySearchTarget(Ped officer,bool vehicleOnly)
-        {
-            if(_config.CompatibilityUseActiveTargets)
-            {
-                if(vehicleOnly){var activeVehicle=_pr.GetActiveVehicle(officer,_config.SearchRadius);if(activeVehicle!=null)return activeVehicle;}
-                else
-                {
-                    var activePed=_pr.GetActivePed(officer,_config.SearchRadius);if(activePed!=null)return activePed;
-                    var activeVehicle=_pr.GetActiveVehicle(officer,_config.SearchRadius);if(activeVehicle!=null)return activeVehicle;
+     …19885 tokens truncated…officer,_config.SearchRadius);if(activeVehicle!=null)return activeVehicle;
                 }
             }
             return vehicleOnly?(Entity)World.GetAllVehicles().Where(v=>v.Exists()&&v.DistanceTo(officer)<=_config.SearchRadius).OrderBy(v=>v.DistanceTo(officer)).FirstOrDefault():FindSearchTarget(officer.Position,_config.SearchRadius);
@@ -3183,7 +2266,7 @@ namespace AdvancedK9
 
         private void ToggleLeash()
         {
-            if (_state == K9State.Leashed || _leashRope >= 0) { DeleteLeashRope(); Follow(); ActionNotification("~b~K9 leash removed."); return; }
+            if (_state == K9State.Leashed || LeashActive) { DeleteLeashRope(); Follow(); ActionNotification("~b~K9 leash removed."); return; }
             if(!DogExists())return;
             ReleaseVehicleSeat();
             NativeFunction.Natives.FREEZE_ENTITY_POSITION(_dog,false);
@@ -3203,12 +2286,64 @@ namespace AdvancedK9
             var handler=Game.LocalPlayer.Character;
             var hand=HandLeashPoint(handler);
             var collar=VestLeashPoint();
+            _nextLeashVisualUpdate=0;
+            if(CreateAnimatedLeash(hand,collar))return;
             NativeFunction.Natives.ROPE_LOAD_TEXTURES();GameFiber.Wait(100);
             float length=Math.Max(PatrolLeashMinimumLength,Math.Min(PatrolLeashMaximumLength,VectorDistance(hand,collar)+.08f));
             _leashRope=NativeFunction.Natives.ADD_ROPE<int>(hand.X,hand.Y,hand.Z,0f,0f,0f,length,4,PatrolLeashMaximumLength,PatrolLeashMinimumLength,0f,false,false,true,1f,false,0);
             // Keep a visual hand-to-collar leash without entity-to-entity rope
             // physics, which can freeze animal navigation tasks.
             if(_leashRope>=0){CreateLeashHardware();PinLeashEndpoints();}
+        }
+
+        private bool CreateAnimatedLeash(Vector3 hand,Vector3 vest)
+        {
+            const string dictionary="advancek9_leash",clip="leash_retract";
+            var model=new Model("advancek9_leash");
+            if(!model.IsValid)return false;
+            try
+            {
+                model.LoadAndWait();
+                _animatedLeash=new Rage.Object(model,vest);
+                _animatedLeash.IsPersistent=true;
+                NativeFunction.Natives.SET_ENTITY_COLLISION(_animatedLeash,false,false);
+                NativeFunction.Natives._SET_OBJECT_TEXTURE_VARIATION(_animatedLeash,_config.LeashPropColor);
+                NativeFunction.Natives.REQUEST_ANIM_DICT(dictionary);
+                uint deadline=Game.GameTime+1500;
+                while(!NativeFunction.Natives.HAS_ANIM_DICT_LOADED<bool>(dictionary)&&Game.GameTime<deadline)GameFiber.Yield();
+                if(!NativeFunction.Natives.HAS_ANIM_DICT_LOADED<bool>(dictionary))throw new InvalidOperationException("animation dictionary not loaded");
+                if(!NativeFunction.Natives.PLAY_ENTITY_ANIM<bool>(_animatedLeash,clip,dictionary,8f,false,true,false,0f,0))throw new InvalidOperationException("leash_retract clip did not play");
+                NativeFunction.Natives.SET_ENTITY_ANIM_SPEED(_animatedLeash,dictionary,clip,0f);
+                UpdateAnimatedLeash(hand,vest);
+                Game.LogTrivial("AdvancedK9 leash: v1.2 animated lead active; color="+_config.LeashPropColor+".");
+                return true;
+            }
+            catch(Exception ex)
+            {
+                Game.LogTrivial("AdvancedK9 leash: animated lead unavailable ("+ex.Message+"); using previous visual leash.");
+                if(_animatedLeash!=null&&_animatedLeash.Exists())_animatedLeash.Delete();
+                _animatedLeash=null;return false;
+            }
+            finally{model.Dismiss();}
+        }
+
+        private void UpdateAnimatedLeash(Vector3 hand,Vector3 vest)
+        {
+            if(_animatedLeash==null||!_animatedLeash.Exists())return;
+            const string dictionary="advancek9_leash",clip="leash_retract";
+            float distance=VectorDistance(hand,vest);
+            // Keep the latch at the dog-side bind position (-0.597, 0, .028)
+            // and rotate the animated local +X axis toward the handler's palm.
+            if(distance<.01f)return;
+            float dx=(hand.X-vest.X)/distance,dy=(hand.Y-vest.Y)/distance,dz=(hand.Z-vest.Z)/distance;
+            float yaw=(float)(Math.Atan2(dy,dx)*180.0/Math.PI);
+            float pitch=(float)(-Math.Atan2(dz,Math.Sqrt(dx*dx+dy*dy))*180.0/Math.PI);
+            Vector3 origin=new Vector3(vest.X+dx*.597f,vest.Y+dy*.597f,vest.Z+dz*.597f-.028f);
+            NativeFunction.Natives.SET_ENTITY_COORDS_NO_OFFSET(_animatedLeash,origin.X,origin.Y,origin.Z,false,false,false);
+            NativeFunction.Natives.SET_ENTITY_ROTATION(_animatedLeash,0f,pitch,yaw,2,true);
+            float clamped=Math.Max(PatrolLeashMinimumLength,Math.Min(PatrolLeashMaximumLength,distance));
+            float phase=(PatrolLeashMaximumLength-clamped)/(PatrolLeashMaximumLength-PatrolLeashMinimumLength);
+            NativeFunction.Natives.SET_ENTITY_ANIM_CURRENT_TIME(_animatedLeash,dictionary,clip,Math.Min(.999f,phase));
         }
 
         private void CreateLeashHardware()
@@ -3261,13 +2396,14 @@ namespace AdvancedK9
 
         private void PinLeashEndpoints()
         {
-            if(_leashRope<0||!DogEntityExists()||Game.GameTime<_nextLeashVisualUpdate)return;
+            if(!LeashActive||!DogEntityExists()||Game.GameTime<_nextLeashVisualUpdate)return;
             _nextLeashVisualUpdate=Game.GameTime+50;
             try
             {
                 var handler=Game.LocalPlayer.Character;
                 Vector3 hand=HandLeashPoint(handler);
                 Vector3 vest=VestLeashPoint();
+                if(_animatedLeash!=null&&_animatedLeash.Exists()){UpdateAnimatedLeash(hand,vest);return;}
                 // One flexible span connects the palm directly to the vest
                 // clasp. The long rigid prop sections are not rendered.
                 Vector3 start=hand;
@@ -3284,7 +2420,7 @@ namespace AdvancedK9
 
         private static float VectorDistance(Vector3 a,Vector3 b){float x=a.X-b.X,y=a.Y-b.Y,z=a.Z-b.Z;return (float)Math.Sqrt(x*x+y*y+z*z);}
 
-        private void DeleteLeashRope(){DeleteLeashHardware();if(_leashRope>=0){try{NativeFunction.Natives.DELETE_ROPE(ref _leashRope);}catch{} }_leashRope=-1;}
+        private void DeleteLeashRope(){DeleteLeashHardware();if(_animatedLeash!=null){try{if(_animatedLeash.Exists())_animatedLeash.Delete();}catch{} _animatedLeash=null;}if(_leashRope>=0){try{NativeFunction.Natives.DELETE_ROPE(ref _leashRope);}catch{} }_leashRope=-1;}
 
         private bool DogEntityExists()=>_dog!=null&&_dog.Exists();
 
@@ -3351,7 +2487,7 @@ namespace AdvancedK9
                 NativeFunction.Natives.SET_ENTITY_COLLISION(_dog,true,true);
                 NativeFunction.Natives.SET_PED_CAN_RAGDOLL(_dog,true);
             }
-            if(_leashRope>=0)PinLeashEndpoints();
+            if(LeashActive)PinLeashEndpoints();
             // Ordinary sprint separation must be recovered through locomotion. Position snapping is
             // reserved for the verified elevator/teleport transition above.
             if (_dog.DistanceTo(Game.LocalPlayer.Character) > 45f && _state == K9State.Following)
