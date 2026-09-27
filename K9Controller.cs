@@ -66,6 +66,8 @@ namespace AdvancedK9
         private Rage.Object _leashCollarClip;
         private Rage.Object _animatedLeash;
         private bool _leashEndpointLogged;
+        private uint _nextLeashMeasurement;
+        private float _lastLeashMeasuredDistance=-1f;
         private bool _leashAttached;
         private bool LeashActive=>_leashAttached;
         private const float PatrolLeashMinimumLength=.48f;
@@ -452,6 +454,9 @@ namespace AdvancedK9
             int old=index==0?_config.LeashPropColor:_config.BowlPropColor;
             try{_config.SaveAccessoryColor(index==0?"Leash":"DualBowl",(old+delta+16)%16);}
             catch(Exception ex){Game.LogTrivial("AdvancedK9 accessory color save: "+ex.Message);Game.DisplayNotification("~r~Unable to save accessory color.");}
+            if(index==0&&_animatedLeash!=null&&_animatedLeash.Exists())
+                try{NativeFunction.Natives.SET_OBJECT_TINT_INDEX(_animatedLeash,_config.LeashPropColor);}
+                catch(Exception ex){Game.LogTrivial("AdvancedK9 leash live tint unavailable: "+ex.Message);}
             OpenAccessoryColors();
         }
         private void OpenAppearanceMenu(){_menuMode="profile_appearance";_menu.Open("K9 PROFILE — "+L("Appearance").ToUpperInvariant(),new[]{L("Edit name")+": "+_profile.Name,L("Breed/model")+": "+_profile.Breed,L("Skin/coat")+": "+(_profile.CoatVariation+1),L("Equipment/vest")+": "+_profile.Vest,L("Vest texture")+": "+_profile.VestTextureName(_dog),"← "+L("Back to K9 Profile")});}
@@ -3212,6 +3217,8 @@ namespace AdvancedK9
             var collar=VestLeashPoint();
             _nextLeashVisualUpdate=0;
             _leashEndpointLogged=false;
+            _lastLeashMeasuredDistance=-1f;
+            _nextLeashMeasurement=0;
             _leashAttached=true;
             if(!CreateAnimatedLeash(hand,collar))Game.DisplayNotification("~y~Animated K9 leash could not load. See RagePluginHook.log; the leash command remains active.");
         }
@@ -3232,8 +3239,8 @@ namespace AdvancedK9
                 NativeFunction.Natives.SET_ENTITY_COLLISION(_animatedLeash,false,false);
                 // Some GTA/RPH builds do not register this native by name.
                 // Color selection must never prevent the leash animation from loading.
-                try{NativeFunction.Natives._SET_OBJECT_TEXTURE_VARIATION(_animatedLeash,_config.LeashPropColor);}
-                catch(Exception ex){Game.LogTrivial("AdvancedK9 leash: color variation unavailable ("+ex.Message+"); continuing with asset default.");}
+                try{NativeFunction.Natives.SET_OBJECT_TINT_INDEX(_animatedLeash,_config.LeashPropColor);}
+                catch(Exception ex){Game.LogTrivial("AdvancedK9 leash: tint unavailable ("+ex.Message+"); continuing with asset default.");}
                 stage="animation dictionary request";
                 NativeFunction.Natives.REQUEST_ANIM_DICT(dictionary);
                 uint deadline=Game.GameTime+1500;
@@ -3245,7 +3252,7 @@ namespace AdvancedK9
                 NativeFunction.Natives.SET_ENTITY_ANIM_SPEED(_animatedLeash,dictionary,clip,0f);
                 stage="initial alignment";
                 UpdateAnimatedLeash(hand,vest);
-                Game.LogTrivial("AdvancedK9 leash: v1.2 animated lead active; color="+_config.LeashPropColor+".");
+                Game.LogTrivial("AdvancedK9 leash: v1.3 animated lead active; color="+_config.LeashPropColor+".");
                 return true;
             }
             catch(Exception ex)
@@ -3274,15 +3281,22 @@ namespace AdvancedK9
             float clamped=Math.Max(PatrolLeashMinimumLength,Math.Min(PatrolLeashMaximumLength,distance));
             float phase=(PatrolLeashMaximumLength-clamped)/(PatrolLeashMaximumLength-PatrolLeashMinimumLength);
             NativeFunction.Natives.SET_ENTITY_ANIM_CURRENT_TIME(_animatedLeash,dictionary,clip,Math.Min(.999f,phase));
-            if(!_leashEndpointLogged)
+            if(!_leashEndpointLogged||(Game.GameTime>=_nextLeashMeasurement&&Math.Abs(distance-_lastLeashMeasuredDistance)>.25f))
             {
                 _leashEndpointLogged=true;
+                _nextLeashMeasurement=Game.GameTime+2500;
+                _lastLeashMeasuredDistance=distance;
                 try
                 {
                     int dogBone=NativeFunction.Natives.GET_ENTITY_BONE_INDEX_BY_NAME<int>(_animatedLeash,"dog_side");
                     int handBone=NativeFunction.Natives.GET_ENTITY_BONE_INDEX_BY_NAME<int>(_animatedLeash,"handler_side");
                     Game.LogTrivial("AdvancedK9 leash endpoints: requested="+distance.ToString("0.00")+"m, dog bone="+dogBone+", hand bone="+handBone+", vest="+vest+", palm="+hand+".");
-                    if(dogBone>=0&&handBone>=0)Game.LogTrivial("AdvancedK9 leash mesh endpoints: latch="+NativeFunction.Natives.GET_WORLD_POSITION_OF_ENTITY_BONE<Vector3>(_animatedLeash,dogBone)+", loop="+NativeFunction.Natives.GET_WORLD_POSITION_OF_ENTITY_BONE<Vector3>(_animatedLeash,handBone)+".");
+                    if(dogBone>=0&&handBone>=0)
+                    {
+                        Vector3 latch=NativeFunction.Natives.GET_WORLD_POSITION_OF_ENTITY_BONE<Vector3>(_animatedLeash,dogBone);
+                        Vector3 loop=NativeFunction.Natives.GET_WORLD_POSITION_OF_ENTITY_BONE<Vector3>(_animatedLeash,handBone);
+                        Game.LogTrivial("AdvancedK9 leash mesh endpoints: span="+VectorDistance(latch,loop).ToString("0.00")+"m, latch="+latch+", loop="+loop+".");
+                    }
                 }
                 catch(Exception ex){Game.LogTrivial("AdvancedK9 leash endpoint measurement unavailable: "+ex.Message);}
             }
