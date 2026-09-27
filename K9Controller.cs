@@ -642,7 +642,7 @@ namespace AdvancedK9
                 if(_activeKennel.Resident!=null&&_activeKennel.Resident.Exists())
                 {
                     _activeKennel.Resident.Position=KennelRestPosition(_activeKennel);
-                    _activeKennel.Resident.Heading=NormalizeHeading(_activeKennel.Heading+90f);
+                    _activeKennel.Resident.Heading=KennelDogFacing(_activeKennel);
                 }
             }
             catch(Exception ex){Game.LogTrivial("AdvancedK9 live kennel preview recovered: "+ex.Message);}
@@ -947,7 +947,7 @@ namespace AdvancedK9
             if(kennel.Resident!=null&&kennel.Resident.Exists())
             {
                 kennel.Resident.Position=KennelRestPosition(kennel);
-                kennel.Resident.Heading=NormalizeHeading(kennel.Heading+90f);
+                kennel.Resident.Heading=KennelDogFacing(kennel);
             }
         }
 
@@ -978,7 +978,9 @@ namespace AdvancedK9
         {
             if(kennel.Large)
             {
-                Vector3 floor=KennelSurfacePosition(kennel,kennel.Position+HeadingOffset(kennel.Heading+90f,-.12f));
+                // Keep the proven doghouse resting spot when only the large cage
+                // rotates. Mission Row therefore remains at its original X/Y.
+                Vector3 floor=KennelSurfacePosition(kennel,kennel.Position+HeadingOffset(kennel.DefaultHeading+90f,.36f)+HeadingOffset(kennel.DefaultHeading,-.16f));
                 return new Vector3(floor.X,floor.Y,floor.Z+.42f);
             }
             Vector3 surface=KennelSurfacePosition(kennel,kennel.Position+HeadingOffset(kennel.Heading+90f,.36f)+HeadingOffset(kennel.Heading,-.16f));
@@ -989,11 +991,13 @@ namespace AdvancedK9
 
         private Vector3 KennelEntrancePosition(StationKennel kennel)
         {
-            if(kennel.Large)return KennelSurfacePosition(kennel,kennel.Position+HeadingOffset(kennel.Heading+90f,.85f));
+            if(kennel.Large)return KennelSurfacePosition(kennel,kennel.Position+HeadingOffset(kennel.Heading-90f,.85f));
             // The prop's physical opening is a quarter turn from the
             // earlier release path, which exited toward Vespucci Avenue.
             return KennelSurfacePosition(kennel,kennel.Position+HeadingOffset(kennel.Heading+90f,1.05f)+HeadingOffset(kennel.Heading,-.16f));
         }
+
+        private static float KennelDogFacing(StationKennel kennel){return NormalizeHeading(kennel.Heading+(kennel.Large?-90f:90f));}
 
         private Vector3 KennelSurfacePosition(StationKennel kennel,Vector3 position)
         {
@@ -1068,7 +1072,7 @@ namespace AdvancedK9
             try
             {
                 model.LoadAndWait();
-                kennel.Resident=new Ped(model,KennelRestPosition(kennel),NormalizeHeading(kennel.Heading+90f));
+                kennel.Resident=new Ped(model,KennelRestPosition(kennel),KennelDogFacing(kennel));
                 if(kennel.Resident==null||!kennel.Resident.Exists())return;
                 kennel.ResidentProfileId=_roster.ActiveId;
                 kennel.Resident.IsPersistent=true;kennel.Resident.BlockPermanentEvents=true;
@@ -1097,7 +1101,7 @@ namespace AdvancedK9
             DeleteLeashRope();
             ExitRestingPose();
             _dog.Tasks.Clear();
-            _dog.Tasks.FollowNavigationMeshToPosition(entrance,kennel.Heading,1.6f).WaitForCompletion(7000);
+            _dog.Tasks.FollowNavigationMeshToPosition(entrance,KennelDogFacing(kennel),1.6f).WaitForCompletion(7000);
             if(!DogExists()||_dog.DistanceTo(entrance)>2.5f)
             {
                 Game.DisplayNotification("~y~Guide "+_profile.Name+" closer to the kennel entrance and try again.");
@@ -1119,7 +1123,7 @@ namespace AdvancedK9
                 Vector3 to=i<=15?entrance:floorRest;
                 float t=(i<=15?i:i-15)/15f;
                 PlaceKennelWalkingPose(returning,kennel,new Vector3(from.X+(to.X-from.X)*t,from.Y+(to.Y-from.Y)*t,Math.Max(from.Z+(to.Z-from.Z)*t,kennel.Position.Z+.02f)),"return");
-                returning.Heading=NormalizeHeading(kennel.Heading+90f);
+                returning.Heading=KennelDogFacing(kennel);
                 GameFiber.Wait(35);
             }
             if(!returning.Exists())return;
@@ -1196,12 +1200,28 @@ namespace AdvancedK9
                 if(!kennel.Large||kennel.Prop==null||!kennel.Prop.Exists()||handler.DistanceTo(kennel.Prop)>12f)continue;
                 K9RosterEntry assigned=_roster.Entries.FirstOrDefault(e=>string.Equals(e.KennelKey,kennel.Key,StringComparison.OrdinalIgnoreCase)&&!string.Equals(e.Status,"Deployed",StringComparison.OrdinalIgnoreCase));
                 if(assigned==null||string.IsNullOrWhiteSpace(assigned.Name))continue;
-                Vector3 sign=kennel.Prop.Position+HeadingOffset(kennel.Heading+90f,.52f)+new Vector3(0f,0f,1.00f);
-                float x,y;
+                Vector3 front=HeadingOffset(kennel.Heading-90f,1f);
+                Vector3 camera=NativeFunction.Natives.GET_GAMEPLAY_CAM_COORD<Vector3>();
+                Vector3 towardsCamera=camera-kennel.Prop.Position;
+                if(front.X*towardsCamera.X+front.Y*towardsCamera.Y<.1f)continue;
+                Vector3 sign=kennel.Prop.Position+HeadingOffset(kennel.Heading-90f,.565f)+new Vector3(0f,0f,1.00f);
+                Vector3 left=sign+HeadingOffset(kennel.Heading,-.35f)+new Vector3(0f,0f,.085f);
+                Vector3 right=sign+HeadingOffset(kennel.Heading,.35f)+new Vector3(0f,0f,-.085f);
+                float x,y,lx,ly,rx,ry;
                 try
                 {
-                    if(NativeFunction.Natives.GET_SCREEN_COORD_FROM_WORLD_COORD<bool>(sign.X,sign.Y,sign.Z,out x,out y))
-                        DrawText(assigned.Name.ToUpperInvariant(),x-.012f*Math.Min(assigned.Name.Length,12),y-.01f,.27f);
+                    if(NativeFunction.Natives.GET_SCREEN_COORD_FROM_WORLD_COORD<bool>(sign.X,sign.Y,sign.Z,out x,out y)&&
+                       NativeFunction.Natives.GET_SCREEN_COORD_FROM_WORLD_COORD<bool>(left.X,left.Y,left.Z,out lx,out ly)&&
+                       NativeFunction.Natives.GET_SCREEN_COORD_FROM_WORLD_COORD<bool>(right.X,right.Y,right.Z,out rx,out ry))
+                    {
+                        float width=Math.Abs(lx-rx),height=Math.Abs(ly-ry);
+                        // The asset has a fixed ADVANCE K9 badge. A dark live
+                        // nameplate covers it from the front until the source mesh
+                        // is supplied with a blank badge.
+                        NativeFunction.Natives.DRAW_RECT(x,y,width,height,15,18,21,255);
+                        string name=assigned.Name.ToUpperInvariant();if(name.Length>16)name=name.Substring(0,16);
+                        DrawText(name,x-Math.Min(width*.42f,name.Length*width*.026f),y-height*.31f,Math.Max(.16f,Math.Min(.28f,width*.75f)));
+                    }
                 }
                 catch(Exception ex){Game.LogTrivial("AdvancedK9 kennel name display: "+ex.Message);}
             }
@@ -1237,7 +1257,7 @@ namespace AdvancedK9
                 {
                     float t=i/18f;
                     PlaceKennelWalkingPose(sleeping,kennel,new Vector3(start.X+(release.X-start.X)*t,start.Y+(release.Y-start.Y)*t,Math.Max(floorStart.Z+(release.Z-floorStart.Z)*t,kennel.Position.Z+.02f)),"deploy");
-                    sleeping.Heading=NormalizeHeading(kennel.Heading+90f);
+                    sleeping.Heading=KennelDogFacing(kennel);
                     GameFiber.Wait(35);
                 }
                 if(!sleeping.Exists())return;
