@@ -71,6 +71,7 @@ namespace AdvancedK9
         public string PortraitFile = "";
         public readonly Dictionary<K9Command,string[]> CustomCommandPhrases=new Dictionary<K9Command,string[]>();
         private readonly Dictionary<string,string> _kennelLocations=new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string,string> _kennelAppearances=new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase);
         private readonly string _configPath=Path.Combine("Plugins","LSPDFR","AdvancedK9","AdvancedK9.ini");
 
         private static readonly string[] KennelKeys={"MissionRow","Davis","Vespucci","RockfordHills","Vinewood","LaMesa","SandyShores","Paleto","Ranger","LSIA","Bolingbroke","DelPerro","PortOfLosSantos","GreatOceanHighway","FortZancudo","FIB","BrookTrail"};
@@ -160,7 +161,11 @@ namespace AdvancedK9
                 string[] phrases=aliases.Split(new[]{'|',';'},StringSplitOptions.RemoveEmptyEntries).Select(x=>x.Trim()).Where(x=>!string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
                 if(phrases.Length>0)result.CustomCommandPhrases[definition.Command]=phrases;
             }
-            foreach(string key in KennelKeys)result._kennelLocations[key]=ini.ReadString("KennelLocations",key,"");
+            foreach(string key in KennelKeys)
+            {
+                result._kennelLocations[key]=ini.ReadString("KennelLocations",key,"");
+                result._kennelAppearances[key]=ini.ReadString("KennelAppearance",key,"Doghouse,0");
+            }
             result.MigrateLegacyKennelDefaults();
             return result;
         }
@@ -218,6 +223,33 @@ namespace AdvancedK9
                 return false;
             }
             return true;
+        }
+
+        public void GetKennelAppearance(string key,out bool large,out int color)
+        {
+            string value;large=false;color=0;
+            if(!_kennelAppearances.TryGetValue(key,out value))return;
+            string[] parts=value.Split(',');
+            large=parts.Length>0&&parts[0].Trim().Equals("Large",StringComparison.OrdinalIgnoreCase);
+            int parsed;if(parts.Length>1&&int.TryParse(parts[1],out parsed))color=Math.Max(0,Math.Min(15,parsed));
+        }
+
+        public void SaveKennelAppearance(string key,bool large,int color)
+        {
+            string value=(large?"Large":"Doghouse")+","+Math.Max(0,Math.Min(15,color));
+            var lines=File.Exists(_configPath)?new List<string>(File.ReadAllLines(_configPath)):new List<string>();
+            int section=-1,end=lines.Count,keyLine=-1;
+            for(int i=0;i<lines.Count;i++)
+            {
+                string trimmed=lines[i].Trim();
+                if(trimmed.Equals("[KennelAppearance]",StringComparison.OrdinalIgnoreCase)){section=i;continue;}
+                if(section>=0&&i>section&&trimmed.StartsWith("[")&&trimmed.EndsWith("]")){end=i;break;}
+                if(section>=0&&i>section&&trimmed.StartsWith(key+"=",StringComparison.OrdinalIgnoreCase))keyLine=i;
+            }
+            if(section<0){if(lines.Count>0&&lines[lines.Count-1].Length>0)lines.Add("");lines.Add("[KennelAppearance]");end=lines.Count;}
+            if(keyLine>=0)lines[keyLine]=key+"="+value;else lines.Insert(end,key+"="+value);
+            string temporary=_configPath+".tmp";File.WriteAllLines(temporary,lines);File.Copy(temporary,_configPath,true);File.Delete(temporary);
+            _kennelAppearances[key]=value;
         }
 
         public void SaveKennelLocation(string key,Vector3 position,float heading)
