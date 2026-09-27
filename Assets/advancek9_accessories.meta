@@ -1,24 +1,24 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<AdvanceK9AccessoryMetadata version="1.1">
+<AdvanceK9AccessoryMetadata version="1.4">
   <Prop model="advancek9_leash" tintVariations="16">
     <Pivot x="0.00000" y="0.00000" z="0.00000" />
     <HandlerSide label="HANDLER_SIDE_HAND_LOOP">
-      <LoopCenter x="1.70300" y="0.00000" z="0.02800" />
-      <EndAnchor x="1.73218" y="0.00000" z="0.02800" />
+      <LoopCenter x="2.90300" y="0.00000" z="0.02800" />
+      <EndAnchor x="2.93218" y="0.00000" z="0.02800" />
     </HandlerSide>
     <DogSide label="DOG_SIDE_VEST_LATCH">
       <LatchAnchor x="-0.59700" y="0.00000" z="0.02800" />
       <AttachmentDirection x="-1.00000" y="0.00000" z="0.00000" />
     </DogSide>
     <Rig type="THREE_PART_DEFORMABLE">
-      <Part name="HAND_LOOP" bone="handler_side" pivotX="1.15700" pivotY="0.00000" pivotZ="0.02800" />
+      <Part name="HAND_LOOP" bone="handler_side" pivotX="2.90300" pivotY="0.00000" pivotZ="0.02800" />
       <Part name="FLEXIBLE_STRAP" startBone="strap_00" endBone="strap_08" boneCount="9" />
       <Part name="SWIVEL_LATCH" bone="dog_side" pivotX="-0.59700" pivotY="0.00000" pivotZ="0.02800" />
       <StrapBones>strap_00 strap_01 strap_02 strap_03 strap_04 strap_05 strap_06 strap_07 strap_08</StrapBones>
     </Rig>
     <AnimationDictionary name="advancek9_leash">
       <Clip name="leash_retract" durationSeconds="1.00000" normalizedControl="true"
-            extendedDistance="2.30000" retractedDistance="0.48000"
+            extendedDistance="3.50000" retractedDistance="0.48000"
             rootMotion="false" fixedBone="dog_side" movingBone="handler_side" />
     </AnimationDictionary>
     <ColorControl method="SET_OBJECT_TINT_INDEX" minimumIndex="0" maximumIndex="15"
