@@ -127,8 +127,8 @@ namespace AdvancedK9
             result.VestStyle = ini.ReadInt32("Dog", "VestStyle", result.VestStyle);
             result.VestColor = ini.ReadInt32("Dog", "VestColor", result.VestColor);
             result.VestComponent = ini.ReadInt32("Dog", "VestComponent", result.VestComponent);
-            result.LeashPropColor = Clamp(ini.ReadInt32("AccessoryColors", "Leash", 0),0,15);
-            result.BowlPropColor = Clamp(ini.ReadInt32("AccessoryColors", "DualBowl", 0),0,15);
+            result.LeashPropColor = Math.Max(0,Math.Min(15,ini.ReadInt32("AccessoryColors", "Leash", 0)));
+            result.BowlPropColor = Math.Max(0,Math.Min(15,ini.ReadInt32("AccessoryColors", "DualBowl", 0)));
             result.PositiveChance = Clamp(ini.ReadSingle("Search", "FallbackPositiveChance", result.PositiveChance), 0f, 1f);
             result.SearchRadius = Math.Max(3f, ini.ReadSingle("Search", "Radius", result.SearchRadius));
             result.TrackRadius = Math.Max(20f, ini.ReadSingle("Tracking", "AcquisitionRadius", result.TrackRadius));
