@@ -997,7 +997,27 @@ namespace AdvancedK9
             return KennelSurfacePosition(kennel,kennel.Position+HeadingOffset(kennel.Heading+90f,1.05f)+HeadingOffset(kennel.Heading,-.16f));
         }
 
-        private static float KennelDogFacing(StationKennel kennel){return NormalizeHeading(kennel.Heading+(kennel.Large?-90f:90f));}
+        private static float KennelDogFacing(StationKennel kennel)
+        {
+            // The kennel can rotate without rotating the proven sleeping pose.
+            return NormalizeHeading((kennel.Large?kennel.DefaultHeading:kennel.Heading)+90f);
+        }
+
+        private static float KennelExitFacing(StationKennel kennel)
+        {
+            return NormalizeHeading(kennel.Heading+(kennel.Large?-90f:90f));
+        }
+
+        private static void TurnKennelDog(Ped dog,float target)
+        {
+            float start=dog.Heading;
+            float delta=(target-start+540f)%360f-180f;
+            for(int i=1;i<=8&&dog.Exists();i++)
+            {
+                dog.Heading=NormalizeHeading(start+delta*i/8f);
+                GameFiber.Wait(35);
+            }
+        }
 
         private Vector3 KennelSurfacePosition(StationKennel kennel,Vector3 position)
         {
@@ -1101,7 +1121,7 @@ namespace AdvancedK9
             DeleteLeashRope();
             ExitRestingPose();
             _dog.Tasks.Clear();
-            _dog.Tasks.FollowNavigationMeshToPosition(entrance,KennelDogFacing(kennel),1.6f).WaitForCompletion(7000);
+            _dog.Tasks.FollowNavigationMeshToPosition(entrance,kennel.Large?NormalizeHeading(KennelExitFacing(kennel)+180f):KennelDogFacing(kennel),1.6f).WaitForCompletion(7000);
             if(!DogExists()||_dog.DistanceTo(entrance)>2.5f)
             {
                 Game.DisplayNotification("~y~Guide "+_profile.Name+" closer to the kennel entrance and try again.");
@@ -1123,10 +1143,11 @@ namespace AdvancedK9
                 Vector3 to=i<=15?entrance:floorRest;
                 float t=(i<=15?i:i-15)/15f;
                 PlaceKennelWalkingPose(returning,kennel,new Vector3(from.X+(to.X-from.X)*t,from.Y+(to.Y-from.Y)*t,Math.Max(from.Z+(to.Z-from.Z)*t,kennel.Position.Z+.02f)),"return");
-                returning.Heading=KennelDogFacing(kennel);
+                returning.Heading=kennel.Large?NormalizeHeading(KennelExitFacing(kennel)+180f):KennelDogFacing(kennel);
                 GameFiber.Wait(35);
             }
             if(!returning.Exists())return;
+            if(kennel.Large)TurnKennelDog(returning,KennelDogFacing(kennel));
             returning.Health=Math.Max(returning.Health,safeHealth);
             _dog=null;
             _roster.UpdateActive(_profile.Name,kennel.Key,_profile.IsRehabilitating?"Rehabilitation":"Available");
@@ -1137,6 +1158,7 @@ namespace AdvancedK9
             NativeFunction.Natives.FREEZE_ENTITY_POSITION(returning,true);
             NativeFunction.Natives.SET_ENTITY_COLLISION(returning,false,false);
             returning.Position=rest;
+            returning.Heading=KennelDogFacing(kennel);
             PlayCanineClip(returning,"creatures@rottweiler@amb@sleep_in_kennel@","sleep_in_kennel",-1,true);
             KeepKennelPoseAboveFloor(returning,kennel,"sleep");
             NativeFunction.Natives.FREEZE_ENTITY_POSITION(returning,true);
@@ -1239,6 +1261,7 @@ namespace AdvancedK9
             if(sleeping!=null&&sleeping.Exists()&&kennel.ResidentProfileId==_roster.ActiveId)
             {
                 sleeping.Position=KennelRestPosition(kennel);
+                sleeping.Heading=KennelDogFacing(kennel);
                 PlayCanineClip(sleeping,"creatures@rottweiler@amb@sleep_in_kennel@","exit_kennel",-1,false);
                 for(int i=0;i<26&&sleeping.Exists();i++)
                 {
@@ -1253,11 +1276,12 @@ namespace AdvancedK9
                 sleeping.Tasks.Clear();
                 PlayCanineClip(sleeping,"creatures@rottweiler@move","walk",-1,true);
                 PlaceKennelWalkingPose(sleeping,kennel,floorStart,"deploy start");
+                if(kennel.Large)TurnKennelDog(sleeping,KennelExitFacing(kennel));
                 for(int i=1;i<=18&&sleeping.Exists();i++)
                 {
                     float t=i/18f;
                     PlaceKennelWalkingPose(sleeping,kennel,new Vector3(start.X+(release.X-start.X)*t,start.Y+(release.Y-start.Y)*t,Math.Max(floorStart.Z+(release.Z-floorStart.Z)*t,kennel.Position.Z+.02f)),"deploy");
-                    sleeping.Heading=KennelDogFacing(kennel);
+                    sleeping.Heading=KennelExitFacing(kennel);
                     GameFiber.Wait(35);
                 }
                 if(!sleeping.Exists())return;
