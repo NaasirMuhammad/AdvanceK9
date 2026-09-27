@@ -1478,10 +1478,10 @@ namespace AdvancedK9
                 Game.DisplayNotification("~y~Guide "+_profile.Name+" closer to the selected vehicle door and retry.");
                 Follow();return;
             }
-            // Approach facing the doorway, not the front bumper. Side +1 is
-            // the passenger door; its inward heading is 90 degrees left.
+            // Vehicle-local +X is the passenger side. The canine entry clip
+            // uses the opposite starting heading from the exit clip.
             float side=_dogVehicleDoor==2?-1f:1f;
-            TurnDogToward(NormalizeHeading(vehicle.Heading-side*90f),360);
+            TurnDogToward(NormalizeHeading(vehicle.Heading+side*90f),360);
             Game.DisplaySubtitle("~b~K9 entering through the selected door...",700);
             bool visibleJump=PlayDogVehicleJump(vehicle,seat,doorPosition);
             if(!visibleJump)
@@ -1506,7 +1506,7 @@ namespace AdvancedK9
                 Vector3 seatPosition=NativeFunction.Natives.GET_WORLD_POSITION_OF_ENTITY_BONE<Vector3>(vehicle,bone);
                 Vector3 start=_dog.Position;Vector3 apex=new Vector3((start.X+seatPosition.X)*.5f,(start.Y+seatPosition.Y)*.5f,Math.Max(start.Z,seatPosition.Z)+.48f);
                 float side=_dogVehicleDoor==2?-1f:1f;
-                float inward=NormalizeHeading(vehicle.Heading-side*90f);
+                float inward=NormalizeHeading(vehicle.Heading+side*90f);
                 _dog.Tasks.ClearImmediately();NativeFunction.Natives.SET_ENTITY_COLLISION(_dog,false,false);_dog.Heading=inward;
                 if(!PlayCanineClip(_dog,"creatures@rottweiler@incar@","get_in",-1,false))return false;
                 // Let the paws begin the entry clip at the door before the body moves.
@@ -1561,7 +1561,7 @@ namespace AdvancedK9
             Vector3 seatStart=_dog.Position;
             ReleaseVehicleSeat();NativeFunction.Natives.SET_ENTITY_COLLISION(_dog,false,false);
             NativeFunction.Natives.SET_ENTITY_COORDS_NO_OFFSET(_dog,seatStart.X,seatStart.Y,seatStart.Z,false,false,false);
-            float outward=NormalizeHeading(vehicle.Heading+side*90f);
+            float outward=NormalizeHeading(vehicle.Heading-side*90f);
             TurnDogToward(outward,350);
             if(!PlayCanineClip(_dog,"creatures@rottweiler@incar@","get_out",-1,false))
                 try{NativeFunction.Natives.REQUEST_ANIM_DICT("creatures@rottweiler@move");uint timeout=Game.GameTime+600;while(!NativeFunction.Natives.HAS_ANIM_DICT_LOADED<bool>("creatures@rottweiler@move")&&Game.GameTime<timeout)GameFiber.Yield();NativeFunction.Natives.TASK_PLAY_ANIM(_dog,"creatures@rottweiler@move","jump",4f,-3f,450,0,0f,false,false,false);}catch{}
@@ -3226,8 +3226,10 @@ namespace AdvancedK9
                 _animatedLeash.IsPersistent=true;
                 stage="collision";
                 NativeFunction.Natives.SET_ENTITY_COLLISION(_animatedLeash,false,false);
-                stage="texture variation";
-                NativeFunction.Natives._SET_OBJECT_TEXTURE_VARIATION(_animatedLeash,_config.LeashPropColor);
+                // Some GTA/RPH builds do not register this native by name.
+                // Color selection must never prevent the leash animation from loading.
+                try{NativeFunction.Natives._SET_OBJECT_TEXTURE_VARIATION(_animatedLeash,_config.LeashPropColor);}
+                catch(Exception ex){Game.LogTrivial("AdvancedK9 leash: color variation unavailable ("+ex.Message+"); continuing with asset default.");}
                 stage="animation dictionary request";
                 NativeFunction.Natives.REQUEST_ANIM_DICT(dictionary);
                 uint deadline=Game.GameTime+1500;
