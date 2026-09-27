@@ -63,7 +63,6 @@ namespace AdvancedK9
         private uint _nextHeatWarning;
         private int _dogVehicleDoor=3;
         private int _leashRope = -1;
-        private Rage.Object _leashHandLead;
         private Rage.Object _leashCollarClip;
         private const float PatrolLeashMinimumLength=.48f;
         private const float PatrolLeashMaximumLength=2.3f;
@@ -3160,22 +3159,18 @@ namespace AdvancedK9
             _leashRope=NativeFunction.Natives.ADD_ROPE<int>(hand.X,hand.Y,hand.Z,0f,0f,0f,length,4,PatrolLeashMaximumLength,PatrolLeashMinimumLength,0f,false,false,true,1f,false,0);
             // Keep a visual hand-to-collar leash without entity-to-entity rope
             // physics, which can freeze animal navigation tasks.
-            if(_leashRope>=0){CreateLeashHardware(handler);PinLeashEndpoints();}
+            if(_leashRope>=0){CreateLeashHardware();PinLeashEndpoints();}
         }
 
-        private void CreateLeashHardware(Ped handler)
+        private void CreateLeashHardware()
         {
             try
             {
-                // The model pivot is at the straight end, while its loop must
-                // sit in the left hand. Reverse the lead and bring the loop to
-                // the grip instead of letting it extend behind the handler.
-                _leashHandLead=AttachLeashPart("prop_cs_dog_lead_2a",handler,26611,
-                    HandLeashPoint(handler),0f,.16f,0f,0f,0f,180f);
-                // This K9 wears a vest, not a collar. Place the clasp low and
-                // flat over the rear half of the vest instead of at the neck.
-                _leashCollarClip=AttachLeashPart("prop_cs_dog_lead_2b",_dog,0,
-                    VestLeashPoint(),0f,.16f,.55f,90f,0f,180f);
+                // 2a and 2b are long rigid lead sections and cannot follow a
+                // moving handler/K9 pair as endpoint fittings. Use the small
+                // clasp at the vest ring and one flexible rope to the palm.
+                _leashCollarClip=AttachLeashPart("prop_cs_dog_lead_2c",_dog,0,
+                    VestLeashPoint(),0f,.48f,.55f,90f,0f,180f);
             }
             catch(Exception ex){Game.LogTrivial("AdvancedK9 leash hardware unavailable: "+ex.Message);DeleteLeashHardware();}
         }
@@ -3201,9 +3196,8 @@ namespace AdvancedK9
 
         private void DeleteLeashHardware()
         {
-            try{if(_leashHandLead!=null&&_leashHandLead.Exists())_leashHandLead.Delete();}catch{}
             try{if(_leashCollarClip!=null&&_leashCollarClip.Exists())_leashCollarClip.Delete();}catch{}
-            _leashHandLead=null;_leashCollarClip=null;
+            _leashCollarClip=null;
         }
 
         private static Vector3 HandLeashPoint(Ped handler)
@@ -3214,7 +3208,7 @@ namespace AdvancedK9
             return new Vector3((hand.X+finger.X)*.5f,(hand.Y+finger.Y)*.5f,(hand.Z+finger.Z)*.5f);
         }
 
-        private Vector3 VestLeashPoint(){return _dog.GetOffsetPosition(new Vector3(0f,.16f,.55f));}
+        private Vector3 VestLeashPoint(){return _dog.GetOffsetPosition(new Vector3(0f,.48f,.55f));}
 
         private void PinLeashEndpoints()
         {
@@ -3225,11 +3219,10 @@ namespace AdvancedK9
                 var handler=Game.LocalPlayer.Character;
                 Vector3 hand=HandLeashPoint(handler);
                 Vector3 vest=VestLeashPoint();
-                // The rope is the single flexible span between the two rigid
-                // GTA leash pieces. Pin to their free ends, not a second
-                // independent hand-to-neck leash.
-                Vector3 start=_leashHandLead!=null&&_leashHandLead.Exists()?_leashHandLead.Position:hand;
-                Vector3 end=_leashCollarClip!=null&&_leashCollarClip.Exists()?_leashCollarClip.Position:vest;
+                // One flexible span connects the palm directly to the vest
+                // clasp. The long rigid prop sections are not rendered.
+                Vector3 start=hand;
+                Vector3 end=vest;
                 float slack=_workingLeashed?.12f:.06f;
                 float length=Math.Max(PatrolLeashMinimumLength,Math.Min(PatrolLeashMaximumLength,VectorDistance(start,end)+slack));
                 NativeFunction.Natives.ROPE_FORCE_LENGTH(_leashRope,length);
