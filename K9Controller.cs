@@ -978,9 +978,9 @@ namespace AdvancedK9
         {
             if(kennel.Large)
             {
-                // Keep the proven doghouse resting spot when only the large cage
-                // rotates. Mission Row therefore remains at its original X/Y.
-                Vector3 floor=KennelSurfacePosition(kennel,kennel.Position+HeadingOffset(kennel.DefaultHeading+90f,.36f)+HeadingOffset(kennel.DefaultHeading,-.16f)-HeadingOffset(kennel.Heading-90f,.20f)-HeadingOffset(kennel.Heading,.24f));
+                // The v3 kennel's physical opening faces opposite its object
+                // heading. Use its added rear depth behind the centered doorway.
+                Vector3 floor=KennelSurfacePosition(kennel,kennel.Position+HeadingOffset(kennel.DefaultHeading+90f,.36f)+HeadingOffset(kennel.DefaultHeading,-.16f)-HeadingOffset(kennel.Heading-90f,.20f)+HeadingOffset(kennel.Heading,.24f));
                 return new Vector3(floor.X,floor.Y,floor.Z+.42f);
             }
             Vector3 surface=KennelSurfacePosition(kennel,kennel.Position+HeadingOffset(kennel.Heading+90f,.36f)+HeadingOffset(kennel.Heading,-.16f));
@@ -991,7 +991,7 @@ namespace AdvancedK9
 
         private Vector3 KennelEntrancePosition(StationKennel kennel)
         {
-            if(kennel.Large)return KennelSurfacePosition(kennel,kennel.Position+HeadingOffset(kennel.Heading,.85f));
+            if(kennel.Large)return KennelSurfacePosition(kennel,kennel.Position+HeadingOffset(kennel.Heading+180f,.85f));
             // The prop's physical opening is a quarter turn from the
             // earlier release path, which exited toward Vespucci Avenue.
             return KennelSurfacePosition(kennel,kennel.Position+HeadingOffset(kennel.Heading+90f,1.05f)+HeadingOffset(kennel.Heading,-.16f));
@@ -999,13 +999,12 @@ namespace AdvancedK9
 
         private static float KennelDogFacing(StationKennel kennel)
         {
-            // The kennel can rotate without rotating the proven sleeping pose.
-            return NormalizeHeading((kennel.Large?kennel.DefaultHeading:kennel.Heading)+90f);
+            return NormalizeHeading(kennel.Large?kennel.DefaultHeading-90f:kennel.Heading+90f);
         }
 
         private static float KennelExitFacing(StationKennel kennel)
         {
-            return NormalizeHeading(kennel.Heading+(kennel.Large?0f:90f));
+            return NormalizeHeading(kennel.Heading+(kennel.Large?180f:90f));
         }
 
         private static void TurnKennelDog(Ped dog,float target)
@@ -1222,11 +1221,11 @@ namespace AdvancedK9
                 if(!kennel.Large||kennel.Prop==null||!kennel.Prop.Exists()||handler.DistanceTo(kennel.Prop)>12f)continue;
                 K9RosterEntry assigned=_roster.Entries.FirstOrDefault(e=>string.Equals(e.KennelKey,kennel.Key,StringComparison.OrdinalIgnoreCase)&&!string.Equals(e.Status,"Deployed",StringComparison.OrdinalIgnoreCase));
                 if(assigned==null||string.IsNullOrWhiteSpace(assigned.Name))continue;
-                Vector3 front=HeadingOffset(kennel.Heading,1f);
+                Vector3 front=HeadingOffset(kennel.Heading+180f,1f);
                 Vector3 camera=NativeFunction.Natives.GET_GAMEPLAY_CAM_COORD<Vector3>();
                 Vector3 towardsCamera=camera-kennel.Prop.Position;
                 if(front.X*towardsCamera.X+front.Y*towardsCamera.Y<.1f)continue;
-                Vector3 sign=kennel.Prop.Position+HeadingOffset(kennel.Heading,.51894f)+new Vector3(0f,0f,1.16910f);
+                Vector3 sign=kennel.Prop.Position+HeadingOffset(kennel.Heading+180f,.51894f)+new Vector3(0f,0f,1.16910f);
                 Vector3 left=sign+HeadingOffset(kennel.Heading+90f,-.35f)+new Vector3(0f,0f,.085f);
                 Vector3 right=sign+HeadingOffset(kennel.Heading+90f,.35f)+new Vector3(0f,0f,-.085f);
                 float x=0f,y=0f,lx=0f,ly=0f,rx=0f,ry=0f;
@@ -1239,7 +1238,7 @@ namespace AdvancedK9
                         float width=Math.Abs(lx-rx),height=Math.Abs(ly-ry);
                         // The v3 kennel has a blank badge centered on this point.
                         string name=assigned.Name.ToUpperInvariant();if(name.Length>16)name=name.Substring(0,16);
-                        DrawText(name,x-Math.Min(width*.42f,name.Length*width*.026f),y-height*.31f,Math.Max(.16f,Math.Min(.28f,width*.75f)));
+                        DrawText(name,x-Math.Min(width*.42f,name.Length*width*.026f),y-height*.31f,Math.Max(.30f,Math.Min(.55f,width*3.5f)));
                     }
                 }
                 catch(Exception ex){Game.LogTrivial("AdvancedK9 kennel name display: "+ex.Message);}
