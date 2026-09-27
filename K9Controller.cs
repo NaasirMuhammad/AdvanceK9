@@ -65,7 +65,8 @@ namespace AdvancedK9
         private int _leashRope = -1;
         private Rage.Object _leashCollarClip;
         private Rage.Object _animatedLeash;
-        private bool LeashActive=>_leashRope>=0||(_animatedLeash!=null&&_animatedLeash.Exists());
+        private bool _leashAttached;
+        private bool LeashActive=>_leashAttached;
         private const float PatrolLeashMinimumLength=.48f;
         private const float PatrolLeashMaximumLength=2.3f;
         private bool _workingLeashed;
@@ -3193,6 +3194,7 @@ namespace AdvancedK9
             NativeFunction.Natives.SET_PED_CAN_RAGDOLL(_dog,true);
             _dog.Tasks.Clear();
             CreateLeashRope();
+            _leashAttached=true;
             _state = K9State.Leashed;
             IssuePersistentFollow(Game.LocalPlayer.Character,true);
             Game.LogTrivial("AdvancedK9 leash: attached visual leash and issued persistent animal follow task.");
@@ -3206,40 +3208,43 @@ namespace AdvancedK9
             var hand=HandLeashPoint(handler);
             var collar=VestLeashPoint();
             _nextLeashVisualUpdate=0;
-            if(CreateAnimatedLeash(hand,collar))return;
-            NativeFunction.Natives.ROPE_LOAD_TEXTURES();GameFiber.Wait(100);
-            float length=Math.Max(PatrolLeashMinimumLength,Math.Min(PatrolLeashMaximumLength,VectorDistance(hand,collar)+.08f));
-            _leashRope=NativeFunction.Natives.ADD_ROPE<int>(hand.X,hand.Y,hand.Z,0f,0f,0f,length,4,PatrolLeashMaximumLength,PatrolLeashMinimumLength,0f,false,false,true,1f,false,0);
-            // Keep a visual hand-to-collar leash without entity-to-entity rope
-            // physics, which can freeze animal navigation tasks.
-            if(_leashRope>=0){CreateLeashHardware();PinLeashEndpoints();}
+            _leashAttached=true;
+            if(!CreateAnimatedLeash(hand,collar))Game.DisplayNotification("~y~Animated K9 leash could not load. See RagePluginHook.log; the leash command remains active.");
         }
 
         private bool CreateAnimatedLeash(Vector3 hand,Vector3 vest)
         {
             const string dictionary="advancek9_leash",clip="leash_retract";
             var model=new Model("advancek9_leash");
-            if(!model.IsValid)return false;
+            if(!model.IsValid){Game.LogTrivial("AdvancedK9 leash: stage model validation failed.");return false;}
+            string stage="model load";
             try
             {
                 model.LoadAndWait();
+                stage="object spawn";
                 _animatedLeash=new Rage.Object(model,vest);
                 _animatedLeash.IsPersistent=true;
+                stage="collision";
                 NativeFunction.Natives.SET_ENTITY_COLLISION(_animatedLeash,false,false);
+                stage="texture variation";
                 NativeFunction.Natives._SET_OBJECT_TEXTURE_VARIATION(_animatedLeash,_config.LeashPropColor);
+                stage="animation dictionary request";
                 NativeFunction.Natives.REQUEST_ANIM_DICT(dictionary);
                 uint deadline=Game.GameTime+1500;
                 while(!NativeFunction.Natives.HAS_ANIM_DICT_LOADED<bool>(dictionary)&&Game.GameTime<deadline)GameFiber.Yield();
                 if(!NativeFunction.Natives.HAS_ANIM_DICT_LOADED<bool>(dictionary))throw new InvalidOperationException("animation dictionary not loaded");
+                stage="animation playback";
                 if(!NativeFunction.Natives.PLAY_ENTITY_ANIM<bool>(_animatedLeash,clip,dictionary,8f,false,true,false,0f,0))throw new InvalidOperationException("leash_retract clip did not play");
+                stage="animation speed";
                 NativeFunction.Natives.SET_ENTITY_ANIM_SPEED(_animatedLeash,dictionary,clip,0f);
+                stage="initial alignment";
                 UpdateAnimatedLeash(hand,vest);
                 Game.LogTrivial("AdvancedK9 leash: v1.2 animated lead active; color="+_config.LeashPropColor+".");
                 return true;
             }
             catch(Exception ex)
             {
-                Game.LogTrivial("AdvancedK9 leash: animated lead unavailable ("+ex.Message+"); using previous visual leash.");
+                Game.LogTrivial("AdvancedK9 leash: stage "+stage+" failed ("+ex+"); no substitute leash rendered.");
                 if(_animatedLeash!=null&&_animatedLeash.Exists())_animatedLeash.Delete();
                 _animatedLeash=null;return false;
             }
@@ -3323,6 +3328,7 @@ namespace AdvancedK9
                 Vector3 hand=HandLeashPoint(handler);
                 Vector3 vest=VestLeashPoint();
                 if(_animatedLeash!=null&&_animatedLeash.Exists()){UpdateAnimatedLeash(hand,vest);return;}
+                if(_leashRope<0)return;
                 // One flexible span connects the palm directly to the vest
                 // clasp. The long rigid prop sections are not rendered.
                 Vector3 start=hand;
@@ -3339,7 +3345,7 @@ namespace AdvancedK9
 
         private static float VectorDistance(Vector3 a,Vector3 b){float x=a.X-b.X,y=a.Y-b.Y,z=a.Z-b.Z;return (float)Math.Sqrt(x*x+y*y+z*z);}
 
-        private void DeleteLeashRope(){DeleteLeashHardware();if(_animatedLeash!=null){try{if(_animatedLeash.Exists())_animatedLeash.Delete();}catch{} _animatedLeash=null;}if(_leashRope>=0){try{NativeFunction.Natives.DELETE_ROPE(ref _leashRope);}catch{} }_leashRope=-1;}
+        private void DeleteLeashRope(){_leashAttached=false;DeleteLeashHardware();if(_animatedLeash!=null){try{if(_animatedLeash.Exists())_animatedLeash.Delete();}catch{} _animatedLeash=null;}if(_leashRope>=0){try{NativeFunction.Natives.DELETE_ROPE(ref _leashRope);}catch{} }_leashRope=-1;}
 
         private bool DogEntityExists()=>_dog!=null&&_dog.Exists();
 
