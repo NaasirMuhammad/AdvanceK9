@@ -999,7 +999,9 @@ namespace AdvancedK9
 
         private static float KennelDogFacing(StationKennel kennel)
         {
-            return NormalizeHeading(kennel.Large?kennel.DefaultHeading-90f:kennel.Heading+90f);
+            // The kennel sleep clip renders the canine's head opposite the ped
+            // heading; reverse its heading so the body faces the open doorway.
+            return NormalizeHeading((kennel.Large?kennel.DefaultHeading:kennel.Heading)+90f);
         }
 
         private static float KennelExitFacing(StationKennel kennel)
@@ -1238,7 +1240,14 @@ namespace AdvancedK9
                         float width=Math.Abs(lx-rx),height=Math.Abs(ly-ry);
                         // The v3 kennel has a blank badge centered on this point.
                         string name=assigned.Name.ToUpperInvariant();if(name.Length>16)name=name.Substring(0,16);
-                        DrawText(name,x-Math.Min(width*.42f,name.Length*width*.026f),y-height*.31f,Math.Max(.30f,Math.Min(.55f,width*3.5f)));
+                        float scale=Math.Max(.14f,Math.Min(.48f,width*4.5f*Math.Min(1f,7f/name.Length)));
+                        NativeFunction.Natives.SET_TEXT_FONT(0);
+                        NativeFunction.Natives.SET_TEXT_SCALE(scale,scale);
+                        NativeFunction.Natives.SET_TEXT_COLOUR(226,232,235,255);
+                        NativeFunction.Natives.SET_TEXT_CENTRE(true);
+                        NativeFunction.Natives.BEGIN_TEXT_COMMAND_DISPLAY_TEXT("STRING");
+                        NativeFunction.Natives.ADD_TEXT_COMPONENT_SUBSTRING_PLAYER_NAME(name);
+                        NativeFunction.Natives.END_TEXT_COMMAND_DISPLAY_TEXT(x,y-height*.31f);
                     }
                 }
                 catch(Exception ex){Game.LogTrivial("AdvancedK9 kennel name display: "+ex.Message);}
