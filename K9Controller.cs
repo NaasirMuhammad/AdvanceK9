@@ -991,7 +991,7 @@ namespace AdvancedK9
 
         private Vector3 KennelEntrancePosition(StationKennel kennel)
         {
-            if(kennel.Large)return KennelSurfacePosition(kennel,kennel.Position+HeadingOffset(kennel.Heading-90f,.85f));
+            if(kennel.Large)return KennelSurfacePosition(kennel,kennel.Position+HeadingOffset(kennel.Heading,.85f));
             // The prop's physical opening is a quarter turn from the
             // earlier release path, which exited toward Vespucci Avenue.
             return KennelSurfacePosition(kennel,kennel.Position+HeadingOffset(kennel.Heading+90f,1.05f)+HeadingOffset(kennel.Heading,-.16f));
@@ -1005,7 +1005,7 @@ namespace AdvancedK9
 
         private static float KennelExitFacing(StationKennel kennel)
         {
-            return NormalizeHeading(kennel.Heading+(kennel.Large?-90f:90f));
+            return NormalizeHeading(kennel.Heading+(kennel.Large?0f:90f));
         }
 
         private static void TurnKennelDog(Ped dog,float target)
