@@ -1207,7 +1207,7 @@ namespace AdvancedK9
                 Vector3 sign=kennel.Prop.Position+HeadingOffset(kennel.Heading-90f,.565f)+new Vector3(0f,0f,1.00f);
                 Vector3 left=sign+HeadingOffset(kennel.Heading,-.35f)+new Vector3(0f,0f,.085f);
                 Vector3 right=sign+HeadingOffset(kennel.Heading,.35f)+new Vector3(0f,0f,-.085f);
-                float x,y,lx,ly,rx,ry;
+                float x=0f,y=0f,lx=0f,ly=0f,rx=0f,ry=0f;
                 try
                 {
                     if(NativeFunction.Natives.GET_SCREEN_COORD_FROM_WORLD_COORD<bool>(sign.X,sign.Y,sign.Z,out x,out y)&&
