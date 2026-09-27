@@ -980,7 +980,7 @@ namespace AdvancedK9
             {
                 // Keep the proven doghouse resting spot when only the large cage
                 // rotates. Mission Row therefore remains at its original X/Y.
-                Vector3 floor=KennelSurfacePosition(kennel,kennel.Position+HeadingOffset(kennel.DefaultHeading+90f,.36f)+HeadingOffset(kennel.DefaultHeading,-.16f)-HeadingOffset(kennel.Heading-90f,.20f));
+                Vector3 floor=KennelSurfacePosition(kennel,kennel.Position+HeadingOffset(kennel.DefaultHeading+90f,.36f)+HeadingOffset(kennel.DefaultHeading,-.16f)-HeadingOffset(kennel.Heading-90f,.20f)-HeadingOffset(kennel.Heading,.24f));
                 return new Vector3(floor.X,floor.Y,floor.Z+.42f);
             }
             Vector3 surface=KennelSurfacePosition(kennel,kennel.Position+HeadingOffset(kennel.Heading+90f,.36f)+HeadingOffset(kennel.Heading,-.16f));
@@ -1222,13 +1222,13 @@ namespace AdvancedK9
                 if(!kennel.Large||kennel.Prop==null||!kennel.Prop.Exists()||handler.DistanceTo(kennel.Prop)>12f)continue;
                 K9RosterEntry assigned=_roster.Entries.FirstOrDefault(e=>string.Equals(e.KennelKey,kennel.Key,StringComparison.OrdinalIgnoreCase)&&!string.Equals(e.Status,"Deployed",StringComparison.OrdinalIgnoreCase));
                 if(assigned==null||string.IsNullOrWhiteSpace(assigned.Name))continue;
-                Vector3 front=HeadingOffset(kennel.Heading-90f,1f);
+                Vector3 front=HeadingOffset(kennel.Heading,1f);
                 Vector3 camera=NativeFunction.Natives.GET_GAMEPLAY_CAM_COORD<Vector3>();
                 Vector3 towardsCamera=camera-kennel.Prop.Position;
                 if(front.X*towardsCamera.X+front.Y*towardsCamera.Y<.1f)continue;
-                Vector3 sign=kennel.Prop.Position+HeadingOffset(kennel.Heading-90f,.565f)+new Vector3(0f,0f,1.00f);
-                Vector3 left=sign+HeadingOffset(kennel.Heading,-.35f)+new Vector3(0f,0f,.085f);
-                Vector3 right=sign+HeadingOffset(kennel.Heading,.35f)+new Vector3(0f,0f,-.085f);
+                Vector3 sign=kennel.Prop.Position+HeadingOffset(kennel.Heading,.51894f)+new Vector3(0f,0f,1.16910f);
+                Vector3 left=sign+HeadingOffset(kennel.Heading+90f,-.35f)+new Vector3(0f,0f,.085f);
+                Vector3 right=sign+HeadingOffset(kennel.Heading+90f,.35f)+new Vector3(0f,0f,-.085f);
                 float x=0f,y=0f,lx=0f,ly=0f,rx=0f,ry=0f;
                 try
                 {
@@ -1237,10 +1237,7 @@ namespace AdvancedK9
                        NativeFunction.Natives.GET_SCREEN_COORD_FROM_WORLD_COORD<bool>(right.X,right.Y,right.Z,out rx,out ry))
                     {
                         float width=Math.Abs(lx-rx),height=Math.Abs(ly-ry);
-                        // The asset has a fixed ADVANCE K9 badge. A dark live
-                        // nameplate covers it from the front until the source mesh
-                        // is supplied with a blank badge.
-                        NativeFunction.Natives.DRAW_RECT(x,y,width,height,15,18,21,255);
+                        // The v3 kennel has a blank badge centered on this point.
                         string name=assigned.Name.ToUpperInvariant();if(name.Length>16)name=name.Substring(0,16);
                         DrawText(name,x-Math.Min(width*.42f,name.Length*width*.026f),y-height*.31f,Math.Max(.16f,Math.Min(.28f,width*.75f)));
                     }
