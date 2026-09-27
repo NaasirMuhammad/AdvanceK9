@@ -1465,7 +1465,10 @@ namespace AdvancedK9
                 Game.DisplayNotification("~y~Guide "+_profile.Name+" closer to the selected vehicle door and retry.");
                 Follow();return;
             }
-            NativeFunction.Natives.TASK_TURN_PED_TO_FACE_ENTITY(_dog,vehicle,500);GameFiber.Wait(500);
+            // Approach facing the doorway, not the front bumper. Side +1 is
+            // the passenger door; its inward heading is 90 degrees left.
+            float side=_dogVehicleDoor==2?-1f:1f;
+            TurnDogToward(NormalizeHeading(vehicle.Heading-side*90f),360);
             Game.DisplaySubtitle("~b~K9 entering through the selected door...",700);
             bool visibleJump=PlayDogVehicleJump(vehicle,seat,doorPosition);
             if(!visibleJump)
@@ -1489,7 +1492,9 @@ namespace AdvancedK9
                 int bone=NativeFunction.Natives.GET_ENTITY_BONE_INDEX_BY_NAME<int>(vehicle,boneName);if(bone<0)return false;
                 Vector3 seatPosition=NativeFunction.Natives.GET_WORLD_POSITION_OF_ENTITY_BONE<Vector3>(vehicle,bone);
                 Vector3 start=_dog.Position;Vector3 apex=new Vector3((start.X+seatPosition.X)*.5f,(start.Y+seatPosition.Y)*.5f,Math.Max(start.Z,seatPosition.Z)+.48f);
-                _dog.Tasks.ClearImmediately();NativeFunction.Natives.SET_ENTITY_COLLISION(_dog,false,false);
+                float side=_dogVehicleDoor==2?-1f:1f;
+                float inward=NormalizeHeading(vehicle.Heading-side*90f);
+                _dog.Tasks.ClearImmediately();NativeFunction.Natives.SET_ENTITY_COLLISION(_dog,false,false);_dog.Heading=inward;
                 if(!PlayCanineClip(_dog,"creatures@rottweiler@incar@","get_in",-1,false))return false;
                 // Let the paws begin the entry clip at the door before the body moves.
                 GameFiber.Wait(220);
@@ -1500,8 +1505,11 @@ namespace AdvancedK9
                     float x=one*one*start.X+2f*one*t*apex.X+t*t*seatPosition.X;
                     float y=one*one*start.Y+2f*one*t*apex.Y+t*t*seatPosition.Y;
                     float z=one*one*start.Z+2f*one*t*apex.Z+t*t*(seatPosition.Z+.12f);
-                    NativeFunction.Natives.SET_ENTITY_COORDS_NO_OFFSET(_dog,x,y,z,false,false,false);_dog.Heading=vehicle.Heading;GameFiber.Wait(36);
+                    NativeFunction.Natives.SET_ENTITY_COORDS_NO_OFFSET(_dog,x,y,z,false,false,false);_dog.Heading=inward;GameFiber.Wait(36);
                 }
+                // Complete the jump into the seat before rotating into the
+                // settled, forward-facing sitting pose.
+                if(DogExists())TurnDogToward(vehicle.Heading,340);
                 Game.LogTrivial("AdvancedK9 vehicle load: get_in through door "+_dogVehicleDoor+" completed for "+_profile.ModelName+".");
                 return DogExists()&&vehicle.Exists();
             }
@@ -1509,27 +1517,44 @@ namespace AdvancedK9
         }
         private void ExitVehicle(){if(_dog==null||!_dog.Exists())return;var vehicle=_dogVehicle!=null&&_dogVehicle.Exists()?_dogVehicle:_dog.CurrentVehicle;if(vehicle==null||!vehicle.Exists()){ReleaseVehicleSeat();Follow();return;}if(vehicle.Speed>1.5f){Game.DisplayNotification("~y~Stop the vehicle before unloading the K9.");return;}NativeFunction.Natives.SET_VEHICLE_DOOR_OPEN(vehicle,_dogVehicleDoor,false,false);GameFiber.Wait(650);int savedHealth=Math.Max(100,_dog.Health);Vector3 exit=StageDogOutsideVehicle(vehicle);if(_dog.IsDead)NativeFunction.Natives.RESURRECT_PED(_dog);_dog.Health=savedHealth;GameFiber.Wait(300);NativeFunction.Natives.SET_VEHICLE_DOOR_SHUT(vehicle,_dogVehicleDoor,false);K9IncidentLog.Write(_profile.Name,"Kennel","Unloaded through open rear door",exit);CompleteCollisionSafeVehicleEgress(vehicle,exit);}
 
+        private void TurnDogToward(float target,int duration)
+        {
+            if(!DogEntityExists())return;
+            float start=_dog.Heading;float delta=(target-start+540f)%360f-180f;
+            int frames=Math.Max(1,duration/35);
+            for(int i=1;i<=frames&&DogEntityExists();i++)
+            {
+                _dog.Heading=NormalizeHeading(start+delta*i/frames);
+                GameFiber.Wait(35);
+            }
+        }
+
         private Vector3 StageDogOutsideVehicle(Vehicle vehicle)
         {
-            float side=_dogVehicleDoor==2?-1f:1f;Vector3 threshold=vehicle.GetOffsetPosition(new Vector3(side*1.08f,-1.18f,.42f));Vector3 exit=vehicle.GetOffsetPosition(new Vector3(side*1.58f,-1.42f,.12f));
+            float side=_dogVehicleDoor==2?-1f:1f;Vector3 exit=vehicle.GetOffsetPosition(new Vector3(side*1.58f,-1.42f,.12f));
             // Finish rising from the seated pose before turning toward the door.
             PlayCanineClip(_dog,"creatures@rottweiler@tricks@","sit_exit",800,false);
             if(!DogEntityExists())return exit;
-            _dog.Heading=NormalizeHeading(vehicle.Heading-90f);
-            GameFiber.Wait(250);
-            // Break both GTA's seat ownership and AdvancedK9's calibrated attachment before
-            // animating the egress.  Clearing only the attachment can leave the canine logically
-            // seated, causing the walking-in-the-car behavior observed after pursuit bailouts.
+            // Detach at the actual seat position, then turn toward the open
+            // door while still inside. Keep that heading until all paws land.
             _dog.Tasks.ClearImmediately();
-            if(_dog.CurrentVehicle!=null)NativeFunction.Natives.TASK_LEAVE_VEHICLE(_dog,vehicle,16);
-            GameFiber.Wait(250);
-            _dog.Tasks.ClearImmediately();NativeFunction.Natives.SET_ENTITY_VISIBLE(_dog,false,false);ReleaseVehicleSeat();NativeFunction.Natives.SET_ENTITY_COLLISION(_dog,false,false);NativeFunction.Natives.SET_ENTITY_COORDS_NO_OFFSET(_dog,threshold.X,threshold.Y,threshold.Z,false,false,false);_dog.Heading=vehicle.Heading;
-            NativeFunction.Natives.SET_ENTITY_VISIBLE(_dog,true,false);NativeFunction.Natives.RESET_ENTITY_ALPHA(_dog);
+            if(_dog.CurrentVehicle!=null)
+            {
+                // The emergency warp-seat fallback can leave GTA seat ownership.
+                // Release it before the custom canine egress takes over.
+                NativeFunction.Natives.TASK_LEAVE_VEHICLE(_dog,vehicle,16);GameFiber.Wait(250);
+                _dog.Tasks.ClearImmediately();
+            }
+            Vector3 seatStart=_dog.Position;
+            ReleaseVehicleSeat();NativeFunction.Natives.SET_ENTITY_COLLISION(_dog,false,false);
+            NativeFunction.Natives.SET_ENTITY_COORDS_NO_OFFSET(_dog,seatStart.X,seatStart.Y,seatStart.Z,false,false,false);
+            float outward=NormalizeHeading(vehicle.Heading+side*90f);
+            TurnDogToward(outward,350);
             if(!PlayCanineClip(_dog,"creatures@rottweiler@incar@","get_out",-1,false))
                 try{NativeFunction.Natives.REQUEST_ANIM_DICT("creatures@rottweiler@move");uint timeout=Game.GameTime+600;while(!NativeFunction.Natives.HAS_ANIM_DICT_LOADED<bool>("creatures@rottweiler@move")&&Game.GameTime<timeout)GameFiber.Yield();NativeFunction.Natives.TASK_PLAY_ANIM(_dog,"creatures@rottweiler@move","jump",4f,-3f,450,0,0f,false,false,false);}catch{}
             GameFiber.Wait(180);
-            const int frames=12;for(int i=1;i<=frames&&DogEntityExists();i++){float t=i/(float)frames;float arc=(float)Math.Sin(Math.PI*t)*.28f;float x=threshold.X+(exit.X-threshold.X)*t,y=threshold.Y+(exit.Y-threshold.Y)*t,z=threshold.Z+(exit.Z-threshold.Z)*t+arc;NativeFunction.Natives.SET_ENTITY_COORDS_NO_OFFSET(_dog,x,y,z,false,false,false);GameFiber.Wait(28);}
-            NativeFunction.Natives.SET_ENTITY_COORDS_NO_OFFSET(_dog,exit.X,exit.Y,exit.Z,false,false,false);NativeFunction.Natives.SET_ENTITY_COLLISION(_dog,true,true);NativeFunction.Natives.SET_PED_CAN_RAGDOLL(_dog,true);return exit;
+            const int frames=20;for(int i=1;i<=frames&&DogEntityExists();i++){float t=i/(float)frames;float arc=(float)Math.Sin(Math.PI*t)*.22f;float x=seatStart.X+(exit.X-seatStart.X)*t,y=seatStart.Y+(exit.Y-seatStart.Y)*t,z=seatStart.Z+(exit.Z-seatStart.Z)*t+arc;NativeFunction.Natives.SET_ENTITY_COORDS_NO_OFFSET(_dog,x,y,z,false,false,false);_dog.Heading=outward;GameFiber.Wait(28);}
+            NativeFunction.Natives.SET_ENTITY_COORDS_NO_OFFSET(_dog,exit.X,exit.Y,exit.Z,false,false,false);_dog.Heading=outward;NativeFunction.Natives.SET_ENTITY_COLLISION(_dog,true,true);NativeFunction.Natives.SET_PED_CAN_RAGDOLL(_dog,true);return exit;
         }
 
         private void CompleteCollisionSafeVehicleEgress(Vehicle vehicle,Vector3 exit)
