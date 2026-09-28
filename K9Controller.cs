@@ -1514,17 +1514,16 @@ namespace AdvancedK9
                 // The get_in clip can report its IK feet more than a metre
                 // below the pavement before the first rendered frame. Use
                 // the vehicle's ground reference, not that transient bone.
-                Vector3 startFloor=vehicle.GetOffsetPosition(new Vector3(sideForDoor(seat)*1.15f,-1.25f,.10f));
-                Vector3 sill=vehicle.GetOffsetPosition(new Vector3(sideForDoor(seat)*.88f,-1.25f,.28f));
+                Vector3 startRoot=start;
+                Vector3 seatRoot=new Vector3(seatPosition.X,seatPosition.Y,seatPosition.Z+_seatProfiles.Get(vehicle).Z);
                 float side=_dogVehicleDoor==2?-1f:1f;
                 float inward=NormalizeHeading(vehicle.Heading+side*90f);
                 _dog.Tasks.ClearImmediately();NativeFunction.Natives.SET_ENTITY_COLLISION(_dog,false,false);NativeFunction.Natives.FREEZE_ENTITY_POSITION(_dog,true);_dog.Heading=inward;
                 if(!PlayCanineClip(_dog,"creatures@rottweiler@incar@","get_in",-1,false)){NativeFunction.Natives.FREEZE_ENTITY_POSITION(_dog,false);return false;}
-                startFloor=new Vector3(start.X,start.Y,startFloor.Z);
-                Game.LogTrivial("AdvancedK9 vehicle entry paws: ground="+startFloor.Z.ToString("0.000")+", sill="+sill.Z.ToString("0.000")+", seat="+seatPosition.Z.ToString("0.000")+".");
+                Game.LogTrivial("AdvancedK9 vehicle entry root: ground="+startRoot.Z.ToString("0.000")+", seat="+seatRoot.Z.ToString("0.000")+".");
                 // The clip supplies the jump arc. Move only its root across the
                 // doorway, using playback phase rather than a second timed jump.
-                FollowVehicleClipRoot("get_in",startFloor,seatPosition,inward);
+                FollowVehicleClipRoot("get_in",startRoot,seatRoot,inward);
                 // Complete the jump into the seat before rotating into the
                 // settled, forward-facing sitting pose.
                 if(DogExists())TurnDogToward(vehicle.Heading,340);
@@ -1546,12 +1545,12 @@ namespace AdvancedK9
             return foot==float.MaxValue?dog.Position.Z-.48f:foot;
         }
         private static float VehicleDogFootLift(Ped dog){return Math.Max(.40f,Math.Min(.75f,dog.Position.Z-VehicleDogFootZ(dog)+.025f));}
-        private void PlaceVehicleDogPaws(float x,float y,float pawZ,float heading)
+        private void PlaceVehicleDogRoot(float x,float y,float rootZ,float heading)
         {
             if(!DogEntityExists())return;
             // The in-car clips animate IK bones outside the dog mesh; using
             // those bones as feedback adds a second vertical jump to the clip.
-            NativeFunction.Natives.SET_ENTITY_COORDS_NO_OFFSET(_dog,x,y,pawZ+.48f,false,false,false);
+            NativeFunction.Natives.SET_ENTITY_COORDS_NO_OFFSET(_dog,x,y,rootZ,false,false,false);
             _dog.Heading=heading;
         }
         private void ExitVehicle(){if(_dog==null||!_dog.Exists())return;var vehicle=_dogVehicle!=null&&_dogVehicle.Exists()?_dogVehicle:_dog.CurrentVehicle;if(vehicle==null||!vehicle.Exists()){ReleaseVehicleSeat();Follow();return;}if(vehicle.Speed>1.5f){Game.DisplayNotification("~y~Stop the vehicle before unloading the K9.");return;}NativeFunction.Natives.SET_VEHICLE_DOOR_OPEN(vehicle,_dogVehicleDoor,false,false);GameFiber.Wait(650);int savedHealth=Math.Max(100,_dog.Health);Vector3 exit=StageDogOutsideVehicle(vehicle);if(_dog.IsDead)NativeFunction.Natives.RESURRECT_PED(_dog);_dog.Health=savedHealth;GameFiber.Wait(300);NativeFunction.Natives.SET_VEHICLE_DOOR_SHUT(vehicle,_dogVehicleDoor,false);K9IncidentLog.Write(_profile.Name,"Kennel","Unloaded through open rear door",exit);CompleteCollisionSafeVehicleEgress(vehicle,exit);}
@@ -1588,12 +1587,10 @@ namespace AdvancedK9
             TurnDogToward(outward,350);
             if(!PlayCanineClip(_dog,"creatures@rottweiler@incar@","get_out",-1,false))
                 try{NativeFunction.Natives.REQUEST_ANIM_DICT("creatures@rottweiler@move");uint timeout=Game.GameTime+600;while(!NativeFunction.Natives.HAS_ANIM_DICT_LOADED<bool>("creatures@rottweiler@move")&&Game.GameTime<timeout)GameFiber.Yield();NativeFunction.Natives.TASK_PLAY_ANIM(_dog,"creatures@rottweiler@move","jump",4f,-3f,450,0,0f,false,false,false);}catch{}
-            Vector3 seatPaws=new Vector3(seatStart.X,seatStart.Y,seatStart.Z-.48f);
-            Vector3 sill=vehicle.GetOffsetPosition(new Vector3(side*.88f,-1.42f,.28f));
-            Game.LogTrivial("AdvancedK9 vehicle exit paws: seat="+seatPaws.Z.ToString("0.000")+", sill="+sill.Z.ToString("0.000")+", ground="+exit.Z.ToString("0.000")+".");
-            FollowVehicleClipRoot("get_out",seatPaws,exit,outward);
-            PlaceVehicleDogPaws(exit.X,exit.Y,exit.Z,outward);
-            Game.LogTrivial("AdvancedK9 vehicle exit landed: root Z="+_dog.Position.Z.ToString("0.000")+", target paw Z="+exit.Z.ToString("0.000")+".");
+            Game.LogTrivial("AdvancedK9 vehicle exit root: seat="+seatStart.Z.ToString("0.000")+", ground="+exit.Z.ToString("0.000")+".");
+            FollowVehicleClipRoot("get_out",seatStart,exit,outward);
+            PlaceVehicleDogRoot(exit.X,exit.Y,exit.Z,outward);
+            Game.LogTrivial("AdvancedK9 vehicle exit landed: root Z="+_dog.Position.Z.ToString("0.000")+", target="+exit.Z.ToString("0.000")+".");
             NativeFunction.Natives.FREEZE_ENTITY_POSITION(_dog,false);ReleaseVehicleSeat();NativeFunction.Natives.SET_PED_CAN_RAGDOLL(_dog,true);return exit;
         }
 
@@ -1614,7 +1611,7 @@ namespace AdvancedK9
                 phase=Math.Max(last,Math.Min(1f,phase));last=phase;
                 float progress=Math.Max(0f,Math.Min(1f,(phase-.12f)/.76f));
                 progress=progress*progress*(3f-2f*progress);
-                PlaceVehicleDogPaws(from.X+(to.X-from.X)*progress,from.Y+(to.Y-from.Y)*progress,from.Z+(to.Z-from.Z)*progress,heading);
+                PlaceVehicleDogRoot(from.X+(to.X-from.X)*progress,from.Y+(to.Y-from.Y)*progress,from.Z+(to.Z-from.Z)*progress,heading);
                 if(phase>=.985f)break;
                 GameFiber.Wait(20);
             }
@@ -3292,9 +3289,9 @@ namespace AdvancedK9
                 stage="animation playback";
                 if(!NativeFunction.Natives.PLAY_ENTITY_ANIM<bool>(_animatedLeash,clip,dictionary,8f,false,true,false,0f,0))throw new InvalidOperationException("leash_retract clip did not play");
                 stage="animation speed";
-                // A fully paused object clip may never evaluate its skinned bones.
-                // Advance imperceptibly while the distance controller scrubs time.
-                NativeFunction.Natives.SET_ENTITY_ANIM_SPEED(_animatedLeash,dictionary,clip,.001f);
+                // The distance controller owns playback position. Engine-driven
+                // advance fights that scrub and makes the handle visibly shake.
+                NativeFunction.Natives.SET_ENTITY_ANIM_SPEED(_animatedLeash,dictionary,clip,0f);
                 stage="initial alignment";
                 UpdateAnimatedLeash(hand,vest);
                 Game.LogTrivial("AdvancedK9 leash: v1.7 animated lead active; color="+_config.LeashPropColor+".");
@@ -3391,16 +3388,15 @@ namespace AdvancedK9
         {
             Vector3 hand=NativeFunction.Natives.GET_PED_BONE_COORDS<Vector3>(handler,18905,0f,0f,0f);
             Vector3 finger=NativeFunction.Natives.GET_PED_BONE_COORDS<Vector3>(handler,26611,0f,0f,0f);
-            if(VectorDistance(hand,finger)>.3f)return hand;
             return new Vector3((hand.X+finger.X)*.5f,(hand.Y+finger.Y)*.5f,(hand.Z+finger.Z)*.5f);
         }
 
-        private Vector3 VestLeashPoint(){return _dog.GetOffsetPosition(new Vector3(0f,.06f,.49f));}
+        private Vector3 VestLeashPoint(){return _dog.GetOffsetPosition(new Vector3(0f,-.10f,.42f));}
 
         private void PinLeashEndpoints()
         {
             if(!LeashActive||!DogEntityExists()||Game.GameTime<_nextLeashVisualUpdate)return;
-            _nextLeashVisualUpdate=Game.GameTime+50;
+            _nextLeashVisualUpdate=Game.GameTime+16;
             try
             {
                 var handler=Game.LocalPlayer.Character;
