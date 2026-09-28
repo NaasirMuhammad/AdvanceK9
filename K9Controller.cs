@@ -1515,7 +1515,9 @@ namespace AdvancedK9
                 // below the pavement before the first rendered frame. Use
                 // the vehicle's ground reference, not that transient bone.
                 Vector3 startRoot=start;
-                Vector3 seatRoot=new Vector3(seatPosition.X,seatPosition.Y,seatPosition.Z+_seatProfiles.Get(vehicle).Z);
+                // The get_in pose lifts the head above its settled sitting
+                // pose. Keep the animated root below the final seat anchor.
+                Vector3 seatRoot=new Vector3(seatPosition.X,seatPosition.Y,seatPosition.Z+_seatProfiles.Get(vehicle).Z-.28f);
                 float side=_dogVehicleDoor==2?-1f:1f;
                 float inward=NormalizeHeading(vehicle.Heading+side*90f);
                 _dog.Tasks.ClearImmediately();NativeFunction.Natives.SET_ENTITY_COLLISION(_dog,false,false);NativeFunction.Natives.FREEZE_ENTITY_POSITION(_dog,true);_dog.Heading=inward;
@@ -1609,7 +1611,12 @@ namespace AdvancedK9
                 if(playing)sawPlayback=true;
                 if(sawPlayback&&!playing)break;
                 phase=Math.Max(last,Math.Min(1f,phase));last=phase;
-                float progress=Math.Max(0f,Math.Min(1f,(phase-.12f)/.76f));
+                // get_out begins its leap early; the root must already cross
+                // the door while the legs perform that leap. Entry completes
+                // before the high end pose settles into the seat.
+                float start=clip=="get_out"?.02f:.12f;
+                float span=clip=="get_out"?.55f:.68f;
+                float progress=Math.Max(0f,Math.Min(1f,(phase-start)/span));
                 progress=progress*progress*(3f-2f*progress);
                 PlaceVehicleDogRoot(from.X+(to.X-from.X)*progress,from.Y+(to.Y-from.Y)*progress,from.Z+(to.Z-from.Z)*progress,heading);
                 if(phase>=.985f)break;
@@ -3260,7 +3267,7 @@ namespace AdvancedK9
             _lastLeashMeasuredDistance=-1f;
             _nextLeashMeasurement=0;
             _leashAttached=true;
-            if(!CreateAnimatedLeash(hand,collar))Game.DisplayNotification("~y~Animated K9 leash could not load. See RagePluginHook.log; the leash command remains active.");
+            if(VectorDistance(hand,collar)<=PatrolLeashMaximumLength&& !CreateAnimatedLeash(hand,collar))Game.DisplayNotification("~y~Animated K9 leash could not load. See RagePluginHook.log; the leash command remains active.");
         }
 
         private bool CreateAnimatedLeash(Vector3 hand,Vector3 vest)
@@ -3311,6 +3318,12 @@ namespace AdvancedK9
             if(_animatedLeash==null||!_animatedLeash.Exists())return;
             const string dictionary="advancek9_leash",clip="leash_retract";
             float distance=VectorDistance(hand,vest);
+            if(distance>PatrolLeashMaximumLength)
+            {
+                NativeFunction.Natives.SET_ENTITY_VISIBLE(_animatedLeash,false,false);
+                return;
+            }
+            NativeFunction.Natives.SET_ENTITY_VISIBLE(_animatedLeash,true,false);
             // Keep the latch at the dog-side bind position (-0.597, 0, .028)
             // and rotate the animated local +X axis toward the handler's palm.
             if(distance<.01f)return;
@@ -3322,7 +3335,10 @@ namespace AdvancedK9
             NativeFunction.Natives.SET_ENTITY_ROTATION(_animatedLeash,0f,pitch,yaw,2,true);
             float clamped=Math.Max(PatrolLeashMinimumLength,Math.Min(PatrolLeashMaximumLength,distance));
             float phase=(PatrolLeashMaximumLength-clamped)/(PatrolLeashMaximumLength-PatrolLeashMinimumLength);
-            NativeFunction.Natives.SET_ENTITY_ANIM_CURRENT_TIME(_animatedLeash,dictionary,clip,Math.Min(.999f,phase));
+            // The evaluated mesh trails the requested clip time by a few
+            // hundredths of a phase on this asset. Leave that much extra lead
+            // so its loop lands at the hand instead of stopping short.
+            NativeFunction.Natives.SET_ENTITY_ANIM_CURRENT_TIME(_animatedLeash,dictionary,clip,Math.Max(0f,Math.Min(.999f,phase-.02f)));
             if(!_leashEndpointLogged||(Game.GameTime>=_nextLeashMeasurement&&Math.Abs(distance-_lastLeashMeasuredDistance)>.25f))
             {
                 _leashEndpointLogged=true;
@@ -3391,7 +3407,7 @@ namespace AdvancedK9
             return new Vector3((hand.X+finger.X)*.5f,(hand.Y+finger.Y)*.5f,(hand.Z+finger.Z)*.5f);
         }
 
-        private Vector3 VestLeashPoint(){return _dog.GetOffsetPosition(new Vector3(0f,-.10f,.42f));}
+        private Vector3 VestLeashPoint(){return _dog.GetOffsetPosition(new Vector3(0f,.14f,.31f));}
 
         private void PinLeashEndpoints()
         {
@@ -3403,6 +3419,7 @@ namespace AdvancedK9
                 Vector3 hand=HandLeashPoint(handler);
                 Vector3 vest=VestLeashPoint();
                 if(_animatedLeash!=null&&_animatedLeash.Exists()){UpdateAnimatedLeash(hand,vest);return;}
+                if(VectorDistance(hand,vest)<=PatrolLeashMaximumLength){CreateAnimatedLeash(hand,vest);return;}
                 if(_leashRope<0)return;
                 // One flexible span connects the palm directly to the vest
                 // clasp. The long rigid prop sections are not rendered.
