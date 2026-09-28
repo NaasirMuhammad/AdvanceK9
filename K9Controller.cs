@@ -3283,7 +3283,7 @@ namespace AdvancedK9
                 NativeFunction.Natives.SET_ENTITY_ANIM_SPEED(_animatedLeash,dictionary,clip,.001f);
                 stage="initial alignment";
                 UpdateAnimatedLeash(hand,vest);
-                Game.LogTrivial("AdvancedK9 leash: v1.4 animated lead active; color="+_config.LeashPropColor+".");
+                Game.LogTrivial("AdvancedK9 leash: v1.7 animated lead active; color="+_config.LeashPropColor+".");
                 return true;
             }
             catch(Exception ex)
