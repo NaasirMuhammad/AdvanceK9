@@ -175,7 +175,7 @@ namespace AdvancedK9
         private string BuildPrompt()
         {
             const int maxPromptLength=800;
-            string prefix="Police K9 command audio in "+Localization.VoicePromptLanguage+". Dog name: "+_dogName+". Preserve the wake word and command. Commands: ";
+            string prefix="Police radio/K9 audio in "+Localization.VoicePromptLanguage+". Dog wake: "+_dogName+". Radio: Dispatch call EMS; Dispatch request transport. Commands: ";
             string phrases=CommandRegistry.VoicePromptPhrases??"";
             int available=Math.Max(0,maxPromptLength-prefix.Length);
             if(phrases.Length>available)phrases=phrases.Substring(0,available);

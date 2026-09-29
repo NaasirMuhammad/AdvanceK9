@@ -75,6 +75,13 @@ namespace AdvancedK9
         {
             command=default(K9Command);if(string.IsNullOrWhiteSpace(text))return false;
             string t=Normalize(text),wake=Normalize(dogName??"");
+            if(HasPhrase(t,"dispatch"))
+            {
+                foreach(var service in All.Where(x=>x.Command==K9Command.RequestMedical||x.Command==K9Command.RequestTransport||x.Command==K9Command.RequestBombSquad||x.Command==K9Command.RequestPerimeter))
+                    foreach(string phrase in PhrasesFor(service))
+                        if(HasPhrase(t,Normalize(phrase))){command=service.Command;return true;}
+                return false;
+            }
             bool hasWake=HasPhrase(t,wake)||HasPhrase(t,"k9")||HasPhrase(t,"k 9")||HasPhrase(t,"k nine")||HasPhrase(t,"kay nine")||HasPhrase(t,"canine");
             if(!hasWake)return false;
             // Spoken "sit down" means sit; do not let the generic word "down" turn it

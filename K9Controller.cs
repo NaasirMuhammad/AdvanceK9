@@ -75,6 +75,7 @@ namespace AdvancedK9
         private bool _workingLeashed;
         private uint _nextLeashFollow;
         private uint _nextLeashVisualUpdate;
+        private uint _nextLeashRangeRecall;
         private uint _nextSeatedIdle;
         private bool _swimming;
         private uint _nextIndoorFollowUpdate;
@@ -1571,9 +1572,12 @@ namespace AdvancedK9
 
         private Vector3 StageDogOutsideVehicle(Vehicle vehicle)
         {
-            float side=_dogVehicleDoor==2?-1f:1f;Vector3 exit=vehicle.GetOffsetPosition(new Vector3(side*2.05f,-2.35f,.05f));
+            float side=_dogVehicleDoor==2?-1f:1f;Vector3 surface=vehicle.GetOffsetPosition(new Vector3(side*2.05f,-2.35f,.05f));
+            Vector3 exit=new Vector3(surface.X,surface.Y,surface.Z-.52f);
             float ground;
-            if(NativeFunction.Natives.GET_GROUND_Z_FOR_3D_COORD<bool>(exit.X,exit.Y,exit.Z+2f,out ground,false))exit=new Vector3(exit.X,exit.Y,ground+.02f);
+            if(NativeFunction.Natives.GET_GROUND_Z_FOR_3D_COORD<bool>(surface.X,surface.Y,surface.Z+2f,out ground,false)&&Math.Abs(ground-surface.Z)<.35f)
+                exit=new Vector3(surface.X,surface.Y,ground-.55f);
+            Game.LogTrivial("AdvancedK9 vehicle exit surface="+surface.Z.ToString("0.000")+", validated root="+exit.Z.ToString("0.000")+".");
             // Detach first: playing sit_exit on the attached seat can lift the
             // ped through the roof as the vehicle transform is applied twice.
             _dog.Tasks.ClearImmediately();
@@ -1621,7 +1625,9 @@ namespace AdvancedK9
                 float progress=Math.Max(0f,Math.Min(1f,(phase-start)/span));
                 progress=progress*progress*(3f-2f*progress);
                 PlaceVehicleDogRoot(from.X+(to.X-from.X)*progress,from.Y+(to.Y-from.Y)*progress,from.Z+(to.Z-from.Z)*progress,heading);
-                if(phase>=.985f)break;
+                // get_in ends in a seated pose. Stop after its landing so the
+                // K9 can stand, turn and perform sit_enter just once.
+                if(phase>=(clip=="get_in"?.85f:.985f))break;
                 GameFiber.Wait(20);
             }
             Game.LogTrivial("AdvancedK9 vehicle "+clip+" playback: duration="+duration.ToString("0.000")+"s, observed="+sawPlayback+", final phase="+last.ToString("0.000")+".");
@@ -3421,6 +3427,27 @@ namespace AdvancedK9
 
         private Vector3 VestLeashPoint(){return _dog.GetOffsetPosition(new Vector3(0f,.14f,.20f));}
 
+        private void MaintainLeashRange()
+        {
+            if(!LeashActive||!DogEntityExists())return;
+            Ped handler=Game.LocalPlayer.Character;
+            if(handler==null||!handler.Exists())return;
+            float separation=VectorDistance(HandLeashPoint(handler),VestLeashPoint());
+            if(separation>PatrolLeashMaximumLength)
+            {
+                DeleteLeashRope();
+                Follow();
+                ActionNotification("~y~K9 leash released at full extension.~s~ Recall and reattach when close.");
+                Game.LogTrivial("AdvancedK9 leash: released at "+separation.ToString("0.00")+"m instead of rendering beyond 3.50m.");
+                return;
+            }
+            if(separation>3.05f&&Game.GameTime>=_nextLeashRangeRecall&&_state==K9State.Leashed)
+            {
+                _nextLeashRangeRecall=Game.GameTime+1000;
+                IssuePersistentFollow(handler,true);
+            }
+        }
+
         private void PinLeashEndpoints()
         {
             if(!LeashActive||!DogEntityExists()||Game.GameTime<_nextLeashVisualUpdate)return;
@@ -3516,7 +3543,7 @@ namespace AdvancedK9
                 NativeFunction.Natives.SET_ENTITY_COLLISION(_dog,true,true);
                 NativeFunction.Natives.SET_PED_CAN_RAGDOLL(_dog,true);
             }
-            if(LeashActive)PinLeashEndpoints();
+            if(LeashActive){MaintainLeashRange();if(LeashActive)PinLeashEndpoints();}
             // Ordinary sprint separation must be recovered through locomotion. Position snapping is
             // reserved for the verified elevator/teleport transition above.
             if (_dog.DistanceTo(Game.LocalPlayer.Character) > 45f && _state == K9State.Following)
