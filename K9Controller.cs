@@ -461,7 +461,7 @@ namespace AdvancedK9
             OpenAccessoryColors();
         }
         private void OpenAppearanceMenu(){_menuMode="profile_appearance";_menu.Open("K9 PROFILE — "+L("Appearance").ToUpperInvariant(),new[]{L("Edit name")+": "+_profile.Name,L("Breed/model")+": "+_profile.Breed,L("Skin/coat")+": "+(_profile.CoatVariation+1),L("Equipment/vest")+": "+_profile.Vest,L("Vest texture")+": "+_profile.VestTextureName(_dog),"← "+L("Back to K9 Profile")});}
-        private void OpenCalloutMenu(){_menuMode="callouts";_menu.Open("ADVANCED K9 — CALLOUTS",new[]{"Missing Vulnerable Teen","Fugitive Trail from an Abandoned Vehicle","Bank Robbery K9 Response","Log current player coordinates","← "+L("Back to Command Categories")});}
+        private void OpenCalloutMenu(){_menuMode="callouts";_menu.Open("ADVANCED K9 — CALLOUTS",new[]{"Missing Vulnerable Teen","Fugitive Trail from an Abandoned Vehicle","Armed Burglary Suspect Hiding","← "+L("Back to Command Categories")});}
         private void OpenFugitiveFullTestMenu()
         {
             _menuMode="fugitive_full_test";
@@ -505,7 +505,7 @@ namespace AdvancedK9
         private void OnMenuSelected(int index)
         {
             if(_menuMode=="commands_root"){if(index>=0&&index<7){OpenCommandGroup(index);return;}if(index==7){OpenCalloutMenu();return;}if(index==8){_menu.Close();Execute(K9Command.SpawnDismiss);return;}if(index==9)ToggleVoice();return;}
-            if(_menuMode=="callouts"){if(index==0)RequestCallout("AdvancedK9: Missing Vulnerable Teen");else if(index==1)RequestCallout("AdvancedK9: Fugitive Trail");else if(index==2)RequestCallout("AdvancedK9: Armed Burglary Suspect Hiding");else if(index==3){LogCalibrationPosition();OpenCalloutMenu();}else ShowCommandMenu();return;}
+            if(_menuMode=="callouts"){if(index==0)RequestCallout("AdvancedK9: Missing Vulnerable Teen");else if(index==1)RequestCallout("AdvancedK9: Fugitive Trail");else if(index==2)RequestCallout("AdvancedK9: Armed Burglary Suspect Hiding");else ShowCommandMenu();return;}
             if(_menuMode=="fugitive_full_test")
             {
                 if(index>=0&&index<13){RequestFugitiveFullTestScene(index);return;}

@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.24.0 beta — Build 866 (0.24.0.80)
+
+- Packaged the confirmed core K9 experience and the AdvancedK9 large kennel, dual bowl and retractable leash DLC. Kennel, bowl and leash color selections are independent; large kennel positioning and name plate use the selected K9 profile.
+- Confirmed in-game that the leash retracts and extends, follows the handler's left hand and Rex's vest, respects its range, and releases when the handler moves beyond it.
+- Confirmed rear-seat entry and a single grounded vehicle exit. A brief seated frame during entry remains a known beta polish issue.
+- Confirmed the voice medical command says “Dispatch, call EMS.”
+- Limited the callout menu to its three actual registered entries: Missing Vulnerable Teen, Fugitive Trail from an Abandoned Vehicle, and Armed Burglary Suspect Hiding. Corrected the third label and removed the coordinates option.
+- Marked all three callouts experimental. See `RELEASE_NOTES_v0.24.0-beta.md` for the beta feature list and tester notes. Historical entries below document prior development and are not a claim that every callout scenario is certified.
+
 ## Policing Redefined K9 custody integration
 
 - Registers each Rex apprehension with PR through its documented public `PedAPI` as a stopped subject without falsely marking the person arrested before cuffs are applied.
