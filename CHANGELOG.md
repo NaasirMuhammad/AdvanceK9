@@ -1,13 +1,16 @@
 # Changelog
 
-## v0.24.0 beta — Build 866 (0.24.0.80)
+## v0.24.0 beta — Build 866 (0.24.0.80), since v0.23.3
 
-- Packaged the confirmed core K9 experience and the AdvancedK9 large kennel, dual bowl and retractable leash DLC. Kennel, bowl and leash color selections are independent; large kennel positioning and name plate use the selected K9 profile.
-- Confirmed in-game that the leash retracts and extends, follows the handler's left hand and Rex's vest, respects its range, and releases when the handler moves beyond it.
-- Confirmed rear-seat entry and a single grounded vehicle exit. A brief seated frame during entry remains a known beta polish issue.
-- Confirmed the voice medical command says “Dispatch, call EMS.”
-- Limited the callout menu to its three actual registered entries: Missing Vulnerable Teen, Fugitive Trail from an Abandoned Vehicle, and Armed Burglary Suspect Hiding. Corrected the third label and removed the coordinates option.
-- Marked all three callouts experimental. See `RELEASE_NOTES_v0.24.0-beta.md` for the beta feature list and tester notes. Historical entries below document prior development and are not a claim that every callout scenario is certified.
+- Added the separate shared API and callout expansion. Exactly three callouts are registered for experimental testing: Missing Vulnerable Teen, Fugitive Trail from an Abandoned Vehicle, and Armed Burglary Suspect Hiding.
+- Added the optional large kennel, dual bowl and retractable leash props DLC, with independent colors, station-specific kennel choices and an editable dog-name plate.
+- Revised visible kennel sleep, deployment and dismissal transitions and canine sit, rest, care and swimming behavior.
+- Rebuilt the leash animation, hand loop and vest latch alignment, retraction and range release. The final leash behavior was confirmed in game.
+- Reworked rear-seat entry and grounded vehicle exit. The final flow was confirmed, with a brief seated frame on entry still present.
+- Refined controlled-bite patient protection, medical response, mobile veterinary care, first aid and long-distance Recall. Callout medical paths remain experimental.
+- Changed the confirmed spoken medical request to “Dispatch, call EMS.”
+- Packaged the core plugin, bridge, callout assembly, API, voice runtime, props DLC and default settings for direct installation. Existing user settings are preserved.
+- See `RELEASE_NOTES_v0.24.0-beta.md` for the detailed changes, tester status and known beta limitation. Historical entries below document earlier development; they do not certify all callout scenarios.
 
 ## Policing Redefined K9 custody integration
 
