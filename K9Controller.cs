@@ -112,20 +112,20 @@ namespace AdvancedK9
             public bool Immediate;
             public Ped AimedTarget;
         }
-        private readonly Dictionary<GameFiber,int> _ownedTaskFibers=new Dictionary<GameFiber,int>();
+        private readonly Dictionary<int,int> _ownedTaskFibers=new Dictionary<int,int>();
         private sealed class CommandSupersededException : OperationCanceledException { }
 
         private void EnsureTaskOwnership()
         {
             int generation;
-            if(_ownedTaskFibers.TryGetValue(GameFiber.CurrentFiber,out generation)&&
+            if(_ownedTaskFibers.TryGetValue(System.Threading.Thread.CurrentThread.ManagedThreadId,out generation)&&
                 (!_running||!_onDuty||generation!=_taskOwnerGeneration))
                 throw new CommandSupersededException();
         }
         private void WaitOwned(int milliseconds)
         {
             EnsureTaskOwnership();
-            if(!_ownedTaskFibers.ContainsKey(GameFiber.CurrentFiber))
+            if(!_ownedTaskFibers.ContainsKey(System.Threading.Thread.CurrentThread.ManagedThreadId))
             {
                 GameFiber.Wait(milliseconds);
                 return;
@@ -137,7 +137,7 @@ namespace AdvancedK9
         private void YieldOwned(){EnsureTaskOwnership();GameFiber.Yield();EnsureTaskOwnership();}
         private void RunOwnedTask(int generation,Action action)
         {
-            var fiber=GameFiber.CurrentFiber;
+            var fiber=System.Threading.Thread.CurrentThread.ManagedThreadId;
             _ownedTaskFibers[fiber]=generation;
             try{EnsureTaskOwnership();action();}
             catch(CommandSupersededException){Game.LogTrivial("AdvancedK9 task owner superseded; obsolete fiber stopped before further dog tasking.");}
@@ -963,8 +963,8 @@ namespace AdvancedK9
                 Game.LogTrivial("AdvancedK9 bite interruption: "+CommandLabel(command)+" converted the active bite into a persistent medical hold before handler control resumed.");
             }
             _taskOwnerGeneration++;
-            if(_ownedTaskFibers.ContainsKey(GameFiber.CurrentFiber))
-                _ownedTaskFibers[GameFiber.CurrentFiber]=_taskOwnerGeneration;
+            if(_ownedTaskFibers.ContainsKey(System.Threading.Thread.CurrentThread.ManagedThreadId))
+                _ownedTaskFibers[System.Threading.Thread.CurrentThread.ManagedThreadId]=_taskOwnerGeneration;
             _trackGeneration++;
             _trackFiberRunning=false;
             _containTarget=null;
@@ -1131,7 +1131,7 @@ namespace AdvancedK9
             for(int i=1;i<=8&&dog.Exists();i++)
             {
                 dog.Heading=NormalizeHeading(start+delta*i/8f);
-                WaitOwned(35);
+                GameFiber.Wait(35);
             }
         }
 
@@ -1496,7 +1496,12 @@ namespace AdvancedK9
         private void Sit()
         {
             if(!DogExists())return;
-            if(_state==K9State.Sitting)return;
+            if(_state==K9State.Sitting)
+            {
+                PlayCanineClip(_dog,"creatures@rottweiler@amb@world_dog_sitting@base","base",-1,true);
+                _nextSeatedIdle=Game.GameTime+12000;
+                return;
+            }
             ExitRestingPose();
             PlayCanineClip(_dog,"creatures@rottweiler@tricks@","sit_enter",950,false);
             _state = K9State.Sitting;
@@ -1575,12 +1580,15 @@ namespace AdvancedK9
         private void MaintainSeatedIdle()
         {
             if(_state!=K9State.Sitting||!DogExists()||Game.GameTime<_nextSeatedIdle)return;
-            // A brief natural idle variation, then a long settled base pose rather than
-            // replaying the short scratch-like clip continuously.
-            PlayCanineClip(_dog,"creatures@retriever@amb@world_dog_sitting@idle_a","idle_a",2400,false);
-            if(DogExists()&&_state==K9State.Sitting)
-                PlayCanineClip(_dog,"creatures@rottweiler@amb@world_dog_sitting@base","base",-1,true);
             _nextSeatedIdle=Game.GameTime+14000;
+            int owner=_taskOwnerGeneration;
+            GameFiber.StartNew(()=>RunOwnedTask(owner,()=>
+            {
+                if(_state!=K9State.Sitting||!DogExists())return;
+                PlayCanineClip(_dog,"creatures@retriever@amb@world_dog_sitting@idle_a","idle_a",2400,false);
+                if(DogExists()&&_state==K9State.Sitting)
+                    PlayCanineClip(_dog,"creatures@rottweiler@amb@world_dog_sitting@base","base",-1,true);
+            }),"AdvancedK9 owned seated idle");
         }
 
         private void Stay(){if(!DogExists())return;_dog.Tasks.Clear();_state=K9State.Staying;Acknowledge("Staying.");}
@@ -2536,7 +2544,7 @@ namespace AdvancedK9
         {
             if(medic==null||!medic.Exists()||patient==null||!patient.Exists())return;
             NativeFunction.Natives.TASK_GO_TO_ENTITY(medic,patient,-1,1.5f,2.1f,0f,0);uint deadline=Game.GameTime+18000;
-            while(medic.Exists()&&patient.Exists()&&medic.DistanceTo(patient)>2.8f&&Game.GameTime<deadline)WaitOwned(200);
+            while(medic.Exists()&&patient.Exists()&&medic.DistanceTo(patient)>2.8f&&Game.GameTime<deadline)GameFiber.Wait(200);
             if(medic.Exists()&&patient.Exists()&&medic.DistanceTo(patient)>3.5f)medic.Position=patient.GetOffsetPosition(offset);
             if(medic.Exists()&&patient.Exists())NativeFunction.Natives.TASK_TURN_PED_TO_FACE_ENTITY(medic,patient,750);
         }
@@ -2557,22 +2565,22 @@ namespace AdvancedK9
                 NativeFunction.Natives.SET_ENTITY_COLLISION(bag,false,false);
                 NativeFunction.Natives.FREEZE_ENTITY_POSITION(bag,true);
                 medic.Tasks.Clear();NativeFunction.Natives.TASK_GO_STRAIGHT_TO_COORD(medic,rear.X,rear.Y,rear.Z,1.5f,10000,ambulance.Heading,1f);
-                uint deadline=Game.GameTime+12000;while(medic.Exists()&&bag.Exists()&&medic.Position.DistanceTo(rear)>1.6f&&Game.GameTime<deadline)WaitOwned(150);
+                uint deadline=Game.GameTime+12000;while(medic.Exists()&&bag.Exists()&&medic.Position.DistanceTo(rear)>1.6f&&Game.GameTime<deadline)GameFiber.Wait(150);
                 if(medic.Position.DistanceTo(rear)>2.5f){bag.Delete();return null;}
                 medic.Tasks.Clear();
-                NativeFunction.Natives.TASK_TURN_PED_TO_FACE_ENTITY(medic,ambulance,900);WaitOwned(900);
+                NativeFunction.Natives.TASK_TURN_PED_TO_FACE_ENTITY(medic,ambulance,900);GameFiber.Wait(900);
                 // Open the rear only after the driver is clear of the door swing.
                 NativeFunction.Natives.SET_VEHICLE_DOOR_OPEN(ambulance,2,false,false);
                 NativeFunction.Natives.SET_VEHICLE_DOOR_OPEN(ambulance,3,false,false);
-                WaitOwned(1200);
+                GameFiber.Wait(1200);
                 NativeFunction.Natives.FREEZE_ENTITY_POSITION(bag,false);
                 int hand=NativeFunction.Natives.GET_PED_BONE_INDEX<int>(medic,57005);
                 NativeFunction.Natives.ATTACH_ENTITY_TO_ENTITY(bag,medic,hand,.42f,-.03f,.03f,-123f,-86f,-4f,false,false,false,true,2,true);
-                WaitOwned(750);
+                GameFiber.Wait(750);
                 // Allow the driver and bag to move clear before closing the compartment.
                 Vector3 clear=ambulance.GetOffsetPosition(new Vector3(1f,-4f,0f));
                 NativeFunction.Natives.TASK_GO_STRAIGHT_TO_COORD(medic,clear.X,clear.Y,clear.Z,1.4f,4000,ambulance.Heading,1f);
-                WaitOwned(1100);
+                GameFiber.Wait(1100);
                 NativeFunction.Natives.SET_VEHICLE_DOOR_SHUT(ambulance,2,false);
                 NativeFunction.Natives.SET_VEHICLE_DOOR_SHUT(ambulance,3,false);
                 Game.LogTrivial("AdvancedK9 EMS presentation: medic walked to the ambulance and visibly retrieved the medical bag.");
