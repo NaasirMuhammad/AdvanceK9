@@ -319,7 +319,8 @@ namespace AdvancedK9
                 UpdateHandlerDownProtection();
                 if (ChordPressed(_config.ModifierKey,_config.CameraKey)) Execute(K9Command.ToggleCamera);
                 if (ChordPressed(_config.ModifierKey,_config.LeashKey)) Execute(K9Command.ToggleLeash);
-                DrainVoice(true);
+                // Academy owns its response queue while a lesson is running.
+                if(!AcademyCommandActive)DrainVoice(true);
                 MaintainState();
                 MaintainVeterinaryTransport();
             }
@@ -458,6 +459,10 @@ namespace AdvancedK9
             else if (!down && _pushToTalkHeld) _voice.StopAndTranscribe();
             _pushToTalkHeld = down;
         }
+
+        private bool AcademyCommandActive=>_activeDogCommand==K9Command.Training||
+            _activeDogCommand==K9Command.TrainNarcotics||_activeDogCommand==K9Command.TrainExplosives||
+            _activeDogCommand==K9Command.TrainWeapons;
 
         private K9Command? PollAcademyVoiceCommand()
         {
@@ -4406,7 +4411,7 @@ namespace AdvancedK9
             }
             finally
             {
-                NativeFunction.Natives.DO_SCREEN_FADE_OUT(500);WaitOwned(650);handler.Position=returnPosition;handler.Heading=returnHeading;_dog.Position=handler.GetOffsetPosition(new Vector3(-1f,-2f,0f));NativeFunction.Natives.DO_SCREEN_FADE_IN(700);Follow();
+                NativeFunction.Natives.DO_SCREEN_FADE_OUT(500);GameFiber.Wait(650);if(handler!=null&&handler.Exists()){handler.Position=returnPosition;handler.Heading=returnHeading;if(DogEntityExists())_dog.Position=handler.GetOffsetPosition(new Vector3(-1f,-2f,0f));}NativeFunction.Natives.DO_SCREEN_FADE_IN(700);if(_running&&_onDuty)Follow();
             }
         }
 
@@ -4427,7 +4432,7 @@ namespace AdvancedK9
                 if(completed)Game.DisplayNotification("~g~"+SpecialtyLabel(specialty).ToUpperInvariant()+" DETECTION CERTIFIED — 250 XP~s~~n~Other detection specialties remain independently trainable.");
                 else Game.DisplayNotification("~b~Specialty saved:~s~ +"+xp+" XP from "+performance+"% performance~n~"+SpecialtyLabel(specialty)+" "+_profile.SpecialtyProgress(specialty)+"/250 XP.");
             }
-            finally{NativeFunction.Natives.DO_SCREEN_FADE_OUT(500);WaitOwned(650);handler.Position=returnPosition;handler.Heading=returnHeading;_dog.Position=handler.GetOffsetPosition(new Vector3(-1f,-2f,0f));NativeFunction.Natives.DO_SCREEN_FADE_IN(700);Follow();}
+            finally{NativeFunction.Natives.DO_SCREEN_FADE_OUT(500);GameFiber.Wait(650);if(handler!=null&&handler.Exists()){handler.Position=returnPosition;handler.Heading=returnHeading;if(DogEntityExists())_dog.Position=handler.GetOffsetPosition(new Vector3(-1f,-2f,0f));}NativeFunction.Natives.DO_SCREEN_FADE_IN(700);if(_running&&_onDuty)Follow();}
         }
 
         private int CalculateTrainingXp(int level,int performance){int cap=level<=2?10:level<=4?20:30;int earnedCap=(int)Math.Round(cap*Math.Max(0,Math.Min(100,performance))/100.0);return earnedCap<=0?0:_random.Next(0,earnedCap+1);}
