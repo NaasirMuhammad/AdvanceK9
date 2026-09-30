@@ -1,5 +1,13 @@
 # Changelog
 
+## Build 867 — core consistency test (0.24.0.81)
+
+- Serializes foreground dog commands and keeps only the latest pending request during an active action; menus and input keep running while the action finishes.
+- Extends task ownership to all commands that direct Rex, invalidates old search/tracking/containment work, and stops stale continuations after waits and navigation completion.
+- Preserves current work when trust or medical eligibility rejects a command. Inspection, camera and service requests do not cancel the dog's task.
+- Guards owned animations from automatic follow, idle and containment maintenance. Uses clip duration/playback completion for finite posture transitions.
+- Keeps the existing direct sit-to-lie transition and kennel/vehicle geometry. This build requires the focused in-game checks in CORE_CONSISTENCY_TESTS.md.
+
 ## v0.24.0 beta — Build 866 (0.24.0.80), since v0.23.3
 
 - Added the separate shared API and callout expansion. Exactly three callouts are registered for experimental testing: Missing Vulnerable Teen, Fugitive Trail from an Abandoned Vehicle, and Armed Burglary Suspect Hiding.
