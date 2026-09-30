@@ -33,6 +33,9 @@ namespace AdvancedK9
         private readonly List<StationKennel> _stationKennels=new List<StationKennel>();
         private Vehicle _dogVehicle;
         private bool _dogSeatAttached;
+        private float _vehicleStandingGroundOffset;
+        private bool _followHandlerMoving;
+        private uint _nextFollowWake;
         private Blip _blip;
         private K9State _state = K9State.Dismissed;
         private bool _running = true;
@@ -106,6 +109,7 @@ namespace AdvancedK9
         private int _canineAnimationDepth;
         private bool _commandWorkerRunning;
         private K9Command? _activeDogCommand;
+        private StationKennel _transitionKennel;
         private bool _handlerOverrideInput;
         private PendingDogCommand _pendingDogCommand;
         private sealed class PendingDogCommand
@@ -1054,10 +1058,18 @@ namespace AdvancedK9
         private void HandleKennelDeployment()
         {
             StationKennel kennel=NearestKennel(7f);if(kennel==null){Game.DisplayNotification("~y~K9 kennel required.~s~~n~Pick up and return your K9 at a police-station doghouse.");return;}
-            if(DogExists()){ReturnToKennel(kennel);return;}
+            if(DogExists())
+            {
+                _transitionKennel=kennel;
+                try{ReturnToKennel(kennel);}
+                finally{_transitionKennel=null;}
+                return;
+            }
             if(!string.IsNullOrWhiteSpace(_roster.Active.KennelKey)&&!_roster.Active.KennelKey.Equals(kennel.Key,StringComparison.OrdinalIgnoreCase)){Game.DisplayNotification("~y~"+_profile.Name+" is assigned to "+_roster.Active.KennelKey+".~s~~n~Select another roster profile or reassign this K9 from the profile menu.");return;}
             if(string.IsNullOrWhiteSpace(_roster.Active.KennelKey))_roster.UpdateActive(_profile.Name,kennel.Key,_profile.IsRehabilitating?"Rehabilitation":"Available");
-            Deploy(kennel);
+            _transitionKennel=kennel;
+            try{Deploy(kennel);}
+            finally{_transitionKennel=null;}
         }
 
         private void SpawnStationKennels()
@@ -1123,6 +1135,9 @@ namespace AdvancedK9
             Ped handler=Game.LocalPlayer.Character;if(handler==null||!handler.Exists())return;
             foreach(StationKennel kennel in _stationKennels)
             {
+                // The transition owns this resident, including its sleep/walk pose
+                // and height. Periodic maintenance must not touch it mid-handoff.
+                if(kennel==_transitionKennel)continue;
                 float distance=kennel.Position.DistanceTo(handler.Position);
                 if(distance>350f)
                 {
@@ -1232,8 +1247,9 @@ namespace AdvancedK9
             dog.Position=new Vector3(target.X,target.Y,Math.Max(floor, target.Z)+lift);
         }
 
-        private void MaintainKennelResident(StationKennel kennel)
+        private void MaintainKennelResident(StationKennel kennel,bool transitionOwner=false)
         {
+            if(kennel==_transitionKennel&&!transitionOwner)return;
             bool selected=!DogExists()&&kennel.Prop!=null&&kennel.Prop.Exists()&&
                 string.Equals(_roster.Active.KennelKey,kennel.Key,StringComparison.OrdinalIgnoreCase);
             if(!selected||kennel.ResidentProfileId!=_roster.ActiveId)
@@ -1244,6 +1260,13 @@ namespace AdvancedK9
             if(!selected)return;
             if(kennel.Resident!=null&&kennel.Resident.Exists())
             {
+                if(!NativeFunction.Natives.IS_ENTITY_PLAYING_ANIM<bool>(kennel.Resident,
+                    "creatures@rottweiler@amb@sleep_in_kennel@","sleep_in_kennel",3))
+                {
+                    kennel.Resident.Tasks.Clear();
+                    if(PlayCanineClip(kennel.Resident,"creatures@rottweiler@amb@sleep_in_kennel@","sleep_in_kennel",-1,true))
+                        Game.LogTrivial("AdvancedK9 kennel resident sleep restored: "+kennel.Name+".");
+                }
                 KeepKennelPoseAboveFloor(kennel.Resident,kennel,"sleep maintenance");
                 return;
             }
@@ -1253,6 +1276,7 @@ namespace AdvancedK9
             try
             {
                 model.LoadAndWait();
+                if(kennel==_transitionKennel&&!transitionOwner)return;
                 kennel.Resident=new Ped(model,KennelRestPosition(kennel),KennelDogFacing(kennel));
                 if(kennel.Resident==null||!kennel.Resident.Exists())return;
                 kennel.ResidentProfileId=_roster.ActiveId;
@@ -1310,19 +1334,33 @@ namespace AdvancedK9
             if(!returning.Exists())return;
             if(kennel.Large)TurnKennelDog(returning,KennelDogFacing(kennel));
             returning.Health=Math.Max(returning.Health,safeHealth);
-            _dog=null;
-            _roster.UpdateActive(_profile.Name,kennel.Key,_profile.IsRehabilitating?"Rehabilitation":"Available");
-            Dismiss(true);
-            if(kennel.Resident!=null&&kennel.Resident.Exists())kennel.Resident.Delete();
-            kennel.Resident=returning;kennel.ResidentProfileId=_roster.ActiveId;
             returning.IsPersistent=true;returning.IsInvincible=true;returning.BlockPermanentEvents=true;
             NativeFunction.Natives.FREEZE_ENTITY_POSITION(returning,true);
             NativeFunction.Natives.SET_ENTITY_COLLISION(returning,false,false);
             returning.Position=rest;
             returning.Heading=KennelDogFacing(kennel);
-            PlayCanineClip(returning,"creatures@rottweiler@amb@sleep_in_kennel@","sleep_in_kennel",-1,true);
+            returning.Tasks.Clear();
+            // Finish the kennel pose while this command still owns the dog.
+            // Dismiss invalidates the lease; nothing after it may start a new clip.
+            if(!PlayCanineClip(returning,"creatures@rottweiler@amb@sleep_in_kennel@","sleep_in_kennel",-1,true))
+            {
+                NativeFunction.Natives.FREEZE_ENTITY_POSITION(returning,false);
+                NativeFunction.Natives.SET_ENTITY_COLLISION(returning,true,true);
+                NativeFunction.Natives.SET_PED_CAN_RAGDOLL(returning,true);
+                returning.IsInvincible=false;
+                Follow();
+                Game.DisplayNotification("~y~Kennel sleep animation unavailable. K9 remains deployed; retry the return.");
+                return;
+            }
+            WaitOwned(100);
             KeepKennelPoseAboveFloor(returning,kennel,"sleep");
             NativeFunction.Natives.FREEZE_ENTITY_POSITION(returning,true);
+            if(kennel.Resident!=null&&kennel.Resident.Exists()&&kennel.Resident!=returning)kennel.Resident.Delete();
+            kennel.Resident=returning;kennel.ResidentProfileId=_roster.ActiveId;
+            _roster.UpdateActive(_profile.Name,kennel.Key,_profile.IsRehabilitating?"Rehabilitation":"Available");
+            _dog=null;
+            Dismiss(true);
+            Game.LogTrivial("AdvancedK9 kennel return completed: "+kennel.Name+"; resident handed over after sleep pose assignment.");
         }
 
         private void SpawnNearbyKennelProp(StationKennel kennel)
@@ -1421,7 +1459,7 @@ namespace AdvancedK9
         private void Deploy(StationKennel kennel)
         {
             Vector3 release=KennelEntrancePosition(kennel);
-            if(kennel.Resident==null||!kennel.Resident.Exists())MaintainKennelResident(kennel);
+            if(kennel.Resident==null||!kennel.Resident.Exists())MaintainKennelResident(kennel,true);
             Ped sleeping=kennel.Resident;
             if(sleeping!=null&&sleeping.Exists()&&kennel.ResidentProfileId==_roster.ActiveId)
             {
@@ -1684,13 +1722,19 @@ namespace AdvancedK9
                 int bone=NativeFunction.Natives.GET_ENTITY_BONE_INDEX_BY_NAME<int>(vehicle,boneName);if(bone<0)return false;
                 Vector3 seatPosition=NativeFunction.Natives.GET_WORLD_POSITION_OF_ENTITY_BONE<Vector3>(vehicle,bone);
                 Vector3 start=_dog.Position;
+                float standingGround;
+                _vehicleStandingGroundOffset=0f;
+                if(NativeFunction.Natives.GET_GROUND_Z_FOR_3D_COORD<bool>(start.X,start.Y,start.Z+2f,out standingGround,false))
+                    _vehicleStandingGroundOffset=Math.Max(-.1f,Math.Min(.8f,start.Z-standingGround));
                 // The get_in clip can report its IK feet more than a metre
                 // below the pavement before the first rendered frame. Use
                 // the vehicle's ground reference, not that transient bone.
                 Vector3 startRoot=start;
                 // The get_in pose lifts the head above its settled sitting
                 // pose. Keep the animated root below the final seat anchor.
-                Vector3 seatRoot=new Vector3(seatPosition.X,seatPosition.Y,seatPosition.Z+_seatProfiles.Get(vehicle).Z-.28f);
+                VehicleSeatProfile profile=_seatProfiles.Get(vehicle);
+                Vector3 offset=vehicle.GetOffsetPosition(new Vector3(profile.X,profile.Y,profile.Z))-vehicle.Position;
+                Vector3 seatRoot=seatPosition+offset;
                 float side=_dogVehicleDoor==2?-1f:1f;
                 float inward=NormalizeHeading(vehicle.Heading+side*90f);
                 _dog.Tasks.ClearImmediately();NativeFunction.Natives.SET_ENTITY_COLLISION(_dog,false,false);NativeFunction.Natives.FREEZE_ENTITY_POSITION(_dog,true);_dog.Heading=inward;
@@ -1745,10 +1789,13 @@ namespace AdvancedK9
         private Vector3 StageDogOutsideVehicle(Vehicle vehicle)
         {
             float side=_dogVehicleDoor==2?-1f:1f;Vector3 surface=vehicle.GetOffsetPosition(new Vector3(side*2.05f,-2.35f,.05f));
-            Vector3 exit=new Vector3(surface.X,surface.Y,surface.Z-.52f);
             float ground;
-            if(NativeFunction.Natives.GET_GROUND_Z_FOR_3D_COORD<bool>(surface.X,surface.Y,surface.Z+2f,out ground,false)&&Math.Abs(ground-surface.Z)<.35f)
-                exit=new Vector3(surface.X,surface.Y,ground-.55f);
+            // Vehicle origin height is not pavement height: suspension and model
+            // origins differ. Retain the dog's standing clearance measured at entry.
+            if(!NativeFunction.Natives.GET_GROUND_Z_FOR_3D_COORD<bool>(surface.X,surface.Y,surface.Z+3f,out ground,false))
+                ground=surface.Z;
+            Vector3 exit=new Vector3(surface.X,surface.Y,ground+_vehicleStandingGroundOffset);
+            Vector3 animatedExit=new Vector3(exit.X,exit.Y,ground-.55f);
             Game.LogTrivial("AdvancedK9 vehicle exit surface="+surface.Z.ToString("0.000")+", validated root="+exit.Z.ToString("0.000")+".");
             // Detach first: playing sit_exit on the attached seat can lift the
             // ped through the roof as the vehicle transform is applied twice.
@@ -1768,7 +1815,10 @@ namespace AdvancedK9
             if(!PlayCanineClip(_dog,"creatures@rottweiler@incar@","get_out",-1,false))
                 try{NativeFunction.Natives.REQUEST_ANIM_DICT("creatures@rottweiler@move");uint timeout=Game.GameTime+600;while(!NativeFunction.Natives.HAS_ANIM_DICT_LOADED<bool>("creatures@rottweiler@move")&&Game.GameTime<timeout)YieldOwned();NativeFunction.Natives.TASK_PLAY_ANIM(_dog,"creatures@rottweiler@move","jump",4f,-3f,450,0,0f,false,false,false);}catch(CommandSupersededException){throw;}catch{}
             Game.LogTrivial("AdvancedK9 vehicle exit root: seat="+seatStart.Z.ToString("0.000")+", ground="+exit.Z.ToString("0.000")+".");
-            FollowVehicleClipRoot("get_out",seatStart,exit,outward);
+            FollowVehicleClipRoot("get_out",seatStart,animatedExit,outward);
+            // Remove the clip's final root displacement before restoring standing
+            // ground clearance, all in one frame, before collision is enabled.
+            _dog.Tasks.ClearImmediately();
             PlaceVehicleDogRoot(exit.X,exit.Y,exit.Z,outward);
             Game.LogTrivial("AdvancedK9 vehicle exit landed: root Z="+_dog.Position.Z.ToString("0.000")+", target="+exit.Z.ToString("0.000")+".");
             NativeFunction.Natives.FREEZE_ENTITY_POSITION(_dog,false);ReleaseVehicleSeat();NativeFunction.Natives.SET_PED_CAN_RAGDOLL(_dog,true);return exit;
@@ -1796,7 +1846,8 @@ namespace AdvancedK9
                 float span=clip=="get_out"?.55f:.68f;
                 float progress=Math.Max(0f,Math.Min(1f,(phase-start)/span));
                 progress=progress*progress*(3f-2f*progress);
-                PlaceVehicleDogRoot(from.X+(to.X-from.X)*progress,from.Y+(to.Y-from.Y)*progress,from.Z+(to.Z-from.Z)*progress,heading);
+                float entryLift=clip=="get_in"?-.28f*progress*(1f-Math.Max(0f,Math.Min(1f,(phase-.65f)/.20f))):0f;
+                PlaceVehicleDogRoot(from.X+(to.X-from.X)*progress,from.Y+(to.Y-from.Y)*progress,from.Z+(to.Z-from.Z)*progress+entryLift,heading);
                 // get_in ends in a seated pose. Stop after its landing so the
                 // K9 can stand, turn and perform sit_enter just once.
                 if(phase>=(clip=="get_in"?.85f:.985f))break;
@@ -3433,7 +3484,9 @@ namespace AdvancedK9
                 // The separate water and food surfaces are built into this
                 // prop. Keep the head-low care pose until a verified drinking
                 // animation is available for every supported dog model.
-                for(int i=0;i<5&&DogExists();i++){PlayDogAnimation("creatures@rottweiler@indication@","indicate_low",650,0);WaitOwned(300);}
+                // One bounded loop avoids restarting a full-length finite clip five times.
+                PlayCanineClip(_dog,"creatures@rottweiler@indication@","indicate_low",water?3200:4200,true);
+                if(DogExists())NativeFunction.Natives.STOP_ANIM_TASK(_dog,"creatures@rottweiler@indication@","indicate_low",2f);
                 Sit();
             }
             finally{if(bowl!=null&&bowl.Exists())bowl.Delete();}
@@ -3633,9 +3686,10 @@ namespace AdvancedK9
                 Game.LogTrivial("AdvancedK9 leash: released at "+separation.ToString("0.00")+"m instead of rendering beyond 3.50m.");
                 return;
             }
-            if(separation>3.05f&&Game.GameTime>=_nextLeashRangeRecall&&_state==K9State.Leashed)
+            if(separation>2.45f&&Game.GameTime>=_nextLeashRangeRecall&&_state==K9State.Leashed&&
+                handlerSpeedForFollow(_dog)<.35f)
             {
-                _nextLeashRangeRecall=Game.GameTime+1000;
+                _nextLeashRangeRecall=Game.GameTime+750;
                 IssuePersistentFollow(handler,true);
             }
         }
@@ -3745,10 +3799,8 @@ namespace AdvancedK9
                 NativeFunction.Natives.SET_PED_CAN_RAGDOLL(_dog,true);
             }
             if(LeashActive){MaintainLeashRange();if(LeashActive)PinLeashEndpoints();}
-            // Ordinary sprint separation must be recovered through locomotion. Position snapping is
-            // reserved for the verified elevator/teleport transition above.
-            if (_dog.DistanceTo(Game.LocalPlayer.Character) > 45f && _state == K9State.Following)
-                IssuePersistentFollow(Game.LocalPlayer.Character,false);
+            // Long-distance recovery is owned by MaintainFollowNavigation; do not
+            // restart its live navigation task on every frame beyond 45 metres.
         }
 
         private void MaintainControlledBiteHold()
@@ -4082,7 +4134,17 @@ namespace AdvancedK9
             // proves that the dog has actually been stuck for several seconds.
             NativeFunction.Natives.SET_PED_MAX_MOVE_BLEND_RATIO(_dog,3f);
             NativeFunction.Natives.SET_ENTITY_MAX_SPEED(_dog,16f);
-            NativeFunction.Natives.SET_PED_MOVE_RATE_OVERRIDE(_dog,handlerSpeedForFollow(handler)>5.5f?1.35f:1.12f);
+            float movingSpeed=handlerSpeedForFollow(handler);
+            NativeFunction.Natives.SET_PED_MOVE_RATE_OVERRIDE(_dog,movingSpeed>5.5f?1.35f:1.12f);
+            bool handlerMoving=movingSpeed>.25f;
+            // Wake a standing follower once on the handler's movement edge, rather
+            // than waiting until the leash is nearly exhausted. Never touches rest.
+            if(handlerMoving&&!_followHandlerMoving&&Game.GameTime>=_nextFollowWake&&_followRouteRecoveryUntil==0)
+            {
+                _nextFollowWake=Game.GameTime+750;
+                if(handlerSpeedForFollow(_dog)<.35f)IssuePersistentFollow(handler,leashed);
+            }
+            _followHandlerMoving=handlerMoving;
             if(Game.GameTime<_nextFollowMotionSample)return;
             _nextFollowMotionSample=Game.GameTime+1000;
             Vector3 dogPosition=_dog.Position;
@@ -4124,7 +4186,7 @@ namespace AdvancedK9
             float catchupSpeed=handlerSpeed>5.5f?9f:handlerSpeed>2.5f?6.5f:4.2f;
             NativeFunction.Natives.SET_ENTITY_MAX_SPEED(_dog,16f);
             NativeFunction.Natives.SET_PED_MOVE_RATE_OVERRIDE(_dog,handlerSpeed>5.5f?1.35f:1.12f);
-            NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(_dog,handler,side,ahead,0f,catchupSpeed,-1,.65f,true);
+            NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(_dog,handler,side,ahead,0f,catchupSpeed,-1,leashed?.20f:.35f,true);
             NativeFunction.Natives.SET_PED_KEEP_TASK(_dog,true);
             NativeFunction.Natives.SET_PED_MAX_MOVE_BLEND_RATIO(_dog,3f);
             _followMotionSamplePosition=_dog.Position;

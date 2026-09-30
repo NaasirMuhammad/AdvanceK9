@@ -1,6 +1,6 @@
-# AdvancedK9 Build 867 — core consistency checks
+# AdvancedK9 Build 868 — core consistency checks
 
-Internal version 0.24.0.81. This is a focused test build after the released v0.24.0 beta baseline; it is not yet certified in game.
+Internal version 0.24.0.82. This is a focused test build after the released v0.24.0 beta baseline; it is not yet certified in game.
 
 1. Start an area, vehicle and building search. During navigation, sniffing and the final indication, issue Follow, Stay, Sit, then a different search. The latest accepted task must remain in control; old workers must not restore a previous route, sit or alert later.
 2. Start a track and interrupt it with Sit, Stay, Recall, a search and Enter Vehicle. Repeat while Rex is turning or checking direction. Test Inspect, camera and EMS requests during tracking: these must leave it active.
@@ -11,3 +11,14 @@ Internal version 0.24.0.81. This is a focused test build after the released v0.2
 7. Go off duty or unload during search, track and a transition. No old worker should task a replacement/deleted dog or resume after redeployment.
 
 Record the command sequence, vehicle/dog model, visible result and RagePluginHook.log. Look for the task-owner-superseded message on interruptions. Windows compilation alone does not validate animation appearance or native timing.
+
+## Kennel regression check
+
+At the large kennel, repeat deploy -> Sit/Lie/Follow -> return at least ten times. Rex must walk in, turn, settle into sleep and remain there. Queue Recall during return, then deploy again. Repeat at the original doghouse. Confirm one resident, correct floor height and no sleep-maintenance correction during the active exit sequence. Each successful return should log `kennel return completed`; it must not be followed by self-cancellation before the sleep pose is assigned.
+
+## Additional Build 868 checks
+
+- Standing follow: start/stop walking, turn, jog and sprint while leashed and unleashed. Rex should respond promptly without repeated task resets or ordinary-walk leash detachment. Sit/lie getup must still finish first.
+- Feed and water: one care loop, approximately 4.2 / 3.2 seconds plus posture transitions, bowl cleaned up after completion or interruption.
+- Load/unload both 16 FPIU and ambient Explorer, both rear doors where available, flat and sloped pavement. Check final seat height, roof clearance and one grounded exit. Keep existing saved calibrations.
+- EMS was not retested by the user; camera testing was partial. Neither is newly confirmed by this build.

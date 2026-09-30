@@ -1,5 +1,18 @@
 # Changelog
 
+## Build 868 — core consistency follow-up (0.24.0.82)
+
+- Fixes Build 867 cancelling its own kennel-return command before starting the sleep animation. Sleep now starts before ownership passes from the deployed dog to the kennel resident.
+- Reserves the transitioning kennel so periodic resident maintenance cannot adjust, respawn or delete the dog during deployment or return.
+- Repairs a missing sleep pose on an idle kennel resident, without interrupting an active kennel transition.
+- Adds a completed-handoff log entry and repeated kennel/patrol transition checks. Kennel placement and model-specific offsets are retained.
+
+- Wakes an already-standing follower when the handler starts moving, tightens follow stopping distance, and starts leash-range recovery earlier without repeatedly restarting a moving dog.
+- Removes per-frame follow-task resets beyond 45 metres; long-distance recovery retains ownership.
+- Replaces five full care-animation restarts with one bounded eating/drinking loop.
+- Uses the complete vehicle seat offset for jump arrival and restores standing ground clearance after exit; retains saved seat profiles.
+- Vehicle animation geometry and walking responsiveness require in-game confirmation on the 16 FPIU and ambient Explorer. EMS remains untested; camera checks are partial.
+
 ## Build 867 — core consistency test (0.24.0.81)
 
 - Serializes foreground dog commands and keeps only the latest pending request during an active action; menus and input keep running while the action finishes.
