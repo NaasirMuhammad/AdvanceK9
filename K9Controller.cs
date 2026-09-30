@@ -34,6 +34,11 @@ namespace AdvancedK9
         private Vehicle _dogVehicle;
         private bool _dogSeatAttached;
         private float _vehicleStandingGroundOffset;
+        private Vector3 _vehicleStandingBodyOffset;
+        private Vector3 _vehicleSittingBodyOffset;
+        private int _vehicleBodyBone=-1;
+        private uint _vehiclePoseModel;
+        private bool _vehiclePoseReady;
         private bool _followHandlerMoving;
         private uint _nextFollowWake;
         private Blip _blip;
@@ -1707,7 +1712,10 @@ namespace AdvancedK9
                 _dog.Tasks.ClearImmediately();NativeFunction.Natives.SET_ENTITY_VISIBLE(_dog,false,false);
                 NativeFunction.Natives.TASK_WARP_PED_INTO_VEHICLE(_dog,vehicle,seat);WaitOwned(150);
             }
-            _dogVehicle=vehicle;_activeSeatProfile=_seatProfiles.Get(vehicle);ApplySeatCalibration(visibleJump);
+            _dogVehicle=vehicle;_activeSeatProfile=_seatProfiles.Get(vehicle);
+            // get_in already finishes seated. Replaying sit_enter starts from a
+            // standing pose at the seat and lifts the mesh toward the roof.
+            ApplySeatCalibration(false);
             NativeFunction.Natives.SET_ENTITY_VISIBLE(_dog,true,false);NativeFunction.Natives.RESET_ENTITY_ALPHA(_dog);
             NativeFunction.Natives.SET_VEHICLE_DOOR_SHUT(vehicle,_dogVehicleDoor,false);NativeFunction.Natives.SET_ENTITY_INVINCIBLE(_dog,true);
             _state=K9State.InVehicle;K9IncidentLog.Write(_profile.Name,"Kennel","Dog-safe direct load using saved "+_seatProfiles.VehicleName(vehicle)+" seat profile",vehicle.Position);Acknowledge("Sitting safely in the saved right-rear position.");
@@ -1721,11 +1729,15 @@ namespace AdvancedK9
                 string boneName=seat==2?"seat_pside_r":seat==1?"seat_dside_r":"seat_pside_f";
                 int bone=NativeFunction.Natives.GET_ENTITY_BONE_INDEX_BY_NAME<int>(vehicle,boneName);if(bone<0)return false;
                 Vector3 seatPosition=NativeFunction.Natives.GET_WORLD_POSITION_OF_ENTITY_BONE<Vector3>(vehicle,bone);
+                if(!PrepareVehicleBodyReference())return false;
                 Vector3 start=_dog.Position;
+                Vector3 body=NativeFunction.Natives.GET_WORLD_POSITION_OF_ENTITY_BONE<Vector3>(_dog,_vehicleBodyBone);
+                _vehicleStandingBodyOffset=NativeFunction.Natives.GET_OFFSET_FROM_ENTITY_GIVEN_WORLD_COORDS<Vector3>(_dog,body.X,body.Y,body.Z);
                 float standingGround;
                 _vehicleStandingGroundOffset=0f;
                 if(NativeFunction.Natives.GET_GROUND_Z_FOR_3D_COORD<bool>(start.X,start.Y,start.Z+2f,out standingGround,false))
-                    _vehicleStandingGroundOffset=Math.Max(-.1f,Math.Min(.8f,start.Z-standingGround));
+                    _vehicleStandingGroundOffset=Math.Max(-2f,Math.Min(2f,start.Z-standingGround));
+                Game.LogTrivial("AdvancedK9 vehicle standing reference: root="+start.Z.ToString("0.000")+", ground="+standingGround.ToString("0.000")+", clearance="+_vehicleStandingGroundOffset.ToString("0.000")+".");
                 // The get_in clip can report its IK feet more than a metre
                 // below the pavement before the first rendered frame. Use
                 // the vehicle's ground reference, not that transient bone.
@@ -1740,35 +1752,93 @@ namespace AdvancedK9
                 _dog.Tasks.ClearImmediately();NativeFunction.Natives.SET_ENTITY_COLLISION(_dog,false,false);NativeFunction.Natives.FREEZE_ENTITY_POSITION(_dog,true);_dog.Heading=inward;
                 if(!PlayCanineClip(_dog,"creatures@rottweiler@incar@","get_in",-1,false)){NativeFunction.Natives.FREEZE_ENTITY_POSITION(_dog,false);return false;}
                 Game.LogTrivial("AdvancedK9 vehicle entry root: ground="+startRoot.Z.ToString("0.000")+", seat="+seatRoot.Z.ToString("0.000")+".");
-                // The clip supplies the jump arc. Move only its root across the
-                // doorway, using playback phase rather than a second timed jump.
-                FollowVehicleClipRoot("get_in",startRoot,seatRoot,inward);
-                // Complete the jump into the seat before rotating into the
-                // settled, forward-facing sitting pose.
-                if(DogExists()){_dog.Tasks.ClearImmediately();WaitOwned(160);TurnDogToward(vehicle.Heading,340);}
+                // Use the rendered torso as the reference, removing the asset's
+                // root displacement instead of adding a second jump to it.
+                FollowVehicleClipRoot("get_in",startRoot,seatRoot,inward,_vehicleStandingBodyOffset,_vehicleSittingBodyOffset);
+                if(DogExists())
+                {
+                    PlayCanineClip(_dog,"creatures@rottweiler@amb@world_dog_sitting@base","base",-1,true);
+                    SettleVehicleDogBody(seatRoot,_vehicleSittingBodyOffset,inward);
+                    TurnDogToward(vehicle.Heading,340);
+                }
                 if(DogExists())NativeFunction.Natives.FREEZE_ENTITY_POSITION(_dog,false);
                 Game.LogTrivial("AdvancedK9 vehicle load: get_in through door "+_dogVehicleDoor+" completed for "+_profile.ModelName+".");
                 return DogExists()&&vehicle.Exists();
             }
             catch(Exception ex) when (!(ex is CommandSupersededException)){if(DogEntityExists())NativeFunction.Natives.FREEZE_ENTITY_POSITION(_dog,false);Game.LogTrivial("AdvancedK9 vehicle jump fallback: "+ex.Message);return false;}
         }
-        private static float sideForDoor(int seat){return seat==1?-1f:1f;}
-        private static float VehicleDogFootZ(Ped dog)
+        private bool PrepareVehicleBodyReference()
         {
-            float foot=float.MaxValue;
-            foreach(string name in new[]{"IK_L_Foot","IK_R_Foot"})
+            uint model=NativeFunction.Natives.GET_ENTITY_MODEL<uint>(_dog);
+            if(_vehiclePoseReady&&_vehiclePoseModel==model)return true;
+            _vehiclePoseReady=false;_vehicleBodyBone=-1;
+            foreach(string name in new[]{"SKEL_Pelvis","SKEL_Spine0","SKEL_Spine1"})
             {
-                int bone=NativeFunction.Natives.GET_ENTITY_BONE_INDEX_BY_NAME<int>(dog,name);
-                if(bone>=0)foot=Math.Min(foot,NativeFunction.Natives.GET_WORLD_POSITION_OF_ENTITY_BONE<Vector3>(dog,bone).Z);
+                int index=NativeFunction.Natives.GET_ENTITY_BONE_INDEX_BY_NAME<int>(_dog,name);
+                if(index>=0){_vehicleBodyBone=index;break;}
             }
-            return foot==float.MaxValue?dog.Position.Z-.48f:foot;
+            if(_vehicleBodyBone<0)return false;
+            // A hidden, non-colliding pose probe provides this model's settled
+            // sitting reference without changing Rex's live navigation or pose.
+            Ped probe=null;
+            try
+            {
+                probe=new Ped(_dog.Model,_dog.Position,_dog.Heading);
+                if(probe==null||!probe.Exists())return false;
+                probe.IsPersistent=true;probe.IsInvincible=true;probe.BlockPermanentEvents=true;
+                NativeFunction.Natives.SET_ENTITY_VISIBLE(probe,false,false);
+                NativeFunction.Natives.SET_ENTITY_COLLISION(probe,false,false);
+                NativeFunction.Natives.FREEZE_ENTITY_POSITION(probe,true);
+                if(!PlayCanineClip(probe,"creatures@rottweiler@amb@world_dog_sitting@base","base",-1,true))return false;
+                uint deadline=Game.GameTime+600;
+                while(probe.Exists()&&!NativeFunction.Natives.IS_ENTITY_PLAYING_ANIM<bool>(probe,"creatures@rottweiler@amb@world_dog_sitting@base","base",3)&&Game.GameTime<deadline)YieldOwned();
+                if(!probe.Exists()||!NativeFunction.Natives.IS_ENTITY_PLAYING_ANIM<bool>(probe,"creatures@rottweiler@amb@world_dog_sitting@base","base",3))return false;
+                WaitOwned(100);
+                Vector3 body=NativeFunction.Natives.GET_WORLD_POSITION_OF_ENTITY_BONE<Vector3>(probe,_vehicleBodyBone);
+                _vehicleSittingBodyOffset=NativeFunction.Natives.GET_OFFSET_FROM_ENTITY_GIVEN_WORLD_COORDS<Vector3>(probe,body.X,body.Y,body.Z);
+                _vehiclePoseModel=model;_vehiclePoseReady=true;
+                Game.LogTrivial("AdvancedK9 vehicle body reference: model="+model.ToString("X8")+", bone="+_vehicleBodyBone+", sitting="+FormatVector(_vehicleSittingBodyOffset)+".");
+                return true;
+            }
+            finally{if(probe!=null&&probe.Exists())probe.Delete();}
         }
-        private static float VehicleDogFootLift(Ped dog){return Math.Max(.40f,Math.Min(.75f,dog.Position.Z-VehicleDogFootZ(dog)+.025f));}
+
+        private float PlaceVehicleDogBody(Vector3 root,Vector3 poseOffset,float heading)
+        {
+            if(!DogEntityExists())return 0f;
+            if(!_vehiclePoseReady||_vehicleBodyBone<0)
+            {
+                PlaceVehicleDogRoot(root.X,root.Y,root.Z,heading);
+                return 0f;
+            }
+            _dog.Heading=heading;
+            Vector3 currentRoot=_dog.Position;
+            Vector3 currentBody=NativeFunction.Natives.GET_WORLD_POSITION_OF_ENTITY_BONE<Vector3>(_dog,_vehicleBodyBone);
+            Vector3 animatedOffset=currentBody-currentRoot;
+            Vector3 targetOffset=_dog.GetOffsetPosition(poseOffset)-currentRoot;
+            Vector3 corrected=root+targetOffset-animatedOffset;
+            PlaceVehicleDogRoot(corrected.X,corrected.Y,corrected.Z,heading);
+            return corrected.Z-root.Z;
+        }
+
+        private void SettleVehicleDogBody(Vector3 root,Vector3 pose,float heading)
+        {
+            // Keep body compensation until the replacement idle has evaluated.
+            // Clearing a task does not replace its rendered skeleton immediately.
+            uint end=Game.GameTime+150;
+            while(DogEntityExists()&&Game.GameTime<end)
+            {
+                PlaceVehicleDogBody(root,pose,heading);
+                YieldOwned();
+            }
+            if(DogEntityExists())PlaceVehicleDogRoot(root.X,root.Y,root.Z,heading);
+        }
+
         private void PlaceVehicleDogRoot(float x,float y,float rootZ,float heading)
         {
             if(!DogEntityExists())return;
-            // The in-car clips animate IK bones outside the dog mesh; using
-            // those bones as feedback adds a second vertical jump to the clip.
+            // Body compensation samples a rendered skeletal torso, never the
+            // animation's detached IK targets or feet.
             NativeFunction.Natives.SET_ENTITY_COORDS_NO_OFFSET(_dog,x,y,rootZ,false,false,false);
             _dog.Heading=heading;
         }
@@ -1788,6 +1858,7 @@ namespace AdvancedK9
 
         private Vector3 StageDogOutsideVehicle(Vehicle vehicle)
         {
+            PrepareVehicleBodyReference();
             float side=_dogVehicleDoor==2?-1f:1f;Vector3 surface=vehicle.GetOffsetPosition(new Vector3(side*2.05f,-2.35f,.05f));
             float ground;
             // Vehicle origin height is not pavement height: suspension and model
@@ -1795,7 +1866,6 @@ namespace AdvancedK9
             if(!NativeFunction.Natives.GET_GROUND_Z_FOR_3D_COORD<bool>(surface.X,surface.Y,surface.Z+3f,out ground,false))
                 ground=surface.Z;
             Vector3 exit=new Vector3(surface.X,surface.Y,ground+_vehicleStandingGroundOffset);
-            Vector3 animatedExit=new Vector3(exit.X,exit.Y,ground-.55f);
             Game.LogTrivial("AdvancedK9 vehicle exit surface="+surface.Z.ToString("0.000")+", validated root="+exit.Z.ToString("0.000")+".");
             // Detach first: playing sit_exit on the attached seat can lift the
             // ped through the roof as the vehicle transform is applied twice.
@@ -1815,16 +1885,17 @@ namespace AdvancedK9
             if(!PlayCanineClip(_dog,"creatures@rottweiler@incar@","get_out",-1,false))
                 try{NativeFunction.Natives.REQUEST_ANIM_DICT("creatures@rottweiler@move");uint timeout=Game.GameTime+600;while(!NativeFunction.Natives.HAS_ANIM_DICT_LOADED<bool>("creatures@rottweiler@move")&&Game.GameTime<timeout)YieldOwned();NativeFunction.Natives.TASK_PLAY_ANIM(_dog,"creatures@rottweiler@move","jump",4f,-3f,450,0,0f,false,false,false);}catch(CommandSupersededException){throw;}catch{}
             Game.LogTrivial("AdvancedK9 vehicle exit root: seat="+seatStart.Z.ToString("0.000")+", ground="+exit.Z.ToString("0.000")+".");
-            FollowVehicleClipRoot("get_out",seatStart,animatedExit,outward);
+            FollowVehicleClipRoot("get_out",seatStart,exit,outward,_vehicleStandingBodyOffset,_vehicleStandingBodyOffset);
             // Remove the clip's final root displacement before restoring standing
             // ground clearance, all in one frame, before collision is enabled.
             _dog.Tasks.ClearImmediately();
-            PlaceVehicleDogRoot(exit.X,exit.Y,exit.Z,outward);
+            NativeFunction.Natives.TASK_STAND_STILL(_dog,-1);
+            SettleVehicleDogBody(exit,_vehicleStandingBodyOffset,outward);
             Game.LogTrivial("AdvancedK9 vehicle exit landed: root Z="+_dog.Position.Z.ToString("0.000")+", target="+exit.Z.ToString("0.000")+".");
             NativeFunction.Natives.FREEZE_ENTITY_POSITION(_dog,false);ReleaseVehicleSeat();NativeFunction.Natives.SET_PED_CAN_RAGDOLL(_dog,true);return exit;
         }
 
-        private void FollowVehicleClipRoot(string clip,Vector3 from,Vector3 to,float heading)
+        private void FollowVehicleClipRoot(string clip,Vector3 from,Vector3 to,float heading,Vector3 fromPose,Vector3 toPose)
         {
             const string dict="creatures@rottweiler@incar@";
             float duration=NativeFunction.Natives.GET_ANIM_DURATION<float>(dict,clip);
@@ -1832,6 +1903,7 @@ namespace AdvancedK9
             uint limit=(uint)Math.Max(750f,Math.Min(4000f,duration*1000f+350f));
             float last=0f;
             bool sawPlayback=false;
+            float largestCorrection=0f;
             while(DogEntityExists()&&Game.GameTime-started<limit)
             {
                 bool playing=NativeFunction.Natives.IS_ENTITY_PLAYING_ANIM<bool>(_dog,dict,clip,3);
@@ -1846,13 +1918,18 @@ namespace AdvancedK9
                 float span=clip=="get_out"?.55f:.68f;
                 float progress=Math.Max(0f,Math.Min(1f,(phase-start)/span));
                 progress=progress*progress*(3f-2f*progress);
-                float entryLift=clip=="get_in"?-.28f*progress*(1f-Math.Max(0f,Math.Min(1f,(phase-.65f)/.20f))):0f;
-                PlaceVehicleDogRoot(from.X+(to.X-from.X)*progress,from.Y+(to.Y-from.Y)*progress,from.Z+(to.Z-from.Z)*progress+entryLift,heading);
-                // get_in ends in a seated pose. Stop after its landing so the
-                // K9 can stand, turn and perform sit_enter just once.
+                // Only this path moves the torso. The asset supplies leg/body
+                // articulation; its embedded translation is cancelled each frame.
+                float arc=(clip=="get_in"?.12f:.08f)*4f*progress*(1f-progress);
+                Vector3 root=from+(to-from)*progress+new Vector3(0f,0f,arc);
+                Vector3 pose=fromPose+(toPose-fromPose)*progress;
+                if(playing)largestCorrection=Math.Max(largestCorrection,Math.Abs(PlaceVehicleDogBody(root,pose,heading)));
+                // get_in ends seated; hand straight to the seated base after
+                // landing instead of restarting a standing/sit-enter sequence.
                 if(phase>=(clip=="get_in"?.85f:.985f))break;
-                WaitOwned(20);
+                YieldOwned();
             }
+            Game.LogTrivial("AdvancedK9 vehicle body compensation "+clip+": max root correction="+largestCorrection.ToString("0.000")+"m.");
             Game.LogTrivial("AdvancedK9 vehicle "+clip+" playback: duration="+duration.ToString("0.000")+"s, observed="+sawPlayback+", final phase="+last.ToString("0.000")+".");
         }
 

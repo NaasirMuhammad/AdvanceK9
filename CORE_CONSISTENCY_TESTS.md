@@ -1,6 +1,6 @@
-# AdvancedK9 Build 868 — core consistency checks
+# AdvancedK9 Build 869 — core consistency checks
 
-Internal version 0.24.0.82. This is a focused test build after the released v0.24.0 beta baseline; it is not yet certified in game.
+Internal version 0.24.0.83. This is a focused test build after the released v0.24.0 beta baseline; it is not yet certified in game.
 
 1. Start an area, vehicle and building search. During navigation, sniffing and the final indication, issue Follow, Stay, Sit, then a different search. The latest accepted task must remain in control; old workers must not restore a previous route, sit or alert later.
 2. Start a track and interrupt it with Sit, Stay, Recall, a search and Enter Vehicle. Repeat while Rex is turning or checking direction. Test Inspect, camera and EMS requests during tracking: these must leave it active.
@@ -22,3 +22,11 @@ At the large kennel, repeat deploy -> Sit/Lie/Follow -> return at least ten time
 - Feed and water: one care loop, approximately 4.2 / 3.2 seconds plus posture transitions, bowl cleaned up after completion or interruption.
 - Load/unload both 16 FPIU and ambient Explorer, both rear doors where available, flat and sloped pavement. Check final seat height, roof clearance and one grounded exit. Keep existing saved calibrations.
 - EMS was not retested by the user; camera testing was partial. Neither is newly confirmed by this build.
+
+## Build 869 vehicle regression checks
+
+- Repeat three entry/exit cycles on 16K9, SWATCHGR and LAPD1. Check the entire jump, final turn, seated height, roof clearance and grounded landing before follow resumes.
+- Repeat on the ambient Explorer and both rear doors where available; try a curb and a slope. Saved seat positions must remain unchanged.
+- Confirm only one jump clip per action. Log should report vehicle body reference and per-clip body compensation; keep log and video together.
+- The brief seated finish of get_in remains; no second sit_enter should replay on arrival.
+- Kennel return was confirmed by the user in Build 868 and its implementation is unchanged here.

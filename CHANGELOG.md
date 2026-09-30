@@ -1,5 +1,12 @@
 # Changelog
 
+## Build 869 — vehicle jump body alignment (0.24.0.83)
+
+- Compensates the in-car animation's rendered torso displacement every frame so script movement and animation movement do not add a second jump. Uses model-specific seated reference and the existing saved seat calibration.
+- Removes the fixed below-ground exit animation target and retains the dog's measured standing clearance, including supported model origins below ground.
+- Stops replaying sit_enter after the entry clip has already finished seated, preventing a standing restart at the seat anchor. The brief seated finish is retained.
+- Preserves the user-confirmed Build 868 kennel return, follow and care changes. Vehicle changes still require in-game confirmation on 16K9, SWATCHGR and LAPD1.
+
 ## Build 868 — core consistency follow-up (0.24.0.82)
 
 - Fixes Build 867 cancelling its own kennel-return command before starting the sleep animation. Sleep now starts before ownership passes from the deployed dog to the kennel resident.
