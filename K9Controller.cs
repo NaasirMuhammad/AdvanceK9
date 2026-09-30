@@ -873,6 +873,11 @@ namespace AdvancedK9
                     return;
                 }
                 if(_trackFiberRunning&&command==K9Command.Track)return;
+                if(_mobileVetActive&&command==K9Command.VeterinaryCare)
+                {
+                    Game.DisplayNotification("~y~The mobile K9 veterinarian is already responding.");
+                    return;
+                }
                 _hudCommand=CommandLabel(command);
                 bool leashed=LeashActive;
                 if(LeashActive&&(command==K9Command.Training||command==K9Command.TrainNarcotics||command==K9Command.TrainExplosives||command==K9Command.TrainWeapons)){Game.DisplayNotification("~y~Remove the leash before traveling to the academy.");return;}
@@ -1894,7 +1899,12 @@ namespace AdvancedK9
             _mobileVetActive=true;
             Game.DisplayNotification("~b~Mobile K9 veterinarian dispatched.~s~~n~Keep "+_profile.Name+" at the current location and maintain a safe scene.");
             K9IncidentLog.Write(_profile.Name,"Medical","Mobile veterinarian dispatched",_dog.Position);
-            GameFiber.StartNew(MobileVeterinaryResponse,"AdvancedK9.MobileVeterinarian");
+            int owner=_taskOwnerGeneration;
+            GameFiber.StartNew(()=>
+            {
+                try{RunOwnedTask(owner,MobileVeterinaryResponse);}
+                finally{_mobileVetActive=false;}
+            },"AdvancedK9.MobileVeterinarian");
         }
 
         private void MobileVeterinaryResponse()
@@ -2074,10 +2084,10 @@ namespace AdvancedK9
             if(Game.GameTime<_nextPursuitProbe)return;_nextPursuitProbe=Game.GameTime+1000;var suspect=CurrentPursuitSuspect();
             if(suspect==null||!suspect.Exists()||suspect.IsDead)
             {
-                if(_compatibilityPursuitSuspect!=null){if(_scentTarget==_compatibilityPursuitSuspect){_scentTarget=null;_activeScentSample=null;_activeScentSource="None";_trailLost=false;}if(DogExists()&&(_state==K9State.Tracking||_state==K9State.Containing||_state==K9State.Apprehending))Follow();Game.LogTrivial("AdvancedK9 pursuit cleanup: pursuit ended or subject unavailable; track, containment and target references cleared.");}
+                if(_compatibilityPursuitSuspect!=null){if(_scentTarget==_compatibilityPursuitSuspect){_scentTarget=null;_activeScentSample=null;_activeScentSource="None";_trailLost=false;}if(DogExists()&&(_state==K9State.Tracking||_state==K9State.Containing||_state==K9State.Apprehending))Execute(K9Command.Recall);Game.LogTrivial("AdvancedK9 pursuit cleanup: pursuit ended or subject unavailable; track, containment and target references cleared.");}
                 _compatibilityPursuitSuspect=null;_pursuitLastVehicle=null;_pursuitTrackStarted=false;_pursuitLostVisualTrackStarted=false;_pursuitLastVisualAt=0;_automaticTrackRequested=false;return;
             }
-            if(IsProtectedOperationalPed(suspect)){if(_scentTarget==suspect){_scentTarget=null;_activeScentSample=null;}_compatibilityPursuitSuspect=null;_pursuitLastVehicle=null;_pursuitTrackStarted=false;_pursuitLostVisualTrackStarted=false;if(DogExists())Follow();Game.LogTrivial("AdvancedK9 pursuit cleanup: suspect arrested/restrained; K9 recalled.");return;}
+            if(IsProtectedOperationalPed(suspect)){if(_scentTarget==suspect){_scentTarget=null;_activeScentSample=null;}_compatibilityPursuitSuspect=null;_pursuitLastVehicle=null;_pursuitTrackStarted=false;_pursuitLostVisualTrackStarted=false;if(DogExists())Execute(K9Command.Recall);Game.LogTrivial("AdvancedK9 pursuit cleanup: suspect arrested/restrained; K9 recalled.");return;}
             if(_compatibilityPursuitSuspect!=suspect){_compatibilityPursuitSuspect=suspect;_pursuitLastVehicle=suspect.CurrentVehicle;_pursuitTrackStarted=false;_pursuitLostVisualTrackStarted=false;_pursuitLastVisualAt=Game.GameTime;Game.LogTrivial("AdvancedK9 pursuit integration: suspect assigned without requiring a PR/STP stop.");}
             var current=suspect.CurrentVehicle;
             if(current!=null&&current.Exists()){if(_pursuitLastVehicle!=null&&_pursuitLastVehicle.Exists()&&_pursuitLastVehicle.Handle!=current.Handle)Game.LogTrivial("AdvancedK9 pursuit cleanup: suspect changed vehicles; stale vehicle scent reference replaced.");_pursuitLastVehicle=current;}
