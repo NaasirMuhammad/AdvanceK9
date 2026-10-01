@@ -1,5 +1,12 @@
 # Changelog
 
+## Build 870 — restore visible vehicle jumps and doorway landing (0.24.0.84)
+
+- Decouples standing-ground measurement and visible get_in from optional body-pose calibration, fixing Build 869 skipping entry and leaving ground clearance unset.
+- Adds ped-bone ID lookup after named-bone lookup and specific calibration diagnostics. Keeps the existing in-car clip active if calibration is unavailable.
+- Holds the occupied seat's fore/aft position during exit, producing a straight sideways doorway route instead of the fixed rear-bumper landing. Post-landing navigation no longer redirects Rex toward the old rearward endpoint.
+- Preserves the user-confirmed kennel fix and saved seat profiles. Vehicle animation and ground clearance still require in-game confirmation.
+
 ## Build 869 — vehicle jump body alignment (0.24.0.83)
 
 - Compensates the in-car animation's rendered torso displacement every frame so script movement and animation movement do not add a second jump. Uses model-specific seated reference and the existing saved seat calibration.

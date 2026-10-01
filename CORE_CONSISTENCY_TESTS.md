@@ -1,6 +1,6 @@
-# AdvancedK9 Build 869 — core consistency checks
+# AdvancedK9 Build 870 — core consistency checks
 
-Internal version 0.24.0.83. This is a focused test build after the released v0.24.0 beta baseline; it is not yet certified in game.
+Internal version 0.24.0.84. This is a focused test build after the released v0.24.0 beta baseline; it is not yet certified in game.
 
 1. Start an area, vehicle and building search. During navigation, sniffing and the final indication, issue Follow, Stay, Sit, then a different search. The latest accepted task must remain in control; old workers must not restore a previous route, sit or alert later.
 2. Start a track and interrupt it with Sit, Stay, Recall, a search and Enter Vehicle. Repeat while Rex is turning or checking direction. Test Inspect, camera and EMS requests during tracking: these must leave it active.
@@ -30,3 +30,10 @@ At the large kennel, repeat deploy -> Sit/Lie/Follow -> return at least ten time
 - Confirm only one jump clip per action. Log should report vehicle body reference and per-clip body compensation; keep log and video together.
 - The brief seated finish of get_in remains; no second sit_enter should replay on arrival.
 - Kennel return was confirmed by the user in Build 868 and its implementation is unchanged here.
+
+## Build 870 targeted checks
+
+- Entry must visibly play get_in on SWATCHGR and LAPD1, then 16K9 and ambient Explorer. Calibration failure must not silently warp the dog into the car.
+- Exit must travel sideways from the occupied seat, through the selected door, then land at ground clearance before follow resumes. Test right and left rear doors, road, curb and slope.
+- Logs must include standing reference before entry, body bone lookup or a specific calibration failure, observed=True get_in playback and the doorway landing coordinate.
+- Return to kennel remains the Build 868 implementation; do not recalibrate kennel positioning.

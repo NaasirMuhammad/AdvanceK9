@@ -33,7 +33,7 @@ namespace AdvancedK9
         private readonly List<StationKennel> _stationKennels=new List<StationKennel>();
         private Vehicle _dogVehicle;
         private bool _dogSeatAttached;
-        private float _vehicleStandingGroundOffset;
+        private float _vehicleStandingGroundOffset=.48f;
         private Vector3 _vehicleStandingBodyOffset;
         private Vector3 _vehicleSittingBodyOffset;
         private int _vehicleBodyBone=-1;
@@ -1708,7 +1708,7 @@ namespace AdvancedK9
             bool visibleJump=PlayDogVehicleJump(vehicle,seat,doorPosition);
             if(!visibleJump)
             {
-                Game.LogTrivial("AdvancedK9 vehicle load: animal jump unavailable for "+_profile.ModelName+"; using hidden safe-seat fallback.");
+                Game.LogTrivial("AdvancedK9 vehicle load: get_in playback or compatible seat unavailable for "+_profile.ModelName+"; using hidden safe-seat fallback.");
                 _dog.Tasks.ClearImmediately();NativeFunction.Natives.SET_ENTITY_VISIBLE(_dog,false,false);
                 NativeFunction.Natives.TASK_WARP_PED_INTO_VEHICLE(_dog,vehicle,seat);WaitOwned(150);
             }
@@ -1729,15 +1729,17 @@ namespace AdvancedK9
                 string boneName=seat==2?"seat_pside_r":seat==1?"seat_dside_r":"seat_pside_f";
                 int bone=NativeFunction.Natives.GET_ENTITY_BONE_INDEX_BY_NAME<int>(vehicle,boneName);if(bone<0)return false;
                 Vector3 seatPosition=NativeFunction.Natives.GET_WORLD_POSITION_OF_ENTITY_BONE<Vector3>(vehicle,bone);
-                if(!PrepareVehicleBodyReference())return false;
+                // Capture ground clearance independently of optional pose calibration.
+                CaptureVehicleStandingReference();
+                bool bodyReady=PrepareVehicleBodyReference();
                 Vector3 start=_dog.Position;
-                Vector3 body=NativeFunction.Natives.GET_WORLD_POSITION_OF_ENTITY_BONE<Vector3>(_dog,_vehicleBodyBone);
-                _vehicleStandingBodyOffset=NativeFunction.Natives.GET_OFFSET_FROM_ENTITY_GIVEN_WORLD_COORDS<Vector3>(_dog,body.X,body.Y,body.Z);
-                float standingGround;
-                _vehicleStandingGroundOffset=0f;
-                if(NativeFunction.Natives.GET_GROUND_Z_FOR_3D_COORD<bool>(start.X,start.Y,start.Z+2f,out standingGround,false))
-                    _vehicleStandingGroundOffset=Math.Max(-2f,Math.Min(2f,start.Z-standingGround));
-                Game.LogTrivial("AdvancedK9 vehicle standing reference: root="+start.Z.ToString("0.000")+", ground="+standingGround.ToString("0.000")+", clearance="+_vehicleStandingGroundOffset.ToString("0.000")+".");
+                CaptureVehicleStandingReference();
+                if(bodyReady)
+                {
+                    Vector3 body=NativeFunction.Natives.GET_WORLD_POSITION_OF_ENTITY_BONE<Vector3>(_dog,_vehicleBodyBone);
+                    _vehicleStandingBodyOffset=NativeFunction.Natives.GET_OFFSET_FROM_ENTITY_GIVEN_WORLD_COORDS<Vector3>(_dog,body.X,body.Y,body.Z);
+                }
+                else Game.LogTrivial("AdvancedK9 vehicle pose calibration unavailable; retaining visible get_in and measured standing clearance.");
                 // The get_in clip can report its IK feet more than a metre
                 // below the pavement before the first rendered frame. Use
                 // the vehicle's ground reference, not that transient bone.
@@ -1767,24 +1769,48 @@ namespace AdvancedK9
             }
             catch(Exception ex) when (!(ex is CommandSupersededException)){if(DogEntityExists())NativeFunction.Natives.FREEZE_ENTITY_POSITION(_dog,false);Game.LogTrivial("AdvancedK9 vehicle jump fallback: "+ex.Message);return false;}
         }
+        private void CaptureVehicleStandingReference()
+        {
+            if(!DogEntityExists())return;
+            Vector3 position=_dog.Position;
+            float ground;
+            if(NativeFunction.Natives.GET_GROUND_Z_FOR_3D_COORD<bool>(position.X,position.Y,position.Z+3f,out ground,false)&&Math.Abs(position.Z-ground)<2f)
+                _vehicleStandingGroundOffset=position.Z-ground;
+            Game.LogTrivial("AdvancedK9 vehicle standing reference: root="+position.Z.ToString("0.000")+", clearance="+_vehicleStandingGroundOffset.ToString("0.000")+".");
+        }
+
         private bool PrepareVehicleBodyReference()
         {
             uint model=NativeFunction.Natives.GET_ENTITY_MODEL<uint>(_dog);
             if(_vehiclePoseReady&&_vehiclePoseModel==model)return true;
             _vehiclePoseReady=false;_vehicleBodyBone=-1;
-            foreach(string name in new[]{"SKEL_Pelvis","SKEL_Spine0","SKEL_Spine1"})
+            string reference="";
+            foreach(string name in new[]{"SKEL_Pelvis","SKEL_Spine0","SKEL_Spine1","SKEL_Spine_0","SKEL_Spine_1","SKEL_Spine_2"})
             {
                 int index=NativeFunction.Natives.GET_ENTITY_BONE_INDEX_BY_NAME<int>(_dog,name);
-                if(index>=0){_vehicleBodyBone=index;break;}
+                if(index>=0){_vehicleBodyBone=index;reference=name;break;}
             }
-            if(_vehicleBodyBone<0)return false;
+            // Ped bone IDs provide a second lookup path for skeletons whose
+            // named bones are not exposed by GET_ENTITY_BONE_INDEX_BY_NAME.
+            if(_vehicleBodyBone<0)
+                foreach(int tag in new[]{11816,23553,24816,24817,24818,31086})
+                {
+                    int index=NativeFunction.Natives.GET_PED_BONE_INDEX<int>(_dog,tag);
+                    if(index>=0){_vehicleBodyBone=index;reference="ped tag "+tag;break;}
+                }
+            if(_vehicleBodyBone<0)
+            {
+                Game.LogTrivial("AdvancedK9 vehicle body reference unavailable: no supported named or tagged bone on model "+model.ToString("X8")+". Visible animation remains enabled.");
+                return false;
+            }
+            Game.LogTrivial("AdvancedK9 vehicle body bone resolved: "+reference+", index="+_vehicleBodyBone+".");
             // A hidden, non-colliding pose probe provides this model's settled
             // sitting reference without changing Rex's live navigation or pose.
             Ped probe=null;
             try
             {
                 probe=new Ped(_dog.Model,_dog.Position,_dog.Heading);
-                if(probe==null||!probe.Exists())return false;
+                if(probe==null||!probe.Exists()){Game.LogTrivial("AdvancedK9 vehicle pose probe could not be created.");return false;}
                 probe.IsPersistent=true;probe.IsInvincible=true;probe.BlockPermanentEvents=true;
                 NativeFunction.Natives.SET_ENTITY_VISIBLE(probe,false,false);
                 NativeFunction.Natives.SET_ENTITY_COLLISION(probe,false,false);
@@ -1792,7 +1818,11 @@ namespace AdvancedK9
                 if(!PlayCanineClip(probe,"creatures@rottweiler@amb@world_dog_sitting@base","base",-1,true))return false;
                 uint deadline=Game.GameTime+600;
                 while(probe.Exists()&&!NativeFunction.Natives.IS_ENTITY_PLAYING_ANIM<bool>(probe,"creatures@rottweiler@amb@world_dog_sitting@base","base",3)&&Game.GameTime<deadline)YieldOwned();
-                if(!probe.Exists()||!NativeFunction.Natives.IS_ENTITY_PLAYING_ANIM<bool>(probe,"creatures@rottweiler@amb@world_dog_sitting@base","base",3))return false;
+                if(!probe.Exists()||!NativeFunction.Natives.IS_ENTITY_PLAYING_ANIM<bool>(probe,"creatures@rottweiler@amb@world_dog_sitting@base","base",3))
+                {
+                    Game.LogTrivial("AdvancedK9 vehicle seated pose probe did not start playback.");
+                    return false;
+                }
                 WaitOwned(100);
                 Vector3 body=NativeFunction.Natives.GET_WORLD_POSITION_OF_ENTITY_BONE<Vector3>(probe,_vehicleBodyBone);
                 _vehicleSittingBodyOffset=NativeFunction.Natives.GET_OFFSET_FROM_ENTITY_GIVEN_WORLD_COORDS<Vector3>(probe,body.X,body.Y,body.Z);
@@ -1859,18 +1889,22 @@ namespace AdvancedK9
         private Vector3 StageDogOutsideVehicle(Vehicle vehicle)
         {
             PrepareVehicleBodyReference();
-            float side=_dogVehicleDoor==2?-1f:1f;Vector3 surface=vehicle.GetOffsetPosition(new Vector3(side*2.05f,-2.35f,.05f));
+            float side=_dogVehicleDoor==2?-1f:1f;
+            Vector3 seatStart=_dog.Position;
+            Vector3 seatLocal=NativeFunction.Natives.GET_OFFSET_FROM_ENTITY_GIVEN_WORLD_COORDS<Vector3>(vehicle,seatStart.X,seatStart.Y,seatStart.Z);
+            // Hold the occupied seat's fore/aft coordinate: the jump travels
+            // straight sideways through its doorway, never toward the rear bumper.
+            Vector3 surface=vehicle.GetOffsetPosition(new Vector3(side*2.05f,seatLocal.Y,.05f));
             float ground;
             // Vehicle origin height is not pavement height: suspension and model
             // origins differ. Retain the dog's standing clearance measured at entry.
             if(!NativeFunction.Natives.GET_GROUND_Z_FOR_3D_COORD<bool>(surface.X,surface.Y,surface.Z+3f,out ground,false))
                 ground=surface.Z;
             Vector3 exit=new Vector3(surface.X,surface.Y,ground+_vehicleStandingGroundOffset);
-            Game.LogTrivial("AdvancedK9 vehicle exit surface="+surface.Z.ToString("0.000")+", validated root="+exit.Z.ToString("0.000")+".");
+            Game.LogTrivial("AdvancedK9 vehicle exit doorway: seat local Y="+seatLocal.Y.ToString("0.000")+", landing="+FormatVector(exit)+", standing clearance="+_vehicleStandingGroundOffset.ToString("0.000")+".");
             // Detach first: playing sit_exit on the attached seat can lift the
             // ped through the roof as the vehicle transform is applied twice.
             _dog.Tasks.ClearImmediately();
-            Vector3 seatStart=_dog.Position;
             if(_dogSeatAttached)NativeFunction.Natives.DETACH_ENTITY(_dog,true,true);
             _dogSeatAttached=false;
             NativeFunction.Natives.SET_ENTITY_COLLISION(_dog,false,false);
@@ -1938,7 +1972,7 @@ namespace AdvancedK9
             if(!DogExists()||vehicle==null||!vehicle.Exists()){Follow();return;}
             NativeFunction.Natives.SET_ENTITY_COLLISION(_dog,true,true);
             float side=_dogVehicleDoor==2?-1f:1f;
-            Vector3 clearSide=vehicle.GetOffsetPosition(new Vector3(side*2.05f,-2.35f,.05f));
+            Vector3 clearSide=exit;
             Vector3 handlerLocal=NativeFunction.Natives.GET_OFFSET_FROM_ENTITY_GIVEN_WORLD_COORDS<Vector3>(vehicle,Game.LocalPlayer.Character.Position.X,Game.LocalPlayer.Character.Position.Y,Game.LocalPlayer.Character.Position.Z);
             _dog.Tasks.Clear();
             if(_dog.DistanceTo(clearSide)>.4f)NavigateDogTo(clearSide,vehicle.Heading,1.9f,2200);
