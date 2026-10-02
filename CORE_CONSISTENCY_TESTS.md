@@ -1,6 +1,6 @@
-# AdvancedK9 Build 870 — core consistency checks
+# AdvancedK9 Build 871 — core consistency checks
 
-Internal version 0.24.0.84. This is a focused test build after the released v0.24.0 beta baseline; it is not yet certified in game.
+Internal version 0.24.0.85. This is a focused test build after the released v0.24.0 beta baseline; it is not yet certified in game.
 
 1. Start an area, vehicle and building search. During navigation, sniffing and the final indication, issue Follow, Stay, Sit, then a different search. The latest accepted task must remain in control; old workers must not restore a previous route, sit or alert later.
 2. Start a track and interrupt it with Sit, Stay, Recall, a search and Enter Vehicle. Repeat while Rex is turning or checking direction. Test Inspect, camera and EMS requests during tracking: these must leave it active.
@@ -37,3 +37,11 @@ At the large kennel, repeat deploy -> Sit/Lie/Follow -> return at least ten time
 - Exit must travel sideways from the occupied seat, through the selected door, then land at ground clearance before follow resumes. Test right and left rear doors, road, curb and slope.
 - Logs must include standing reference before entry, body bone lookup or a specific calibration failure, observed=True get_in playback and the doorway landing coordinate.
 - Return to kennel remains the Build 868 implementation; do not recalibrate kennel positioning.
+
+## Build 871 targeted follow checks
+
+- On an open sidewalk, walk continuously for 60 seconds while leashed; repeat turns, walk/jog/sprint changes and handler stops. Rex should not pause and let normal walking exhaust the leash.
+- Repeat unleashed. Confirm he can stop when the handler stops; test a real obstacle without teleporting or clipping through it.
+- Sit and Lie Down while following: the latest command must hold, and get-up must finish before following resumes. Repeat the confirmed vehicle-search interruption test; no delayed result notification.
+- Capture video and RagePluginHook.log. `follow pause recovery` should identify measured stalls rather than appear repeatedly during smooth movement.
+- Leash endpoints, length and animation assets remain unchanged; out-of-range safety release remains for actual unreachable separation.

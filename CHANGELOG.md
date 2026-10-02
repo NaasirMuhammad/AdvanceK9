@@ -1,5 +1,12 @@
 # Changelog
 
+## Build 871 — follow continuity (0.24.0.85)
+
+- Detects a standing follower that stops while the handler continues moving, with a short measured-pause watchdog instead of waiting several seconds. Healthy moving tasks are left active.
+- Increases pace before the leash reaches full extension and allows the leashed follow task to accommodate handler acceleration. Retains the 3.5 m maximum and safety release.
+- Removes a competing leash-range task retry. Preserves injury movement limits, command ownership and posture-transition guards.
+- Custom sniff, alert and dog model remain deferred. Requires in-game follow/leash verification.
+
 ## Build 870 — restore visible vehicle jumps and doorway landing (0.24.0.84)
 
 - Decouples standing-ground measurement and visible get_in from optional body-pose calibration, fixing Build 869 skipping entry and leaving ground clearance unset.

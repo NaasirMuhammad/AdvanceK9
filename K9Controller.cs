@@ -41,6 +41,8 @@ namespace AdvancedK9
         private bool _vehiclePoseReady;
         private bool _followHandlerMoving;
         private uint _nextFollowWake;
+        private uint _followPausedSince;
+        private uint _nextFollowPauseRecovery;
         private Blip _blip;
         private K9State _state = K9State.Dismissed;
         private bool _running = true;
@@ -83,7 +85,6 @@ namespace AdvancedK9
         private bool _workingLeashed;
         private uint _nextLeashFollow;
         private uint _nextLeashVisualUpdate;
-        private uint _nextLeashRangeRecall;
         private uint _nextSeatedIdle;
         private bool _swimming;
         private uint _nextIndoorFollowUpdate;
@@ -3797,12 +3798,8 @@ namespace AdvancedK9
                 Game.LogTrivial("AdvancedK9 leash: released at "+separation.ToString("0.00")+"m instead of rendering beyond 3.50m.");
                 return;
             }
-            if(separation>2.45f&&Game.GameTime>=_nextLeashRangeRecall&&_state==K9State.Leashed&&
-                handlerSpeedForFollow(_dog)<.35f)
-            {
-                _nextLeashRangeRecall=Game.GameTime+750;
-                IssuePersistentFollow(handler,true);
-            }
+            // Follow recovery owns the single stall watchdog. Do not assign another
+            // follow task here: two independent retries can interrupt locomotion.
         }
 
         private void PinLeashEndpoints()
@@ -4214,7 +4211,11 @@ namespace AdvancedK9
         private void MaintainFollowNavigation()
         {
             bool leashed=_state==K9State.Leashed;
-            if(_state!=K9State.Following&&_state!=K9State.Heeling&&!leashed)return;
+            if(_state!=K9State.Following&&_state!=K9State.Heeling&&!leashed)
+            {
+                _followPausedSince=0;_followHandlerMoving=false;
+                return;
+            }
             var handler=Game.LocalPlayer.Character;if(handler==null||!handler.Exists())return;
             Vector3 handlerPosition=handler.Position;
             if(!_handlerNavigationPositionReady){_lastHandlerNavigationPosition=handlerPosition;_handlerNavigationPositionReady=true;}
@@ -4246,7 +4247,11 @@ namespace AdvancedK9
             NativeFunction.Natives.SET_PED_MAX_MOVE_BLEND_RATIO(_dog,3f);
             NativeFunction.Natives.SET_ENTITY_MAX_SPEED(_dog,16f);
             float movingSpeed=handlerSpeedForFollow(handler);
-            NativeFunction.Natives.SET_PED_MOVE_RATE_OVERRIDE(_dog,movingSpeed>5.5f?1.35f:1.12f);
+            float targetDistance=_dog.DistanceTo(handler.GetOffsetPosition(new Vector3(leashed?-.85f:-1.05f,leashed?.65f:1.15f,0f)));
+            float leashSeparation=leashed?VectorDistance(HandLeashPoint(handler),VestLeashPoint()):0f;
+            // Increase pace before the leash is taut, without replacing the live route.
+            bool catchingUp=leashed?leashSeparation>1.65f:targetDistance>3f;
+            NativeFunction.Natives.SET_PED_MOVE_RATE_OVERRIDE(_dog,_profile.Health<=55?.65f:movingSpeed>5.5f?1.35f:catchingUp?1.25f:1.12f);
             bool handlerMoving=movingSpeed>.25f;
             // Wake a standing follower once on the handler's movement edge, rather
             // than waiting until the leash is nearly exhausted. Never touches rest.
@@ -4256,6 +4261,19 @@ namespace AdvancedK9
                 if(handlerSpeedForFollow(_dog)<.35f)IssuePersistentFollow(handler,leashed);
             }
             _followHandlerMoving=handlerMoving;
+            // A dog that starts walking and then stops does not produce a second
+            // handler movement edge. Detect that pause continuously, well before
+            // the old 1-second samples / 5.5-second stuck delay exhaust the leash.
+            bool paused=handlerMoving&&targetDistance>(leashed?.65f:1.5f)&&handlerSpeedForFollow(_dog)<.35f;
+            if(!paused)_followPausedSince=0;
+            else if(_followPausedSince==0)_followPausedSince=Game.GameTime;
+            else if(Game.GameTime-_followPausedSince>=350&&Game.GameTime>=_nextFollowPauseRecovery)
+            {
+                _nextFollowPauseRecovery=Game.GameTime+1200;
+                IssuePersistentFollow(handler,leashed);
+                Game.LogTrivial("AdvancedK9 follow pause recovery: target gap="+targetDistance.ToString("0.00")+"m, leash="+leashed+".");
+                return;
+            }
             if(Game.GameTime<_nextFollowMotionSample)return;
             _nextFollowMotionSample=Game.GameTime+1000;
             Vector3 dogPosition=_dog.Position;
@@ -4294,16 +4312,20 @@ namespace AdvancedK9
             float side=leashed?-.85f:-1.05f;
             float ahead=leashed?.65f:1.15f;
             float handlerSpeed=handlerSpeedForFollow(handler);
-            float catchupSpeed=handlerSpeed>5.5f?9f:handlerSpeed>2.5f?6.5f:4.2f;
+            // Leashed follow must accommodate later acceleration too: the task's
+            // speed is fixed at assignment, while the handler's pace can change.
+            float catchupSpeed=leashed?9f:handlerSpeed>5.5f?9f:handlerSpeed>2.5f?6.5f:4.2f;
             NativeFunction.Natives.SET_ENTITY_MAX_SPEED(_dog,16f);
-            NativeFunction.Natives.SET_PED_MOVE_RATE_OVERRIDE(_dog,handlerSpeed>5.5f?1.35f:1.12f);
-            NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(_dog,handler,side,ahead,0f,catchupSpeed,-1,leashed?.20f:.35f,true);
+            NativeFunction.Natives.SET_PED_MOVE_RATE_OVERRIDE(_dog,_profile.Health<=55?.65f:handlerSpeed>5.5f?1.35f:1.12f);
+            NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(_dog,handler,side,ahead,0f,catchupSpeed,-1,leashed?.10f:.35f,true);
             NativeFunction.Natives.SET_PED_KEEP_TASK(_dog,true);
             NativeFunction.Natives.SET_PED_MAX_MOVE_BLEND_RATIO(_dog,3f);
             _followMotionSamplePosition=_dog.Position;
             _followMotionSampleReady=true;
             _nextFollowMotionSample=Game.GameTime+1000;
             _followStuckSince=0;
+            _followPausedSince=0;
+            _nextFollowPauseRecovery=Game.GameTime+1200;
         }
 
         private void BeginLongDistanceRecall(Ped handler)
