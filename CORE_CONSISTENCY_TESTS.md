@@ -1,6 +1,6 @@
-# AdvancedK9 Build 873 — core consistency checks
+# AdvancedK9 Build 874 — core consistency checks
 
-Internal version 0.24.0.87. This is a focused test build after the released v0.24.0 beta baseline; it is not yet certified in game.
+Internal version 0.24.0.88. This is a focused test build after the released v0.24.0 beta baseline; it is not yet certified in game.
 
 1. Start an area, vehicle and building search. During navigation, sniffing and the final indication, issue Follow, Stay, Sit, then a different search. The latest accepted task must remain in control; old workers must not restore a previous route, sit or alert later.
 2. Start a track and interrupt it with Sit, Stay, Recall, a search and Enter Vehicle. Repeat while Rex is turning or checking direction. Test Inspect, camera and EMS requests during tracking: these must leave it active.
@@ -61,3 +61,12 @@ At the large kennel, repeat deploy -> Sit/Lie/Follow -> return at least ten time
 - Pace changes alone must not produce assignment logs. Finished-task assignments should occur only when movement is still needed; normal handler stops must not produce a restart loop.
 - Test a real obstacle and interrupt Follow with Sit/Lie/search. Get-up must complete before following, and the newest command must hold.
 - Apprehension was confirmed working by the user in Build 872 and its implementation is unchanged. Perform a short regression check alongside vehicle and kennel transitions.
+
+## Build 874 targeted checks
+
+- Walk continuously for 60 seconds leashed; turn 90/180 degrees, stop/start and change to jogging/sprinting. Repeat unleashed. Rex must remain responsive without repeated braking or ordinary-walk leash release.
+- Walk past a parked vehicle/fence and around a corner. Navmesh avoidance must remain functional; no new position or velocity warps are introduced for ordinary following. A genuinely unreachable separation retains safety detachment.
+- While leashed, Stand -> Sit -> Stand -> Lie -> Stand. The latch must stay at the vest hook through the whole transition and settled pose; the handler loop must remain at the left hand. Repeat after kennel deployment, breed change and redeployment.
+- Check `leash body anchor` for a nonzero supported boneId. A supported=False result means the skeleton fallback still uses the standing root offset and needs model-specific inspection.
+- Capture video and the full log. Moving-destination assignment logs are expected; `follow motion` includes task, route and remaining slack. Compare physical hesitation with those measurements.
+- Interrupt follow with Sit/Lie/search. Get-up must complete before navigation resumes. Apprehension, vehicle entry/exit and both kennel types need a short regression check; their implementations are unchanged.

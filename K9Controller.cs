@@ -47,6 +47,12 @@ namespace AdvancedK9
         private uint _nextFollowTaskSample;
         private uint _followTaskAssignedAt;
         private uint _followTaskInactiveSince;
+        private Vector3 _followNavigationTarget;
+        private bool _followNavigationMoving;
+        private float _followAssignedBlend;
+        private Ped _leashAnchorDog;
+        private int _leashAnchorBoneId;
+        private Vector3 _leashAnchorBoneOffset;
         private Blip _blip;
         private K9State _state = K9State.Dismissed;
         private bool _running = true;
@@ -3787,7 +3793,41 @@ namespace AdvancedK9
             return new Vector3((hand.X+finger.X)*.5f,(hand.Y+finger.Y)*.5f,(hand.Z+finger.Z)*.5f);
         }
 
-        private Vector3 VestLeashPoint(){return _dog.GetOffsetPosition(new Vector3(0f,.14f,.20f));}
+        private void CaptureStandingLeashAnchor()
+        {
+            if(!DogEntityExists()||_leashAnchorDog==_dog)return;
+            // Only calibrate after rest exit has completed. Keep the verified
+            // standing hook position, but express it in the animated upper body.
+            if(_state==K9State.Sitting||_state==K9State.Lying||_state==K9State.InVehicle||_canineAnimationDepth>0)return;
+            _leashAnchorBoneId=0;
+            foreach(int tag in new[]{24818,24817,39317,24816})
+            {
+                int index=NativeFunction.Natives.GET_PED_BONE_INDEX<int>(_dog,tag);
+                if(index<=0)continue;
+                Vector3 origin=NativeFunction.Natives.GET_PED_BONE_COORDS<Vector3>(_dog,tag,0f,0f,0f);
+                Vector3 x=NativeFunction.Natives.GET_PED_BONE_COORDS<Vector3>(_dog,tag,1f,0f,0f)-origin;
+                Vector3 y=NativeFunction.Natives.GET_PED_BONE_COORDS<Vector3>(_dog,tag,0f,1f,0f)-origin;
+                Vector3 z=NativeFunction.Natives.GET_PED_BONE_COORDS<Vector3>(_dog,tag,0f,0f,1f)-origin;
+                Vector3 delta=_dog.GetOffsetPosition(new Vector3(0f,.14f,.20f))-origin;
+                float xx=BoneDot(x,x),yy=BoneDot(y,y),zz=BoneDot(z,z);
+                if(xx<.01f||yy<.01f||zz<.01f)continue;
+                _leashAnchorBoneOffset=new Vector3(BoneDot(delta,x)/xx,BoneDot(delta,y)/yy,BoneDot(delta,z)/zz);
+                _leashAnchorBoneId=tag;
+                break;
+            }
+            _leashAnchorDog=_dog;
+            Game.LogTrivial("AdvancedK9 leash body anchor: boneId="+_leashAnchorBoneId+", local="+_leashAnchorBoneOffset+", supported="+(_leashAnchorBoneId!=0)+".");
+        }
+
+        private static float BoneDot(Vector3 a,Vector3 b){return a.X*b.X+a.Y*b.Y+a.Z*b.Z;}
+
+        private Vector3 VestLeashPoint()
+        {
+            if(_leashAnchorDog!=_dog)CaptureStandingLeashAnchor();
+            if(_leashAnchorDog==_dog&&_leashAnchorBoneId!=0)
+                return NativeFunction.Natives.GET_PED_BONE_COORDS<Vector3>(_dog,_leashAnchorBoneId,_leashAnchorBoneOffset.X,_leashAnchorBoneOffset.Y,_leashAnchorBoneOffset.Z);
+            return _dog.GetOffsetPosition(new Vector3(0f,.14f,.20f));
+        }
 
         private void MaintainLeashRange()
         {
@@ -4245,21 +4285,33 @@ namespace AdvancedK9
                 Game.LogTrivial("AdvancedK9 interior transition: K9 caught up after elevator/teleport change; leash="+leashed+".");return;
             }
 
-            // Entity-offset seeking avoids the follow task's stop/catch-up behaviour.
-            // Keep its live destination while changing pace without route reassignment.
+            // Move toward a short predicted navmesh destination. Moving routes
+            // continue through path updates rather than stopping exactly at an offset.
             NativeFunction.Natives.SET_PED_MAX_MOVE_BLEND_RATIO(_dog,3f);
             NativeFunction.Natives.SET_ENTITY_MAX_SPEED(_dog,16f);
             float movingSpeed=handlerSpeedForFollow(handler);
-            float targetDistance=_dog.DistanceTo(handler.GetOffsetPosition(new Vector3(leashed?-.85f:-1.05f,leashed?.65f:1.15f,0f)));
+            Vector3 target=FollowNavigationTarget(handler,leashed);
+            float targetDistance=_dog.DistanceTo(target);
             float leashSeparation=leashed?VectorDistance(HandLeashPoint(handler),VestLeashPoint()):0f;
             // Increase pace before the leash is taut, without replacing the live route.
             bool catchingUp=leashed?leashSeparation>1.65f:targetDistance>3f;
             NativeFunction.Natives.SET_PED_MOVE_RATE_OVERRIDE(_dog,_profile.Health<=55?.65f:movingSpeed>5.5f?1.35f:catchingUp?1.25f:1.12f);
             bool handlerMoving=movingSpeed>.25f;
             float desiredBlend=FollowMoveBlend(handler,targetDistance);
-            // Changing pace must not cancel and recreate the route.
+            if(leashed&&_profile.Health>55&&handlerMoving)
+                desiredBlend=Math.Max(desiredBlend,leashSeparation>2.1f?3f:leashSeparation>1.25f?2f:1f);
+            // Apply pace between throttled destination updates.
             _followMoveBlend=desiredBlend;
             NativeFunction.Natives.SET_PED_DESIRED_MOVE_BLEND_RATIO(_dog,desiredBlend);
+            uint refreshInterval=leashed&&leashSeparation>2.1f?250u:450u;
+            bool destinationChanged=target.DistanceTo(_followNavigationTarget)>.65f;
+            bool paceChanged=Math.Abs(desiredBlend-_followAssignedBlend)>.25f;
+            bool motionChanged=handlerMoving!=_followNavigationMoving;
+            if(Game.GameTime-_followTaskAssignedAt>=refreshInterval&&(destinationChanged||paceChanged||motionChanged))
+            {
+                IssuePersistentFollow(handler,leashed,motionChanged?"handler start/stop":paceChanged?"navmesh pace update":"moving destination");
+                return;
+            }
             if(Game.GameTime>=_nextFollowTaskSample)
             {
                 _nextFollowTaskSample=Game.GameTime+150;
@@ -4274,22 +4326,21 @@ namespace AdvancedK9
                     return;
                 }
             }
-            // Retain a slower genuine-stall recovery for blocked routes; the short
-            // Build 871 restart loop did not prevent the observed walking pauses.
+            // Record active pauses early; moving destination updates and the slower
+            // blocked-route watchdog own recovery.
             bool paused=handlerMoving&&targetDistance>(leashed?.65f:1.5f)&&handlerSpeedForFollow(_dog)<.35f;
             if(!paused)_followPausedSince=0;
             else if(_followPausedSince==0)_followPausedSince=Game.GameTime;
-            else if(Game.GameTime-_followPausedSince>=1500&&Game.GameTime>=_nextFollowPauseRecovery)
+            else if(Game.GameTime-_followPausedSince>=700&&Game.GameTime>=_nextFollowPauseRecovery)
             {
-                _nextFollowPauseRecovery=Game.GameTime+3000;
-                // An active but blocked/turning task is evidence, not permission to
-                // restart it repeatedly. The existing long blocked-route recovery remains.
+                _nextFollowPauseRecovery=Game.GameTime+1250;
                 Game.LogTrivial("AdvancedK9 follow pause status: task="+_followTaskStatus+", taskAge="+(Game.GameTime-_followTaskAssignedAt)+"ms, target gap="+targetDistance.ToString("0.00")+"m, leash="+leashed+".");
             }
             if(Game.GameTime>=_nextFollowDiagnostic)
             {
                 _nextFollowDiagnostic=Game.GameTime+3000;
-                Game.LogTrivial("AdvancedK9 follow motion: handler="+movingSpeed.ToString("0.00")+", dog="+handlerSpeedForFollow(_dog).ToString("0.00")+", gap="+targetDistance.ToString("0.00")+", blend="+_followMoveBlend.ToString("0.0")+", task="+_followTaskStatus+", taskAge="+(Game.GameTime-_followTaskAssignedAt)+"ms, owner="+_taskOwnerGeneration+", ragdoll="+_dog.IsRagdoll+", leash="+leashed+".");
+                int route=-1;try{route=NativeFunction.Natives.GET_NAVMESH_ROUTE_RESULT<int>(_dog);}catch(CommandSupersededException){throw;}catch{}
+                Game.LogTrivial("AdvancedK9 follow motion: handler="+movingSpeed.ToString("0.00")+", dog="+handlerSpeedForFollow(_dog).ToString("0.00")+", gap="+targetDistance.ToString("0.00")+", blend="+_followMoveBlend.ToString("0.0")+", task="+_followTaskStatus+", taskAge="+(Game.GameTime-_followTaskAssignedAt)+"ms, route="+route+", slack="+(leashed?PatrolLeashMaximumLength-leashSeparation:0f).ToString("0.00")+", owner="+_taskOwnerGeneration+", ragdoll="+_dog.IsRagdoll+", leash="+leashed+".");
             }
             if(Game.GameTime<_nextFollowMotionSample)return;
             _nextFollowMotionSample=Game.GameTime+1000;
@@ -4336,8 +4387,8 @@ namespace AdvancedK9
         {
             try
             {
-                // Both offset native variants use SCRIPT_TASK_GOTO_ENTITY_OFFSET.
-                return NativeFunction.Natives.GET_SCRIPT_TASK_STATUS<int>(_dog,0x87E3E0A8u);
+                // SCRIPT_TASK_FOLLOW_NAV_MESH_TO_COORD.
+                return NativeFunction.Natives.GET_SCRIPT_TASK_STATUS<int>(_dog,0x2A89B8A7u);
             }
             catch(CommandSupersededException){throw;}
             catch{return -1;}
@@ -4347,14 +4398,22 @@ namespace AdvancedK9
         {
             if(handler==null||!handler.Exists()||!DogExists())return;
             _followRouteRecoveryUntil=0;
-            float side=leashed?-.85f:-1.05f;
-            float ahead=leashed?.65f:1.15f;
+            CaptureStandingLeashAnchor();
+            Vector3 target=FollowNavigationTarget(handler,leashed);
             float handlerSpeed=handlerSpeedForFollow(handler);
-            float gap=_dog.DistanceTo(handler.GetOffsetPosition(new Vector3(side,ahead,0f)));
+            float gap=_dog.DistanceTo(target);
             _followMoveBlend=FollowMoveBlend(handler,gap);
+            float separation=leashed?VectorDistance(HandLeashPoint(handler),VestLeashPoint()):0f;
+            if(leashed&&_profile.Health>55&&handlerSpeed>.25f)
+                _followMoveBlend=Math.Max(_followMoveBlend,separation>2.1f?3f:separation>1.25f?2f:1f);
+            _followNavigationMoving=handlerSpeed>.25f;
+            _followNavigationTarget=target;
+            _followAssignedBlend=_followMoveBlend;
             NativeFunction.Natives.SET_ENTITY_MAX_SPEED(_dog,16f);
-            NativeFunction.Natives.SET_PED_MOVE_RATE_OVERRIDE(_dog,_profile.Health<=55?.65f:handlerSpeed>5.5f?1.35f:1.12f);
-            NativeFunction.Natives.TASK_GOTO_ENTITY_OFFSET_XY(_dog,handler,-1,.2f,side,ahead,_followMoveBlend,1);
+            NativeFunction.Natives.SET_PED_MOVE_RATE_OVERRIDE(_dog,_profile.Health<=55?.65f:handlerSpeed>5.5f?1.35f:separation>1.65f?1.25f:1.12f);
+            // ENAV_NO_STOPPING avoids braking during route calculation/arrival;
+            // object and ped avoidance remain enabled. Stopped handlers use normal arrival.
+            NativeFunction.Natives.TASK_FOLLOW_NAV_MESH_TO_COORD(_dog,target.X,target.Y,target.Z,_followMoveBlend,-1,_followNavigationMoving?.65f:.55f,_followNavigationMoving?1:0,40000f);
             _followTaskAssignedAt=Game.GameTime;
             _followTaskInactiveSince=0;
             _followTaskStatus=0;
@@ -4362,12 +4421,29 @@ namespace AdvancedK9
             Game.LogTrivial("AdvancedK9 follow task assigned: reason="+reason+", blend="+_followMoveBlend.ToString("0.0")+", owner="+_taskOwnerGeneration+", leash="+leashed+".");
             NativeFunction.Natives.SET_PED_KEEP_TASK(_dog,true);
             NativeFunction.Natives.SET_PED_MAX_MOVE_BLEND_RATIO(_dog,3f);
-            _followMotionSamplePosition=_dog.Position;
-            _followMotionSampleReady=true;
-            _nextFollowMotionSample=Game.GameTime+1000;
-            _followStuckSince=0;
-            _followPausedSince=0;
-            _nextFollowPauseRecovery=Game.GameTime+3000;
+            if(!reason.StartsWith("moving destination")&&!reason.StartsWith("navmesh pace")&&!reason.StartsWith("handler start/stop"))
+            {
+                _followMotionSamplePosition=_dog.Position;
+                _followMotionSampleReady=true;
+                _nextFollowMotionSample=Game.GameTime+1000;
+                _followStuckSince=0;
+                _followPausedSince=0;
+                _nextFollowPauseRecovery=Game.GameTime+1250;
+            }
+        }
+
+        private Vector3 FollowNavigationTarget(Ped handler,bool leashed)
+        {
+            Vector3 target=handler.GetOffsetPosition(new Vector3(leashed?-.85f:-1.05f,leashed?.65f:1.15f,0f));
+            Vector3 velocity=NativeFunction.Natives.GET_ENTITY_VELOCITY<Vector3>(handler);
+            float horizontal=(float)Math.Sqrt(velocity.X*velocity.X+velocity.Y*velocity.Y);
+            if(horizontal>.25f)
+            {
+                float lead=Math.Min(leashed?.85f:1.5f,horizontal*.45f);
+                target.X+=velocity.X/horizontal*lead;
+                target.Y+=velocity.Y/horizontal*lead;
+            }
+            return target;
         }
 
         private void BeginLongDistanceRecall(Ped handler)

@@ -1,5 +1,13 @@
 # Changelog
 
+## Build 874 — moving follow destination and posture-aware leash anchor (0.24.0.88)
+
+- Replace offset seeking with a short predicted navmesh destination beside/ahead of the handler. Throttle destination updates; moving routes use no-stopping navigation, stopped handlers use a normal arrival radius. Object/ped avoidance remains enabled.
+- Increase catch-up pace based on measured hand-to-vest separation before the 3.50m leash limit. Keep the existing maximum length, attachment art and out-of-range safety release.
+- Convert the verified standing vest-hook position to a supported upper-body bone offset, then evaluate that bone each visual update so the latch follows sitting, lying and posture transitions. Log unsupported skeleton fallback explicitly.
+- Add navmesh result and remaining leash slack to motion diagnostics.
+- Preserve confirmed apprehension, vehicle and kennel routines. These follow/anchor changes require in-game validation; this build is not a claim that hesitation is resolved.
+
 ## Build 873 — uninterrupted follow pace and task diagnostics (0.24.0.87)
 
 - Change walk/jog/run pace without replacing the active handler route.
