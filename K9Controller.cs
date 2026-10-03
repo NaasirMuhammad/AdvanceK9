@@ -39,13 +39,14 @@ namespace AdvancedK9
         private int _vehicleBodyBone=-1;
         private uint _vehiclePoseModel;
         private bool _vehiclePoseReady;
-        private bool _followHandlerMoving;
-        private uint _nextFollowWake;
         private uint _followPausedSince;
         private uint _nextFollowPauseRecovery;
         private float _followMoveBlend;
-        private uint _nextFollowPaceChange;
         private uint _nextFollowDiagnostic;
+        private int _followTaskStatus=-1;
+        private uint _nextFollowTaskSample;
+        private uint _followTaskAssignedAt;
+        private uint _followTaskInactiveSince;
         private Blip _blip;
         private K9State _state = K9State.Dismissed;
         private bool _running = true;
@@ -4217,7 +4218,7 @@ namespace AdvancedK9
             bool leashed=_state==K9State.Leashed;
             if(_state!=K9State.Following&&_state!=K9State.Heeling&&!leashed)
             {
-                _followPausedSince=0;_followHandlerMoving=false;
+                _followPausedSince=0;
                 return;
             }
             var handler=Game.LocalPlayer.Character;if(handler==null||!handler.Exists())return;
@@ -4245,7 +4246,7 @@ namespace AdvancedK9
             }
 
             // Entity-offset seeking avoids the follow task's stop/catch-up behaviour.
-            // Keep its live destination; only change task when the pace band changes.
+            // Keep its live destination while changing pace without route reassignment.
             NativeFunction.Natives.SET_PED_MAX_MOVE_BLEND_RATIO(_dog,3f);
             NativeFunction.Natives.SET_ENTITY_MAX_SPEED(_dog,16f);
             float movingSpeed=handlerSpeedForFollow(handler);
@@ -4256,16 +4257,23 @@ namespace AdvancedK9
             NativeFunction.Natives.SET_PED_MOVE_RATE_OVERRIDE(_dog,_profile.Health<=55?.65f:movingSpeed>5.5f?1.35f:catchingUp?1.25f:1.12f);
             bool handlerMoving=movingSpeed>.25f;
             float desiredBlend=FollowMoveBlend(handler,targetDistance);
-            if(Math.Abs(desiredBlend-_followMoveBlend)>.25f&&Game.GameTime>=_nextFollowPaceChange)
-                IssuePersistentFollow(handler,leashed);
-            // Wake a standing follower once on the handler's movement edge, rather
-            // than waiting until the leash is nearly exhausted. Never touches rest.
-            if(handlerMoving&&!_followHandlerMoving&&Game.GameTime>=_nextFollowWake&&_followRouteRecoveryUntil==0)
+            // Changing pace must not cancel and recreate the route.
+            _followMoveBlend=desiredBlend;
+            NativeFunction.Natives.SET_PED_DESIRED_MOVE_BLEND_RATIO(_dog,desiredBlend);
+            if(Game.GameTime>=_nextFollowTaskSample)
             {
-                _nextFollowWake=Game.GameTime+750;
-                if(handlerSpeedForFollow(_dog)<.35f)IssuePersistentFollow(handler,leashed);
+                _nextFollowTaskSample=Game.GameTime+150;
+                _followTaskStatus=ReadFollowTaskStatus();
+                bool inactive=_followTaskStatus==3||_followTaskStatus==7;
+                bool needsRoute=targetDistance>.5f&&(handlerMoving||targetDistance>1f);
+                if(!inactive||!needsRoute)_followTaskInactiveSince=0;
+                else if(_followTaskInactiveSince==0)_followTaskInactiveSince=Game.GameTime;
+                else if(Game.GameTime-_followTaskInactiveSince>=150&&Game.GameTime-_followTaskAssignedAt>=400)
+                {
+                    IssuePersistentFollow(handler,leashed,"finished task; status="+_followTaskStatus);
+                    return;
+                }
             }
-            _followHandlerMoving=handlerMoving;
             // Retain a slower genuine-stall recovery for blocked routes; the short
             // Build 871 restart loop did not prevent the observed walking pauses.
             bool paused=handlerMoving&&targetDistance>(leashed?.65f:1.5f)&&handlerSpeedForFollow(_dog)<.35f;
@@ -4274,14 +4282,14 @@ namespace AdvancedK9
             else if(Game.GameTime-_followPausedSince>=1500&&Game.GameTime>=_nextFollowPauseRecovery)
             {
                 _nextFollowPauseRecovery=Game.GameTime+3000;
-                IssuePersistentFollow(handler,leashed);
-                Game.LogTrivial("AdvancedK9 follow pause recovery: target gap="+targetDistance.ToString("0.00")+"m, leash="+leashed+".");
-                return;
+                // An active but blocked/turning task is evidence, not permission to
+                // restart it repeatedly. The existing long blocked-route recovery remains.
+                Game.LogTrivial("AdvancedK9 follow pause status: task="+_followTaskStatus+", taskAge="+(Game.GameTime-_followTaskAssignedAt)+"ms, target gap="+targetDistance.ToString("0.00")+"m, leash="+leashed+".");
             }
             if(Game.GameTime>=_nextFollowDiagnostic)
             {
                 _nextFollowDiagnostic=Game.GameTime+3000;
-                Game.LogTrivial("AdvancedK9 follow motion: handler="+movingSpeed.ToString("0.00")+", dog="+handlerSpeedForFollow(_dog).ToString("0.00")+", gap="+targetDistance.ToString("0.00")+", blend="+_followMoveBlend.ToString("0.0")+", leash="+leashed+".");
+                Game.LogTrivial("AdvancedK9 follow motion: handler="+movingSpeed.ToString("0.00")+", dog="+handlerSpeedForFollow(_dog).ToString("0.00")+", gap="+targetDistance.ToString("0.00")+", blend="+_followMoveBlend.ToString("0.0")+", task="+_followTaskStatus+", taskAge="+(Game.GameTime-_followTaskAssignedAt)+"ms, owner="+_taskOwnerGeneration+", ragdoll="+_dog.IsRagdoll+", leash="+leashed+".");
             }
             if(Game.GameTime<_nextFollowMotionSample)return;
             _nextFollowMotionSample=Game.GameTime+1000;
@@ -4309,7 +4317,7 @@ namespace AdvancedK9
             if(!leashed&&distance>18f)BeginLongDistanceRecall(handler);
             else IssuePersistentFollow(handler,leashed);
             ApplyAnimalPedSafeguards();
-            Game.LogTrivial("AdvancedK9 follow recovery: route rebuilt after K9 moved less than 0.3m for 2.5 seconds at "+distance.ToString("0.0")+"m from the handler.");
+            Game.LogTrivial("AdvancedK9 follow recovery: route rebuilt after prolonged movement below 0.3m per sample at "+distance.ToString("0.0")+"m from the handler.");
         }
 
         private static float handlerSpeedForFollow(Ped handler){try{return handler==null||!handler.Exists()?0f:NativeFunction.Natives.GET_ENTITY_SPEED<float>(handler);}catch{return 0f;}}
@@ -4324,7 +4332,18 @@ namespace AdvancedK9
             return 1f;
         }
 
-        private void IssuePersistentFollow(Ped handler,bool leashed)
+        private int ReadFollowTaskStatus()
+        {
+            try
+            {
+                // Both offset native variants use SCRIPT_TASK_GOTO_ENTITY_OFFSET.
+                return NativeFunction.Natives.GET_SCRIPT_TASK_STATUS<int>(_dog,0x87E3E0A8u);
+            }
+            catch(CommandSupersededException){throw;}
+            catch{return -1;}
+        }
+
+        private void IssuePersistentFollow(Ped handler,bool leashed,string reason="command or blocked-route recovery")
         {
             if(handler==null||!handler.Exists()||!DogExists())return;
             _followRouteRecoveryUntil=0;
@@ -4333,10 +4352,14 @@ namespace AdvancedK9
             float handlerSpeed=handlerSpeedForFollow(handler);
             float gap=_dog.DistanceTo(handler.GetOffsetPosition(new Vector3(side,ahead,0f)));
             _followMoveBlend=FollowMoveBlend(handler,gap);
-            _nextFollowPaceChange=Game.GameTime+1000;
             NativeFunction.Natives.SET_ENTITY_MAX_SPEED(_dog,16f);
             NativeFunction.Natives.SET_PED_MOVE_RATE_OVERRIDE(_dog,_profile.Health<=55?.65f:handlerSpeed>5.5f?1.35f:1.12f);
             NativeFunction.Natives.TASK_GOTO_ENTITY_OFFSET_XY(_dog,handler,-1,.2f,side,ahead,_followMoveBlend,1);
+            _followTaskAssignedAt=Game.GameTime;
+            _followTaskInactiveSince=0;
+            _followTaskStatus=0;
+            _nextFollowTaskSample=Game.GameTime+150;
+            Game.LogTrivial("AdvancedK9 follow task assigned: reason="+reason+", blend="+_followMoveBlend.ToString("0.0")+", owner="+_taskOwnerGeneration+", leash="+leashed+".");
             NativeFunction.Natives.SET_PED_KEEP_TASK(_dog,true);
             NativeFunction.Natives.SET_PED_MAX_MOVE_BLEND_RATIO(_dog,3f);
             _followMotionSamplePosition=_dog.Position;

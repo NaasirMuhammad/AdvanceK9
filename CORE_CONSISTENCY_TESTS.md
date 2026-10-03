@@ -1,6 +1,6 @@
-# AdvancedK9 Build 872 — core consistency checks
+# AdvancedK9 Build 873 — core consistency checks
 
-Internal version 0.24.0.86. This is a focused test build after the released v0.24.0 beta baseline; it is not yet certified in game.
+Internal version 0.24.0.87. This is a focused test build after the released v0.24.0 beta baseline; it is not yet certified in game.
 
 1. Start an area, vehicle and building search. During navigation, sniffing and the final indication, issue Follow, Stay, Sit, then a different search. The latest accepted task must remain in control; old workers must not restore a previous route, sit or alert later.
 2. Start a track and interrupt it with Sit, Stay, Recall, a search and Enter Vehicle. Repeat while Rex is turning or checking direction. Test Inspect, camera and EMS requests during tracking: these must leave it active.
@@ -53,3 +53,11 @@ At the large kennel, repeat deploy -> Sit/Lie/Follow -> return at least ten time
 - Apprehend a valid active suspect nearby and at distance. Approach should start without stationary combat barks; controlled takedown only at close, clear contact. A suspect behind a wall or above/below the dog must not be taken down remotely.
 - Cancel approach with Sit/Follow and test suspect surrender before contact. Confirm no stale bite; repeat nonlethal hold, Release and Dispatch call EMS.
 - Start apprehension from Sit/Lie Down: get-up must finish before running. Vehicles and kennel routines require a short regression check.
+
+## Build 873 targeted checks
+
+- Repeat continuous walking, turns, stops and walk/jog/run changes both leashed and unleashed. Rex should follow without periodic route resets or ordinary-walk leash release.
+- Capture the full RagePluginHook.log if a pause occurs. Compare `follow task assigned`, `follow pause status` and `follow motion`; status 0/1/2 is waiting/performing/dormant, 3/7 is vacant/finished.
+- Pace changes alone must not produce assignment logs. Finished-task assignments should occur only when movement is still needed; normal handler stops must not produce a restart loop.
+- Test a real obstacle and interrupt Follow with Sit/Lie/search. Get-up must complete before following, and the newest command must hold.
+- Apprehension was confirmed working by the user in Build 872 and its implementation is unchanged. Perform a short regression check alongside vehicle and kennel transitions.

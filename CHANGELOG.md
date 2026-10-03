@@ -1,5 +1,12 @@
 # Changelog
 
+## Build 873 — uninterrupted follow pace and task diagnostics (0.24.0.87)
+
+- Change walk/jog/run pace without replacing the active handler route.
+- Sample the offset task status; restart a completed/vacant route only after consecutive inactive samples and an assignment grace period.
+- Log route assignment reason, task status/age, command owner, dog speed and ragdoll state to diagnose remaining pauses. Short active pauses no longer trigger repeated task reassignment; prolonged blocked-route recovery remains.
+- Keep the user-confirmed Build 872 apprehension implementation unchanged. Follow improvements require in-game validation; leash range and endpoints remain unchanged.
+
 ## Build 872 — entity seeking and direct apprehension (0.24.0.86)
 
 - Replaces normal follow/heel movement with live entity-offset seeking; selects walk, jog and run with gap/pace hysteresis. Retains side/front offsets and the existing leash limit.
