@@ -1,6 +1,6 @@
-# AdvancedK9 Build 871 — core consistency checks
+# AdvancedK9 Build 872 — core consistency checks
 
-Internal version 0.24.0.85. This is a focused test build after the released v0.24.0 beta baseline; it is not yet certified in game.
+Internal version 0.24.0.86. This is a focused test build after the released v0.24.0 beta baseline; it is not yet certified in game.
 
 1. Start an area, vehicle and building search. During navigation, sniffing and the final indication, issue Follow, Stay, Sit, then a different search. The latest accepted task must remain in control; old workers must not restore a previous route, sit or alert later.
 2. Start a track and interrupt it with Sit, Stay, Recall, a search and Enter Vehicle. Repeat while Rex is turning or checking direction. Test Inspect, camera and EMS requests during tracking: these must leave it active.
@@ -45,3 +45,11 @@ At the large kennel, repeat deploy -> Sit/Lie/Follow -> return at least ten time
 - Sit and Lie Down while following: the latest command must hold, and get-up must finish before following resumes. Repeat the confirmed vehicle-search interruption test; no delayed result notification.
 - Capture video and RagePluginHook.log. `follow pause recovery` should identify measured stalls rather than appear repeatedly during smooth movement.
 - Leash endpoints, length and animation assets remain unchanged; out-of-range safety release remains for actual unreachable separation.
+
+## Build 872 targeted checks
+
+- Repeat the failed Build 871 sidewalk route, both leashed and unleashed. Walk/jog/sprint, turn and stop. Dog must keep moving without regular stops; must settle when handler stops.
+- Test a fence or parked vehicle between dog and handler; seeking must not clip/teleport through the obstacle. Capture follow motion diagnostics plus any recovery.
+- Apprehend a valid active suspect nearby and at distance. Approach should start without stationary combat barks; controlled takedown only at close, clear contact. A suspect behind a wall or above/below the dog must not be taken down remotely.
+- Cancel approach with Sit/Follow and test suspect surrender before contact. Confirm no stale bite; repeat nonlethal hold, Release and Dispatch call EMS.
+- Start apprehension from Sit/Lie Down: get-up must finish before running. Vehicles and kennel routines require a short regression check.

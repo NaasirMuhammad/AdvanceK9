@@ -1,5 +1,13 @@
 # Changelog
 
+## Build 872 — entity seeking and direct apprehension (0.24.0.86)
+
+- Replaces normal follow/heel movement with live entity-offset seeking; selects walk, jog and run with gap/pace hysteresis. Retains side/front offsets and the existing leash limit.
+- Removes the rapid Build 871 pause-retry loop in favour of slower blocked-route recovery and adds motion diagnostics.
+- Apprehension approaches the live suspect without TASK_COMBAT_PED preparation, and activates the existing controlled takedown at close, vertically aligned, unobstructed contact. Removes the 4.5-second proximity fallback wait.
+- Preserves suspect-compliance cancellation, nonlethal health floor, controlled hold and EMS/release flow; resting get-up completes before deployment.
+- Requires in-game confirmation; custom dog, sniff and alert remain deferred.
+
 ## Build 871 — follow continuity (0.24.0.85)
 
 - Detects a standing follower that stops while the handler continues moving, with a short measured-pause watchdog instead of waiting several seconds. Healthy moving tasks are left active.
