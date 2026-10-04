@@ -1,5 +1,13 @@
 # Changelog
 
+## Build 875 — longer leash asset, torso hook and bark presentation (0.24.0.89)
+
+- Package the rebuilt 6m leash DLC. Calibrate the retract clip to 0.48–6.00m while using a separate 4.50m patrol/render/release limit; preserve the handler loop, fixed dog-side latch and independent colors.
+- Prefer a thoracic torso bone for the vest hook, preserving its verified standing position while changing how it follows lying neck/body movement. Visual placement still requires testing.
+- Manual Bark now plays enter, bark and exit clips using the asset durations, requests animal BARK audio, and restores ordinary following only after exit completes. Latest-command ownership and leash visuals remain active during playback.
+- Internal alert sounds use the animal vocalization native without adding full-body animations to search/containment routines. Audible output requires in-game validation.
+- Preserve the Build 874 follow controller, which the user reported substantially improved; one out-of-range release remained. Apprehension, vehicle and kennel routines are unchanged.
+
 ## Build 874 — moving follow destination and posture-aware leash anchor (0.24.0.88)
 
 - Replace offset seeking with a short predicted navmesh destination beside/ahead of the handler. Throttle destination updates; moving routes use no-stopping navigation, stopped handlers use a normal arrival radius. Object/ped avoidance remains enabled.

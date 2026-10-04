@@ -91,7 +91,8 @@ namespace AdvancedK9
         private bool _leashAttached;
         private bool LeashActive=>_leashAttached;
         private const float PatrolLeashMinimumLength=.48f;
-        private const float PatrolLeashMaximumLength=3.5f;
+        private const float PatrolLeashMaximumLength=4.5f;
+        private const float LeashAssetMaximumLength=6f;
         private bool _workingLeashed;
         private uint _nextLeashFollow;
         private uint _nextLeashVisualUpdate;
@@ -965,7 +966,7 @@ namespace AdvancedK9
                     case K9Command.DoorPop: DoorPop(); break;
                     case K9Command.Release: ReleaseControlledBite(); break;
                     case K9Command.Guard: Guard(); break;
-                    case K9Command.Bark: Bark(2); break;
+                    case K9Command.Bark: BarkAlert(); break;
                     case K9Command.EnterVehicle: EnterVehicle(); break;
                     case K9Command.ExitVehicle: ExitVehicle(); break;
                     case K9Command.Fetch: Fetch(); break;
@@ -3677,7 +3678,7 @@ namespace AdvancedK9
                 NativeFunction.Natives.SET_ENTITY_ANIM_SPEED(_animatedLeash,dictionary,clip,0f);
                 stage="initial alignment";
                 UpdateAnimatedLeash(hand,vest);
-                Game.LogTrivial("AdvancedK9 leash: v1.7 animated lead active; color="+_config.LeashPropColor+".");
+                Game.LogTrivial("AdvancedK9 leash: 6m animated lead active (4.5m patrol limit); color="+_config.LeashPropColor+".");
                 return true;
             }
             catch(Exception ex) when (!(ex is CommandSupersededException))
@@ -3710,7 +3711,7 @@ namespace AdvancedK9
             NativeFunction.Natives.SET_ENTITY_COORDS_NO_OFFSET(_animatedLeash,origin.X,origin.Y,origin.Z,false,false,false);
             NativeFunction.Natives.SET_ENTITY_ROTATION(_animatedLeash,0f,pitch,yaw,2,true);
             float clamped=Math.Max(PatrolLeashMinimumLength,Math.Min(PatrolLeashMaximumLength,distance));
-            float phase=(PatrolLeashMaximumLength-clamped)/(PatrolLeashMaximumLength-PatrolLeashMinimumLength);
+            float phase=(LeashAssetMaximumLength-clamped)/(LeashAssetMaximumLength-PatrolLeashMinimumLength);
             // The evaluated mesh trails the requested clip time by a few
             // hundredths of a phase on this asset. Leave that much extra lead
             // so its loop lands at the hand instead of stopping short.
@@ -3800,7 +3801,9 @@ namespace AdvancedK9
             // standing hook position, but express it in the animated upper body.
             if(_state==K9State.Sitting||_state==K9State.Lying||_state==K9State.InVehicle||_canineAnimationDepth>0)return;
             _leashAnchorBoneId=0;
-            foreach(int tag in new[]{24818,24817,39317,24816})
+            // Prefer the thoracic torso over the neck-adjacent upper spine so
+            // the hook follows the vest when the neck folds during sleep.
+            foreach(int tag in new[]{24817,24816,24818,39317})
             {
                 int index=NativeFunction.Natives.GET_PED_BONE_INDEX<int>(_dog,tag);
                 if(index<=0)continue;
@@ -3840,7 +3843,7 @@ namespace AdvancedK9
                 DeleteLeashRope();
                 Follow();
                 ActionNotification("~y~K9 leash released at full extension.~s~ Recall and reattach when close.");
-                Game.LogTrivial("AdvancedK9 leash: released at "+separation.ToString("0.00")+"m instead of rendering beyond 3.50m.");
+                Game.LogTrivial("AdvancedK9 leash: released at "+separation.ToString("0.00")+"m instead of rendering beyond 4.50m.");
                 return;
             }
             // Follow recovery owns the single stall watchdog. Do not assign another
@@ -4777,11 +4780,61 @@ namespace AdvancedK9
                 .OrderBy(p => p.DistanceTo(officer)).FirstOrDefault();
         }
 
+        private void PlayDogBarkSound()
+        {
+            EnsureTaskOwnership();
+            if(!DogExists())return;
+            uint model=NativeFunction.Natives.GET_ENTITY_MODEL<uint>(_dog);
+            int animalType=model==NativeFunction.Natives.GET_HASH_KEY<uint>("a_c_rottweiler")?3:2;
+            NativeFunction.Natives.PLAY_ANIMAL_VOCALIZATION(_dog,animalType,"BARK");
+        }
+
+        private void BarkAlert()
+        {
+            if(!DogExists())return;
+            K9State previous=_state;
+            bool resumeFollow=previous==K9State.Following||previous==K9State.Heeling||previous==K9State.Leashed;
+            _state=K9State.Staying;
+            _canineAnimationDepth++;
+            try
+            {
+                if(!PlayCanineClip(_dog,"creatures@rottweiler@amb@world_dog_barking@enter","enter",1000,false))
+                    Game.LogTrivial("AdvancedK9 bark: enter animation unavailable.");
+                const string dictionary="creatures@rottweiler@amb@world_dog_barking@idle_a",clip="idle_a";
+                if(PlayCanineClip(_dog,dictionary,clip,-1,false))
+                {
+                    float seconds=NativeFunction.Natives.GET_ANIM_DURATION<float>(dictionary,clip);
+                    int duration=seconds>0f&&seconds<15f?(int)Math.Ceiling(seconds*1000f):1800;
+                    uint start=Game.GameTime,end=start+(uint)duration;
+                    bool observed=false,secondBark=false;
+                    PlayDogBarkSound();
+                    while(DogExists()&&Game.GameTime<end)
+                    {
+                        bool playing=NativeFunction.Natives.IS_ENTITY_PLAYING_ANIM<bool>(_dog,dictionary,clip,3);
+                        if(playing)observed=true;
+                        else if(observed)break;
+                        if(!secondBark&&Game.GameTime-start>=(uint)(duration/2)){PlayDogBarkSound();secondBark=true;}
+                        WaitOwned(20);
+                    }
+                    Game.LogTrivial("AdvancedK9 bark: visible clip observed="+observed+"; animal BARK audio requested.");
+                }
+                else{Bark(2);Game.LogTrivial("AdvancedK9 bark: animation unavailable; animal-audio-only fallback.");}
+                if(DogExists())PlayCanineClip(_dog,"creatures@rottweiler@amb@world_dog_barking@exit","exit",1000,false);
+                if(DogExists()&&resumeFollow)
+                {
+                    _state=LeashActive?K9State.Leashed:previous;
+                    IssuePersistentFollow(Game.LocalPlayer.Character,LeashActive,"bark completed");
+                }
+                else if(DogExists())_state=K9State.Staying;
+            }
+            finally{_canineAnimationDepth--;}
+        }
+
         private void Bark(int count)
         {
             for (var i = 0; i < count && DogExists(); i++)
             {
-                NativeFunction.Natives.PLAY_PED_AMBIENT_SPEECH_NATIVE(_dog, "BARK", "SPEECH_PARAMS_FORCE");
+                PlayDogBarkSound();
                 WaitOwned(450);
             }
         }

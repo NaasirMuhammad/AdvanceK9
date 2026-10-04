@@ -1,6 +1,6 @@
-# AdvancedK9 Build 874 — core consistency checks
+# AdvancedK9 Build 875 — core consistency checks
 
-Internal version 0.24.0.88. This is a focused test build after the released v0.24.0 beta baseline; it is not yet certified in game.
+Internal version 0.24.0.89. This is a focused test build after the released v0.24.0 beta baseline; it is not yet certified in game.
 
 1. Start an area, vehicle and building search. During navigation, sniffing and the final indication, issue Follow, Stay, Sit, then a different search. The latest accepted task must remain in control; old workers must not restore a previous route, sit or alert later.
 2. Start a track and interrupt it with Sit, Stay, Recall, a search and Enter Vehicle. Repeat while Rex is turning or checking direction. Test Inspect, camera and EMS requests during tracking: these must leave it active.
@@ -70,3 +70,11 @@ At the large kennel, repeat deploy -> Sit/Lie/Follow -> return at least ten time
 - Check `leash body anchor` for a nonzero supported boneId. A supported=False result means the skeleton fallback still uses the standing root offset and needs model-specific inspection.
 - Capture video and the full log. Moving-destination assignment logs are expected; `follow motion` includes task, route and remaining slack. Compare physical hesitation with those measurements.
 - Interrupt follow with Sit/Lie/search. Get-up must complete before navigation resumes. Apprehension, vehicle entry/exit and both kennel types need a short regression check; their implementations are unchanged.
+
+## Build 875 targeted checks
+
+- Install the included updated DLC and restart GTA. Walk/turn/jog leashed; confirm both endpoints stay attached as separation crosses 3.5m and approaches 4.5m. Retraction uses the 6m asset range; patrol safety release remains at 4.5m.
+- Stand -> Sit -> Lie -> Stand while leashed. Standing/sitting placement must remain correct and the lying latch must stay on the vest hook instead of bare neck/skin. Record a close side view if correction is needed.
+- Say Rex bark/speak or use menu Bark. Confirm visible enter/idle/exit, audible bark and no indefinite loop. Following resumes only after completion; bark from rest must finish get-up first.
+- Interrupt bark with Sit/Follow and confirm the newest command holds. Test internal positive alerts for audible dog vocalization without new full-body task replacement.
+- Short regression: confirmed follow, apprehension, vehicle and both kennel types. Check animated leash color variants after restart.
