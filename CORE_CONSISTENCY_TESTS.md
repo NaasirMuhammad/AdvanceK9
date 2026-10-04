@@ -1,6 +1,6 @@
-# AdvancedK9 Build 875 — core consistency checks
+# AdvancedK9 Build 876 — core consistency checks
 
-Internal version 0.24.0.89. This is a focused test build after the released v0.24.0 beta baseline; it is not yet certified in game.
+Internal version 0.24.0.90. This is a focused test build after the released v0.24.0 beta baseline; it is not yet certified in game.
 
 1. Start an area, vehicle and building search. During navigation, sniffing and the final indication, issue Follow, Stay, Sit, then a different search. The latest accepted task must remain in control; old workers must not restore a previous route, sit or alert later.
 2. Start a track and interrupt it with Sit, Stay, Recall, a search and Enter Vehicle. Repeat while Rex is turning or checking direction. Test Inspect, camera and EMS requests during tracking: these must leave it active.
@@ -78,3 +78,11 @@ At the large kennel, repeat deploy -> Sit/Lie/Follow -> return at least ten time
 - Say Rex bark/speak or use menu Bark. Confirm visible enter/idle/exit, audible bark and no indefinite loop. Following resumes only after completion; bark from rest must finish get-up first.
 - Interrupt bark with Sit/Follow and confirm the newest command holds. Test internal positive alerts for audible dog vocalization without new full-body task replacement.
 - Short regression: confirmed follow, apprehension, vehicle and both kennel types. Check animated leash color variants after restart.
+
+## Build 876 targeted checks
+
+- On duty with Rex undeployed, stand at his kennel, hold the configured push-to-talk key and say Deploy K9. Confirm recording/recognition and natural kennel deployment. Say Kennel up to return, then deploy by voice again.
+- Other dog commands while undeployed must not create a dog away from a kennel. Off-duty voice activation remains blocked by duty lifecycle.
+- Compare walk -> jog -> sprint -> stop, straight and turning, while leashed. Check faster catch-up without sliding/overshoot; genuine separation beyond 4.5m still releases. Repeat Sit/Lie get-up before running.
+- Capture a close side-view clip of Rex standing and lying with the vest hook and latch visible, plus full log. `leash settled pose` and mesh endpoint lines record each pose even if span changes are small. Lying placement is not yet fixed.
+- Bark, vehicle/kennel transitions and apprehension need only a short regression check; their implementation and the 6m asset are unchanged.

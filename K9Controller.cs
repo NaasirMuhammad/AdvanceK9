@@ -53,6 +53,9 @@ namespace AdvancedK9
         private Ped _leashAnchorDog;
         private int _leashAnchorBoneId;
         private Vector3 _leashAnchorBoneOffset;
+        private K9State _leashMeasuredPose=K9State.Dismissed;
+        private uint _leashPoseChangedAt;
+        private bool _leashPoseMeasured;
         private Blip _blip;
         private K9State _state = K9State.Dismissed;
         private bool _running = true;
@@ -468,7 +471,9 @@ namespace AdvancedK9
         private void HandlePushToTalk()
         {
             if (!_voiceActive || _voice == null || !_voice.IsAvailable) return;
-            bool down = DogExists() && Game.IsKeyDownRightNow(_config.PushToTalkKey);
+            // On-duty PTT must work before a dog exists so Deploy K9 is reachable.
+            // DrainVoice still accepts only deployment while undeployed.
+            bool down = Game.IsKeyDownRightNow(_config.PushToTalkKey);
             if (down && !_pushToTalkHeld) { _voiceAimedTarget=GetValidAimedSuspect(false); _voice.StartRecording(); }
             else if(down)
             {
@@ -3859,6 +3864,16 @@ namespace AdvancedK9
                 var handler=Game.LocalPlayer.Character;
                 Vector3 hand=HandLeashPoint(handler);
                 Vector3 vest=VestLeashPoint();
+                if(_state!=_leashMeasuredPose)
+                {
+                    _leashMeasuredPose=_state;_leashPoseChangedAt=Game.GameTime;_leashPoseMeasured=false;
+                }
+                if(!_leashPoseMeasured&&Game.GameTime-_leashPoseChangedAt>=800)
+                {
+                    _leashPoseMeasured=true;
+                    Game.LogTrivial("AdvancedK9 leash settled pose: state="+_state+", boneId="+_leashAnchorBoneId+", local="+_leashAnchorBoneOffset+", hook="+vest+", root="+_dog.Position+".");
+                    _leashEndpointLogged=false;
+                }
                 if(_animatedLeash!=null&&_animatedLeash.Exists()){UpdateAnimatedLeash(hand,vest);return;}
                 if(VectorDistance(hand,vest)<=PatrolLeashMaximumLength){CreateAnimatedLeash(hand,vest);return;}
                 if(_leashRope<0)return;
@@ -4298,7 +4313,7 @@ namespace AdvancedK9
             float leashSeparation=leashed?VectorDistance(HandLeashPoint(handler),VestLeashPoint()):0f;
             // Increase pace before the leash is taut, without replacing the live route.
             bool catchingUp=leashed?leashSeparation>1.65f:targetDistance>3f;
-            NativeFunction.Natives.SET_PED_MOVE_RATE_OVERRIDE(_dog,_profile.Health<=55?.65f:movingSpeed>5.5f?1.35f:catchingUp?1.25f:1.12f);
+            NativeFunction.Natives.SET_PED_MOVE_RATE_OVERRIDE(_dog,_profile.Health<=55?.65f:leashed&&movingSpeed>4.5f?1.55f:leashed&&movingSpeed>3f?1.35f:movingSpeed>5.5f?1.35f:catchingUp?1.25f:1.12f);
             bool handlerMoving=movingSpeed>.25f;
             float desiredBlend=FollowMoveBlend(handler,targetDistance);
             if(leashed&&_profile.Health>55&&handlerMoving)
@@ -4306,7 +4321,7 @@ namespace AdvancedK9
             // Apply pace between throttled destination updates.
             _followMoveBlend=desiredBlend;
             NativeFunction.Natives.SET_PED_DESIRED_MOVE_BLEND_RATIO(_dog,desiredBlend);
-            uint refreshInterval=leashed&&leashSeparation>2.1f?250u:450u;
+            uint refreshInterval=leashed&&movingSpeed>3f?200u:leashed&&leashSeparation>2.1f?250u:450u;
             bool destinationChanged=target.DistanceTo(_followNavigationTarget)>.65f;
             bool paceChanged=Math.Abs(desiredBlend-_followAssignedBlend)>.25f;
             bool motionChanged=handlerMoving!=_followNavigationMoving;
@@ -4413,7 +4428,7 @@ namespace AdvancedK9
             _followNavigationTarget=target;
             _followAssignedBlend=_followMoveBlend;
             NativeFunction.Natives.SET_ENTITY_MAX_SPEED(_dog,16f);
-            NativeFunction.Natives.SET_PED_MOVE_RATE_OVERRIDE(_dog,_profile.Health<=55?.65f:handlerSpeed>5.5f?1.35f:separation>1.65f?1.25f:1.12f);
+            NativeFunction.Natives.SET_PED_MOVE_RATE_OVERRIDE(_dog,_profile.Health<=55?.65f:leashed&&handlerSpeed>4.5f?1.55f:leashed&&handlerSpeed>3f?1.35f:handlerSpeed>5.5f?1.35f:separation>1.65f?1.25f:1.12f);
             // ENAV_NO_STOPPING avoids braking during route calculation/arrival;
             // object and ped avoidance remain enabled. Stopped handlers use normal arrival.
             NativeFunction.Natives.TASK_FOLLOW_NAV_MESH_TO_COORD(_dog,target.X,target.Y,target.Z,_followMoveBlend,-1,_followNavigationMoving?.65f:.55f,_followNavigationMoving?1:0,40000f);
@@ -4442,7 +4457,7 @@ namespace AdvancedK9
             float horizontal=(float)Math.Sqrt(velocity.X*velocity.X+velocity.Y*velocity.Y);
             if(horizontal>.25f)
             {
-                float lead=Math.Min(leashed?.85f:1.5f,horizontal*.45f);
+                float lead=leashed&&horizontal>3f?Math.Min(1.25f,horizontal*.55f):Math.Min(leashed?.85f:1.5f,horizontal*.45f);
                 target.X+=velocity.X/horizontal*lead;
                 target.Y+=velocity.Y/horizontal*lead;
             }

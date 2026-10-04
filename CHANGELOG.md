@@ -1,5 +1,12 @@
 # Changelog
 
+## Build 876 — undeployed voice and running follow response (0.24.0.90)
+
+- Allow on-duty push-to-talk recording before a K9 entity exists so Deploy K9 can reach the existing kennel deploy/return handler. The undeployed command filter and station-kennel requirement remain.
+- Update leashed running destinations faster, use a longer bounded movement prediction and increase healthy running catch-up movement rate. Preserve walking behavior, injured-dog restrictions and the 4.5m safety release. Running requires in-game validation.
+- Log settled standing/sitting/lying anchor positions independently of leash-length changes. Lying latch correction remains unresolved pending a close view of the actual vest hook; this build does not claim to fix it.
+- Bark was confirmed working by the user in Build 875. Walking leash behavior was also confirmed improved; running still released the leash. Preserve bark, DLC, vehicle, kennel and apprehension implementations.
+
 ## Build 875 — longer leash asset, torso hook and bark presentation (0.24.0.89)
 
 - Package the rebuilt 6m leash DLC. Calibrate the retract clip to 0.48–6.00m while using a separate 4.50m patrol/render/release limit; preserve the handler loop, fixed dog-side latch and independent colors.
