@@ -1,5 +1,13 @@
 # Changelog
 
+## Build 879 — persistent moving follow and live lying torso target (0.24.0.93)
+
+- Replace repeatedly reassigned moving coordinate routes with one persistent handler-relative follow task, for leashed and unleashed following. Remove destination/pace reassignment; keep per-frame pace control, handler start/stop transitions and bounded inactive/stall recovery.
+- Use a tight moving arrival tolerance and retain the existing side/front offsets. Stationary handlers still use a navmesh arrival route. Preserve health restrictions, latest-command ownership and the 4.5m leash safety release.
+- Replace the lying standing-offset projection with a live torso-origin target. Rear adjustment follows Spine2 toward Spine1, with independent world-up height, avoiding the rolled standing-offset vector. Standing/sitting fits and other models retain their previous behavior.
+- New `[LeashFit]` keys: LyingTorsoRearOffset=0.08 and LyingTorsoHeightOffset=0.06. Old Build 878 fit keys are ignored so existing INIs receive the new defaults. Exact vest-ring fit still requires in-game confirmation.
+- Include the complete 57-command voice guide and existing props DLC. Vehicle, kennel, barking and apprehension implementations are unchanged.
+
 ## Build 878 — lying torso fit and complete voice reference (0.24.0.92)
 
 - Replace the lying root-heading shift with a correction evaluated in the calibrated animated torso basis. The initial shepherd/Malinois fit is 0.30m rearward and 0.04m lower; visual accuracy requires an in-game check.

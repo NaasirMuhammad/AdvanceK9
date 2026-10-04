@@ -53,7 +53,6 @@ namespace AdvancedK9
         private Ped _leashAnchorDog;
         private int _leashAnchorBoneId;
         private Vector3 _leashAnchorBoneOffset;
-        private Vector3 _leashLyingBoneCorrection;
         private K9State _leashMeasuredPose=K9State.Dismissed;
         private uint _leashPoseChangedAt;
         private bool _leashPoseMeasured;
@@ -3810,7 +3809,6 @@ namespace AdvancedK9
             // standing hook position, but express it in the animated upper body.
             if(_state==K9State.Sitting||_state==K9State.Lying||_state==K9State.InVehicle||_canineAnimationDepth>0)return;
             _leashAnchorBoneId=0;
-            _leashLyingBoneCorrection=new Vector3();
             // Prefer the thoracic torso over the neck-adjacent upper spine so
             // the hook follows the vest when the neck folds during sleep.
             foreach(int tag in new[]{24817,24816,24818,39317})
@@ -3825,10 +3823,6 @@ namespace AdvancedK9
                 float xx=BoneDot(x,x),yy=BoneDot(y,y),zz=BoneDot(z,z);
                 if(xx<.01f||yy<.01f||zz<.01f)continue;
                 _leashAnchorBoneOffset=new Vector3(BoneDot(delta,x)/xx,BoneDot(delta,y)/yy,BoneDot(delta,z)/zz);
-                // Convert the pose-fit adjustment into the same animated torso basis.
-                // A root-heading correction does not follow the sleeping torso tilt.
-                Vector3 correction=_dog.GetOffsetPosition(new Vector3(0f,-_config.LyingLeashHookRearOffset,_config.LyingLeashHookHeightOffset))-_dog.Position;
-                _leashLyingBoneCorrection=new Vector3(BoneDot(correction,x)/xx,BoneDot(correction,y)/yy,BoneDot(correction,z)/zz);
                 _leashAnchorBoneId=tag;
                 break;
             }
@@ -3871,14 +3865,21 @@ namespace AdvancedK9
             float weight=_leashLyingBlend*_leashLyingBlend*(3f-2f*_leashLyingBlend);
             if(weight>0f)
             {
-                Vector3 correction;
-                if(_leashAnchorDog==_dog&&_leashAnchorBoneId!=0)
+                // The lying spine rolls relative to its standing orientation.
+                // Use its live origin and anatomical rear direction; do not rotate
+                // the standing surface offset into the neck/side of the sleeping dog.
+                Vector3 torso=_leashAnchorDog==_dog&&_leashAnchorBoneId!=0
+                    ?NativeFunction.Natives.GET_PED_BONE_COORDS<Vector3>(_dog,_leashAnchorBoneId,0f,0f,0f)
+                    :_dog.Position;
+                Vector3 rear=_dog.GetOffsetPosition(new Vector3(0f,-1f,0f))-_dog.Position;
+                if(_leashAnchorBoneId==24817&&NativeFunction.Natives.GET_PED_BONE_INDEX<int>(_dog,24816)>0)
                 {
-                    Vector3 offset=_leashAnchorBoneOffset+_leashLyingBoneCorrection;
-                    correction=NativeFunction.Natives.GET_PED_BONE_COORDS<Vector3>(_dog,_leashAnchorBoneId,offset.X,offset.Y,offset.Z)-point;
+                    Vector3 spineRear=NativeFunction.Natives.GET_PED_BONE_COORDS<Vector3>(_dog,24816,0f,0f,0f)-torso;
+                    float span=(float)Math.Sqrt(spineRear.X*spineRear.X+spineRear.Y*spineRear.Y);
+                    if(span>.02f)rear=new Vector3(spineRear.X/span,spineRear.Y/span,0f);
                 }
-                else correction=_dog.GetOffsetPosition(new Vector3(0f,-_config.LyingLeashHookRearOffset,_config.LyingLeashHookHeightOffset))-_dog.Position;
-                point+=correction*weight;
+                Vector3 lyingHook=torso+rear*_config.LyingLeashHookRearOffset+new Vector3(0f,0f,_config.LyingLeashHookHeightOffset);
+                point+=(lyingHook-point)*weight;
             }
             return point;
         }
@@ -3917,7 +3918,7 @@ namespace AdvancedK9
                 if(!_leashPoseMeasured&&Game.GameTime-_leashPoseChangedAt>=800)
                 {
                     _leashPoseMeasured=true;
-                    Game.LogTrivial("AdvancedK9 leash settled pose: state="+_state+", boneId="+_leashAnchorBoneId+", local="+_leashAnchorBoneOffset+", lyingBlend="+_leashLyingBlend.ToString("0.00")+", lyingLocal="+_leashLyingBoneCorrection+", hook="+vest+", root="+_dog.Position+".");
+                    Game.LogTrivial("AdvancedK9 leash settled pose: state="+_state+", boneId="+_leashAnchorBoneId+", local="+_leashAnchorBoneOffset+", lyingBlend="+_leashLyingBlend.ToString("0.00")+", lyingRear="+_config.LyingLeashHookRearOffset+", lyingHeight="+_config.LyingLeashHookHeightOffset+", hook="+vest+", root="+_dog.Position+".");
                     _leashEndpointLogged=false;
                 }
                 if(_animatedLeash!=null&&_animatedLeash.Exists()){UpdateAnimatedLeash(hand,vest);return;}
@@ -4364,16 +4365,14 @@ namespace AdvancedK9
             float desiredBlend=FollowMoveBlend(handler,targetDistance);
             if(leashed&&_profile.Health>55&&handlerMoving)
                 desiredBlend=Math.Max(desiredBlend,leashSeparation>2.1f?3f:leashSeparation>1.25f?2f:1f);
-            // Apply pace between throttled destination updates.
+            // Adjust pace while retaining the live follow task.
             _followMoveBlend=desiredBlend;
             NativeFunction.Natives.SET_PED_DESIRED_MOVE_BLEND_RATIO(_dog,desiredBlend);
-            uint refreshInterval=leashed&&movingSpeed>3f?200u:leashed&&leashSeparation>2.1f?250u:450u;
-            bool destinationChanged=target.DistanceTo(_followNavigationTarget)>.65f;
-            bool paceChanged=Math.Abs(desiredBlend-_followAssignedBlend)>.25f;
-            bool motionChanged=handlerMoving!=_followNavigationMoving;
-            if(Game.GameTime-_followTaskAssignedAt>=refreshInterval&&(destinationChanged||paceChanged||motionChanged))
+            // The moving task follows the entity itself. Changing its world
+            // destination or pace must not cancel and recreate it at catch-up.
+            if(handlerMoving!=_followNavigationMoving&&Game.GameTime-_followTaskAssignedAt>=250)
             {
-                IssuePersistentFollow(handler,leashed,motionChanged?"handler start/stop":paceChanged?"navmesh pace update":"moving destination");
+                IssuePersistentFollow(handler,leashed,"handler start/stop");
                 return;
             }
             if(Game.GameTime>=_nextFollowTaskSample)
@@ -4381,10 +4380,10 @@ namespace AdvancedK9
                 _nextFollowTaskSample=Game.GameTime+150;
                 _followTaskStatus=ReadFollowTaskStatus();
                 bool inactive=_followTaskStatus==3||_followTaskStatus==7;
-                bool needsRoute=targetDistance>.5f&&(handlerMoving||targetDistance>1f);
+                bool needsRoute=handlerMoving?targetDistance>2f:targetDistance>1f;
                 if(!inactive||!needsRoute)_followTaskInactiveSince=0;
                 else if(_followTaskInactiveSince==0)_followTaskInactiveSince=Game.GameTime;
-                else if(Game.GameTime-_followTaskInactiveSince>=150&&Game.GameTime-_followTaskAssignedAt>=400)
+                else if(Game.GameTime-_followTaskInactiveSince>=600&&Game.GameTime-_followTaskAssignedAt>=1500)
                 {
                     IssuePersistentFollow(handler,leashed,"finished task; status="+_followTaskStatus);
                     return;
@@ -4397,8 +4396,13 @@ namespace AdvancedK9
             else if(_followPausedSince==0)_followPausedSince=Game.GameTime;
             else if(Game.GameTime-_followPausedSince>=700&&Game.GameTime>=_nextFollowPauseRecovery)
             {
-                _nextFollowPauseRecovery=Game.GameTime+1250;
+                _nextFollowPauseRecovery=Game.GameTime+2000;
                 Game.LogTrivial("AdvancedK9 follow pause status: task="+_followTaskStatus+", taskAge="+(Game.GameTime-_followTaskAssignedAt)+"ms, target gap="+targetDistance.ToString("0.00")+"m, leash="+leashed+".");
+                if(Game.GameTime-_followPausedSince>=1200&&Game.GameTime-_followTaskAssignedAt>=2000)
+                {
+                    IssuePersistentFollow(handler,leashed,"persistent follow stalled");
+                    return;
+                }
             }
             if(Game.GameTime>=_nextFollowDiagnostic)
             {
@@ -4451,8 +4455,10 @@ namespace AdvancedK9
         {
             try
             {
-                // SCRIPT_TASK_FOLLOW_NAV_MESH_TO_COORD.
-                return NativeFunction.Natives.GET_SCRIPT_TASK_STATUS<int>(_dog,0x2A89B8A7u);
+                uint task=_followNavigationMoving
+                    ?NativeFunction.Natives.GET_HASH_KEY<uint>("SCRIPT_TASK_FOLLOW_TO_OFFSET_OF_ENTITY")
+                    :0x2A89B8A7u;
+                return NativeFunction.Natives.GET_SCRIPT_TASK_STATUS<int>(_dog,task);
             }
             catch(CommandSupersededException){throw;}
             catch{return -1;}
@@ -4475,9 +4481,13 @@ namespace AdvancedK9
             _followAssignedBlend=_followMoveBlend;
             NativeFunction.Natives.SET_ENTITY_MAX_SPEED(_dog,16f);
             NativeFunction.Natives.SET_PED_MOVE_RATE_OVERRIDE(_dog,_profile.Health<=55?.65f:leashed&&handlerSpeed>4.5f?1.55f:leashed&&handlerSpeed>3f?1.35f:handlerSpeed>5.5f?1.35f:separation>1.65f?1.25f:1.12f);
-            // ENAV_NO_STOPPING avoids braking during route calculation/arrival;
-            // object and ped avoidance remain enabled. Stopped handlers use normal arrival.
-            NativeFunction.Natives.TASK_FOLLOW_NAV_MESH_TO_COORD(_dog,target.X,target.Y,target.Z,_followMoveBlend,-1,_followNavigationMoving?.65f:.55f,_followNavigationMoving?1:0,40000f);
+            if(_followNavigationMoving)
+            {
+                // Persist against the live handler rather than short world-coordinate
+                // routes. Tight arrival tolerance avoids a deliberate catch-up pause.
+                NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(_dog,handler,leashed?-.85f:-1.05f,leashed?.65f:1.15f,0f,_profile.Health<=55?1f:3f,-1,.10f,true);
+            }
+            else NativeFunction.Natives.TASK_FOLLOW_NAV_MESH_TO_COORD(_dog,target.X,target.Y,target.Z,_followMoveBlend,-1,.55f,0,40000f);
             _followTaskAssignedAt=Game.GameTime;
             _followTaskInactiveSince=0;
             _followTaskStatus=0;

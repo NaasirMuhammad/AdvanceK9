@@ -1,6 +1,6 @@
-# AdvancedK9 Build 878 — core consistency checks
+# AdvancedK9 Build 879 — core consistency checks
 
-Internal version 0.24.0.92. This is a focused test build after the released v0.24.0 beta baseline; it is not yet certified in game.
+Internal version 0.24.0.93. This is a focused test build after the released v0.24.0 beta baseline; it is not yet certified in game.
 
 1. Start an area, vehicle and building search. During navigation, sniffing and the final indication, issue Follow, Stay, Sit, then a different search. The latest accepted task must remain in control; old workers must not restore a previous route, sit or alert later.
 2. Start a track and interrupt it with Sit, Stay, Recall, a search and Enter Vehicle. Repeat while Rex is turning or checking direction. Test Inspect, camera and EMS requests during tracking: these must leave it active.
@@ -87,13 +87,15 @@ At the large kennel, repeat deploy -> Sit/Lie/Follow -> return at least ten time
 - Capture a close side-view clip of Rex standing and lying with the vest hook and latch visible, plus full log. `leash settled pose` and mesh endpoint lines record each pose even if span changes are small. Lying placement is not yet fixed.
 - Bark, vehicle/kennel transitions and apprehension need only a short regression check; their implementation and the 6m asset are unchanged.
 
-## Build 878 targeted checks
+## Build 879 targeted checks
 
 - On the pictured shepherd/Malinois, attach leash while standing, Sit, Lie, then Follow. Capture a close side view matching the prior screenshot. The lying latch should move back onto the vest hook, with no final offset change to standing or sitting.
 - Repeat Lie -> Sit and Lie -> Follow from both left/right handler positions so both get-up clips are covered. The correction should blend out as Rex rises, not jump at the command boundary.
 - Check settled-pose diagnostics: lyingBlend should settle at 1 while lying and 0 while upright; compare hook and mesh latch positions. The 0.18m estimate requires in-game visual confirmation and may need finer calibration.
 - Short regression: verbal deployment/return, bark and walking/running follow. No new DLC installation is required if the Build 875/876 6m pack is already installed.
 
-## Build 878 lying hook check
+## Build 879 follow and lying hook checks
 
-Attach the leash while standing, then Sit, Lie Down and Follow. Check the actual vest ring in each pose and throughout get-up. The lying correction now follows the torso basis; its initial fit still needs confirmation. Keep your existing INI. If adjustment is needed, add `[LeashFit]` with `LyingRearOffset=0.30` and `LyingHeightOffset=-0.04`; change in small 0.02m steps and reload. Increasing rear offset moves toward the vest/tail; decreasing height lowers the hook. These settings affect only lying shepherd/Malinois placement. Capture a close side view and the settled-pose/mesh-endpoint log if it remains off. Confirm VOICE_COMMANDS.md is present at the ZIP root.
+Run continuously without a leash, catch up, change direction and alternate walking/running. Rex should maintain movement when he reaches you. Repeat leashed and confirm no routine catch-up pause causes release. Stop completely, resume and issue Sit/Stay/Search to confirm command ownership. Include a narrow obstacle route to check persistent follow recovery without ignoring collision.
+
+Attach while standing, then Sit, Lie Down and Follow. Check the vest ring in each pose and throughout get-up. Lying now uses the live torso origin rather than a rotated standing surface offset. Initial dimensions still require visual confirmation. New `[LeashFit]` defaults are `LyingTorsoRearOffset=0.08` and `LyingTorsoHeightOffset=0.06`; old Build 878 keys are ignored. Positive rear moves toward Spine1; positive height moves upward. Capture a close side/top view and settled-pose/endpoint logs if off. Confirm VOICE_COMMANDS.md remains at ZIP root.
