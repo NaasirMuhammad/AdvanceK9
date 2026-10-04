@@ -53,6 +53,7 @@ namespace AdvancedK9
         private Ped _leashAnchorDog;
         private int _leashAnchorBoneId;
         private Vector3 _leashAnchorBoneOffset;
+        private Vector3 _leashLyingBoneCorrection;
         private K9State _leashMeasuredPose=K9State.Dismissed;
         private uint _leashPoseChangedAt;
         private bool _leashPoseMeasured;
@@ -3809,6 +3810,7 @@ namespace AdvancedK9
             // standing hook position, but express it in the animated upper body.
             if(_state==K9State.Sitting||_state==K9State.Lying||_state==K9State.InVehicle||_canineAnimationDepth>0)return;
             _leashAnchorBoneId=0;
+            _leashLyingBoneCorrection=new Vector3();
             // Prefer the thoracic torso over the neck-adjacent upper spine so
             // the hook follows the vest when the neck folds during sleep.
             foreach(int tag in new[]{24817,24816,24818,39317})
@@ -3823,6 +3825,10 @@ namespace AdvancedK9
                 float xx=BoneDot(x,x),yy=BoneDot(y,y),zz=BoneDot(z,z);
                 if(xx<.01f||yy<.01f||zz<.01f)continue;
                 _leashAnchorBoneOffset=new Vector3(BoneDot(delta,x)/xx,BoneDot(delta,y)/yy,BoneDot(delta,z)/zz);
+                // Convert the pose-fit adjustment into the same animated torso basis.
+                // A root-heading correction does not follow the sleeping torso tilt.
+                Vector3 correction=_dog.GetOffsetPosition(new Vector3(0f,-_config.LyingLeashHookRearOffset,_config.LyingLeashHookHeightOffset))-_dog.Position;
+                _leashLyingBoneCorrection=new Vector3(BoneDot(correction,x)/xx,BoneDot(correction,y)/yy,BoneDot(correction,z)/zz);
                 _leashAnchorBoneId=tag;
                 break;
             }
@@ -3838,8 +3844,7 @@ namespace AdvancedK9
             Vector3 point=_leashAnchorDog==_dog&&_leashAnchorBoneId!=0
                 ?NativeFunction.Natives.GET_PED_BONE_COORDS<Vector3>(_dog,_leashAnchorBoneId,_leashAnchorBoneOffset.X,_leashAnchorBoneOffset.Y,_leashAnchorBoneOffset.Z)
                 :_dog.GetOffsetPosition(new Vector3(0f,.14f,.20f));
-            // The pictured shepherd replacement's sleeping vest hook sits behind
-            // the generic body anchor. Keep other model fits and upright poses intact.
+            // The shepherd replacement needs its own lying vest fit in the torso frame. Keep other model fits and upright poses intact.
             uint model=NativeFunction.Natives.GET_ENTITY_MODEL<uint>(_dog);
             if(model!=NativeFunction.Natives.GET_HASH_KEY<uint>("a_c_shepherd"))return point;
             if(_leashCorrectionDog!=_dog)
@@ -3866,8 +3871,14 @@ namespace AdvancedK9
             float weight=_leashLyingBlend*_leashLyingBlend*(3f-2f*_leashLyingBlend);
             if(weight>0f)
             {
-                Vector3 rear=_dog.GetOffsetPosition(new Vector3(0f,-.18f,0f))-_dog.Position;
-                point+=rear*weight;
+                Vector3 correction;
+                if(_leashAnchorDog==_dog&&_leashAnchorBoneId!=0)
+                {
+                    Vector3 offset=_leashAnchorBoneOffset+_leashLyingBoneCorrection;
+                    correction=NativeFunction.Natives.GET_PED_BONE_COORDS<Vector3>(_dog,_leashAnchorBoneId,offset.X,offset.Y,offset.Z)-point;
+                }
+                else correction=_dog.GetOffsetPosition(new Vector3(0f,-_config.LyingLeashHookRearOffset,_config.LyingLeashHookHeightOffset))-_dog.Position;
+                point+=correction*weight;
             }
             return point;
         }
@@ -3906,7 +3917,7 @@ namespace AdvancedK9
                 if(!_leashPoseMeasured&&Game.GameTime-_leashPoseChangedAt>=800)
                 {
                     _leashPoseMeasured=true;
-                    Game.LogTrivial("AdvancedK9 leash settled pose: state="+_state+", boneId="+_leashAnchorBoneId+", local="+_leashAnchorBoneOffset+", lyingBlend="+_leashLyingBlend.ToString("0.00")+", hook="+vest+", root="+_dog.Position+".");
+                    Game.LogTrivial("AdvancedK9 leash settled pose: state="+_state+", boneId="+_leashAnchorBoneId+", local="+_leashAnchorBoneOffset+", lyingBlend="+_leashLyingBlend.ToString("0.00")+", lyingLocal="+_leashLyingBoneCorrection+", hook="+vest+", root="+_dog.Position+".");
                     _leashEndpointLogged=false;
                 }
                 if(_animatedLeash!=null&&_animatedLeash.Exists()){UpdateAnimatedLeash(hand,vest);return;}

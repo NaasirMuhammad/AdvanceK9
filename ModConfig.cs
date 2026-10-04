@@ -41,6 +41,8 @@ namespace AdvancedK9
         public int VestColor = 0;
         public int VestComponent = -1;
         public int LeashPropColor = 0;
+        public float LyingLeashHookRearOffset = .30f;
+        public float LyingLeashHookHeightOffset = -.04f;
         public int BowlPropColor = 0;
         public float PositiveChance = 0.28f;
         public float SearchRadius = 12f;
@@ -128,6 +130,8 @@ namespace AdvancedK9
             result.VestColor = ini.ReadInt32("Dog", "VestColor", result.VestColor);
             result.VestComponent = ini.ReadInt32("Dog", "VestComponent", result.VestComponent);
             result.LeashPropColor = Math.Max(0,Math.Min(15,ini.ReadInt32("AccessoryColors", "Leash", 0)));
+            result.LyingLeashHookRearOffset = Clamp(ini.ReadSingle("LeashFit", "LyingRearOffset", result.LyingLeashHookRearOffset), -.5f, .5f);
+            result.LyingLeashHookHeightOffset = Clamp(ini.ReadSingle("LeashFit", "LyingHeightOffset", result.LyingLeashHookHeightOffset), -.3f, .3f);
             result.BowlPropColor = Math.Max(0,Math.Min(15,ini.ReadInt32("AccessoryColors", "DualBowl", 0)));
             result.PositiveChance = Clamp(ini.ReadSingle("Search", "FallbackPositiveChance", result.PositiveChance), 0f, 1f);
             result.SearchRadius = Math.Max(3f, ini.ReadSingle("Search", "Radius", result.SearchRadius));

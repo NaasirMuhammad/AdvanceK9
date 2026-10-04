@@ -1,5 +1,12 @@
 # Changelog
 
+## Build 878 — lying torso fit and complete voice reference (0.24.0.92)
+
+- Replace the lying root-heading shift with a correction evaluated in the calibrated animated torso basis. The initial shepherd/Malinois fit is 0.30m rearward and 0.04m lower; visual accuracy requires an in-game check.
+- Add independent `[LeashFit]` lying rear/height settings. Standing, sitting and other model fits retain their previous behavior; existing INIs use the new defaults when keys are absent.
+- Include VOICE_COMMANDS.md in the release ZIP: all 57 registered actions, every English alias, all 13 additional language packs, wake-word rules, undeployed deployment, dispatch services and custom aliases.
+- Preserve confirmed voice deployment, bark, follow, vehicle, kennel and feeding behavior.
+
 ## Build 877 — shepherd lying vest-hook correction (0.24.0.91)
 
 - Move the shepherd/Malinois sleeping leash anchor 0.18m back toward the vest, based on the user's side-view screenshot. This is an initial visual calibration, not a measured 3D hook coordinate.
