@@ -56,6 +56,9 @@ namespace AdvancedK9
         private K9State _leashMeasuredPose=K9State.Dismissed;
         private uint _leashPoseChangedAt;
         private bool _leashPoseMeasured;
+        private Ped _leashCorrectionDog;
+        private float _leashLyingBlend;
+        private uint _leashLyingBlendTime;
         private Blip _blip;
         private K9State _state = K9State.Dismissed;
         private bool _running = true;
@@ -3832,9 +3835,41 @@ namespace AdvancedK9
         private Vector3 VestLeashPoint()
         {
             if(_leashAnchorDog!=_dog)CaptureStandingLeashAnchor();
-            if(_leashAnchorDog==_dog&&_leashAnchorBoneId!=0)
-                return NativeFunction.Natives.GET_PED_BONE_COORDS<Vector3>(_dog,_leashAnchorBoneId,_leashAnchorBoneOffset.X,_leashAnchorBoneOffset.Y,_leashAnchorBoneOffset.Z);
-            return _dog.GetOffsetPosition(new Vector3(0f,.14f,.20f));
+            Vector3 point=_leashAnchorDog==_dog&&_leashAnchorBoneId!=0
+                ?NativeFunction.Natives.GET_PED_BONE_COORDS<Vector3>(_dog,_leashAnchorBoneId,_leashAnchorBoneOffset.X,_leashAnchorBoneOffset.Y,_leashAnchorBoneOffset.Z)
+                :_dog.GetOffsetPosition(new Vector3(0f,.14f,.20f));
+            // The pictured shepherd replacement's sleeping vest hook sits behind
+            // the generic body anchor. Keep other model fits and upright poses intact.
+            uint model=NativeFunction.Natives.GET_ENTITY_MODEL<uint>(_dog);
+            if(model!=NativeFunction.Natives.GET_HASH_KEY<uint>("a_c_shepherd"))return point;
+            if(_leashCorrectionDog!=_dog)
+            {
+                _leashCorrectionDog=_dog;_leashLyingBlend=0f;_leashLyingBlendTime=Game.GameTime;
+            }
+            uint now=Game.GameTime;
+            float elapsed=Math.Min(.25f,(now-_leashLyingBlendTime)/1000f);
+            _leashLyingBlendTime=now;
+            bool rising=false;
+            foreach(string clip in new[]{"getup_l","getup_r"})
+                if(NativeFunction.Natives.IS_ENTITY_PLAYING_ANIM<bool>(_dog,"creatures@rottweiler@getup",clip,3))
+                {
+                    float phase=NativeFunction.Natives.GET_ENTITY_ANIM_CURRENT_TIME<float>(_dog,"creatures@rottweiler@getup",clip);
+                    _leashLyingBlend=Math.Max(0f,Math.Min(1f,1f-phase));
+                    rising=true;break;
+                }
+            if(!rising)
+            {
+                bool lying=_state==K9State.Lying||NativeFunction.Natives.IS_ENTITY_PLAYING_ANIM<bool>(_dog,"creatures@rottweiler@amb@sleep_in_kennel@","sleep_in_kennel",3);
+                float step=elapsed/ .4f;
+                _leashLyingBlend=lying?Math.Min(1f,_leashLyingBlend+step):Math.Max(0f,_leashLyingBlend-step);
+            }
+            float weight=_leashLyingBlend*_leashLyingBlend*(3f-2f*_leashLyingBlend);
+            if(weight>0f)
+            {
+                Vector3 rear=_dog.GetOffsetPosition(new Vector3(0f,-.18f,0f))-_dog.Position;
+                point+=rear*weight;
+            }
+            return point;
         }
 
         private void MaintainLeashRange()
@@ -3871,7 +3906,7 @@ namespace AdvancedK9
                 if(!_leashPoseMeasured&&Game.GameTime-_leashPoseChangedAt>=800)
                 {
                     _leashPoseMeasured=true;
-                    Game.LogTrivial("AdvancedK9 leash settled pose: state="+_state+", boneId="+_leashAnchorBoneId+", local="+_leashAnchorBoneOffset+", hook="+vest+", root="+_dog.Position+".");
+                    Game.LogTrivial("AdvancedK9 leash settled pose: state="+_state+", boneId="+_leashAnchorBoneId+", local="+_leashAnchorBoneOffset+", lyingBlend="+_leashLyingBlend.ToString("0.00")+", hook="+vest+", root="+_dog.Position+".");
                     _leashEndpointLogged=false;
                 }
                 if(_animatedLeash!=null&&_animatedLeash.Exists()){UpdateAnimatedLeash(hand,vest);return;}

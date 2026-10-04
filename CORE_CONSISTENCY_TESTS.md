@@ -1,6 +1,6 @@
-# AdvancedK9 Build 876 — core consistency checks
+# AdvancedK9 Build 877 — core consistency checks
 
-Internal version 0.24.0.90. This is a focused test build after the released v0.24.0 beta baseline; it is not yet certified in game.
+Internal version 0.24.0.91. This is a focused test build after the released v0.24.0 beta baseline; it is not yet certified in game.
 
 1. Start an area, vehicle and building search. During navigation, sniffing and the final indication, issue Follow, Stay, Sit, then a different search. The latest accepted task must remain in control; old workers must not restore a previous route, sit or alert later.
 2. Start a track and interrupt it with Sit, Stay, Recall, a search and Enter Vehicle. Repeat while Rex is turning or checking direction. Test Inspect, camera and EMS requests during tracking: these must leave it active.
@@ -86,3 +86,10 @@ At the large kennel, repeat deploy -> Sit/Lie/Follow -> return at least ten time
 - Compare walk -> jog -> sprint -> stop, straight and turning, while leashed. Check faster catch-up without sliding/overshoot; genuine separation beyond 4.5m still releases. Repeat Sit/Lie get-up before running.
 - Capture a close side-view clip of Rex standing and lying with the vest hook and latch visible, plus full log. `leash settled pose` and mesh endpoint lines record each pose even if span changes are small. Lying placement is not yet fixed.
 - Bark, vehicle/kennel transitions and apprehension need only a short regression check; their implementation and the 6m asset are unchanged.
+
+## Build 877 targeted checks
+
+- On the pictured shepherd/Malinois, attach leash while standing, Sit, Lie, then Follow. Capture a close side view matching the prior screenshot. The lying latch should move back onto the vest hook, with no final offset change to standing or sitting.
+- Repeat Lie -> Sit and Lie -> Follow from both left/right handler positions so both get-up clips are covered. The correction should blend out as Rex rises, not jump at the command boundary.
+- Check settled-pose diagnostics: lyingBlend should settle at 1 while lying and 0 while upright; compare hook and mesh latch positions. The 0.18m estimate requires in-game visual confirmation and may need finer calibration.
+- Short regression: verbal deployment/return, bark and walking/running follow. No new DLC installation is required if the Build 875/876 6m pack is already installed.

@@ -1,5 +1,12 @@
 # Changelog
 
+## Build 877 — shepherd lying vest-hook correction (0.24.0.91)
+
+- Move the shepherd/Malinois sleeping leash anchor 0.18m back toward the vest, based on the user's side-view screenshot. This is an initial visual calibration, not a measured 3D hook coordinate.
+- Blend the correction into the lying pose and remove it using the active getup_l/getup_r clip progress. Standing and sitting use the existing anchor; other model fits are unchanged.
+- Include lying correction weight in settled-pose diagnostics. Both leash rendering and range checks use the same corrected endpoint.
+- Verbal kennel deployment was confirmed working by the user in Build 876. Preserve voice, bark, follow, 4.5m patrol/6m asset calibration, vehicles and kennels.
+
 ## Build 876 — undeployed voice and running follow response (0.24.0.90)
 
 - Allow on-duty push-to-talk recording before a K9 entity exists so Deploy K9 can reach the existing kennel deploy/return handler. The undeployed command filter and station-kennel requirement remain.
