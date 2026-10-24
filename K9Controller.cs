@@ -39,8 +39,16 @@ namespace AdvancedK9
         private int _vehicleBodyBone=-1;
         private uint _vehiclePoseModel;
         private bool _vehiclePoseReady;
-        private uint _followPausedSince;
         private uint _nextFollowPauseRecovery;
+        private uint _followProgressSampleAt;
+        private bool _followProgressReady;
+        private Vector3 _followProgressDogPosition;
+        private Vector3 _followProgressHandlerPosition;
+        private float _followProgressSeparation;
+        private int _followPoorProgressSamples;
+        private Vector3 _followHandlerDirection;
+        private bool _followHandlerDirectionReady;
+        private uint _followReversalSince;
         private float _followMoveBlend;
         private uint _nextFollowDiagnostic;
         private int _followTaskStatus=-1;
@@ -4324,7 +4332,7 @@ namespace AdvancedK9
             bool leashed=_state==K9State.Leashed;
             if(_state!=K9State.Following&&_state!=K9State.Heeling&&!leashed)
             {
-                _followPausedSince=0;
+                _followProgressReady=false;_followHandlerDirectionReady=false;_followReversalSince=0;
                 return;
             }
             var handler=Game.LocalPlayer.Character;if(handler==null||!handler.Exists())return;
@@ -4390,21 +4398,7 @@ namespace AdvancedK9
                     return;
                 }
             }
-            // A genuine stopped dog needs prompt recovery while the handler
-            // keeps moving. One timer owns the retry; diagnostics must not defer it.
-            bool paused=handlerMoving&&movingSpeed>.65f
-                &&(leashed?leashSeparation>1.8f:targetDistance>2f)
-                &&handlerSpeedForFollow(_dog)<.25f;
-            if(!paused)_followPausedSince=0;
-            else if(_followPausedSince==0)_followPausedSince=Game.GameTime;
-            else if(Game.GameTime-_followPausedSince>=(leashed?550u:1200u)
-                &&Game.GameTime-_followTaskAssignedAt>=(leashed?800u:1500u)
-                &&Game.GameTime>=_nextFollowPauseRecovery)
-            {
-                Game.LogTrivial("AdvancedK9 follow stall recovery: task="+_followTaskStatus+", taskAge="+(Game.GameTime-_followTaskAssignedAt)+"ms, pause="+(Game.GameTime-_followPausedSince)+"ms, target gap="+targetDistance.ToString("0.00")+"m, leash="+leashed+".");
-                IssuePersistentFollow(handler,leashed,"persistent follow stalled");
-                return;
-            }
+            if(MaintainFollowProgress(handler,leashed,handlerMoving,movingSpeed,leashSeparation))return;
             if(Game.GameTime>=_nextFollowDiagnostic)
             {
                 _nextFollowDiagnostic=Game.GameTime+3000;
@@ -4438,6 +4432,71 @@ namespace AdvancedK9
             else IssuePersistentFollow(handler,leashed);
             ApplyAnimalPedSafeguards();
             Game.LogTrivial("AdvancedK9 follow recovery: route rebuilt after prolonged movement below 0.3m per sample at "+distance.ToString("0.0")+"m from the handler.");
+        }
+
+        private bool MaintainFollowProgress(Ped handler,bool leashed,bool handlerMoving,float speed,float leashSeparation)
+        {
+            uint now=Game.GameTime;
+            if(!handlerMoving||speed<=.65f)
+            {
+                // Short speed dips do not discard a pending poor-progress window.
+                // A sustained stopped-handler task resets it on assignment.
+                return false;
+            }
+            float separation=leashed?leashSeparation:_dog.DistanceTo(handler);
+            Vector3 velocity=NativeFunction.Natives.GET_ENTITY_VELOCITY<Vector3>(handler);
+            float horizontal=(float)Math.Sqrt(velocity.X*velocity.X+velocity.Y*velocity.Y);
+            if(horizontal>.65f)
+            {
+                Vector3 direction=new Vector3(velocity.X/horizontal,velocity.Y/horizontal,0f);
+                if(!_followHandlerDirectionReady)
+                {
+                    _followHandlerDirection=direction;_followHandlerDirectionReady=true;
+                }
+                float alignment=BoneDot(_followHandlerDirection,direction);
+                if(alignment<-.35f&&separation>1.5f)
+                {
+                    if(_followReversalSince==0)_followReversalSince=now;
+                    else if(now-_followReversalSince>=120&&now-_followTaskAssignedAt>=350&&now>=_nextFollowPauseRecovery)
+                    {
+                        Game.LogTrivial("AdvancedK9 follow reversal: alignment="+alignment.ToString("0.00")+", separation="+separation.ToString("0.00")+"m, leash="+leashed+".");
+                        IssuePersistentFollow(handler,leashed,"handler reversed direction");
+                        return true;
+                    }
+                }
+                else _followReversalSince=0;
+            }
+            Vector3 dogPosition=_dog.Position,handlerPosition=handler.Position;
+            if(!_followProgressReady)
+            {
+                _followProgressReady=true;_followProgressSampleAt=now;
+                _followProgressDogPosition=dogPosition;_followProgressHandlerPosition=handlerPosition;
+                _followProgressSeparation=separation;_followPoorProgressSamples=0;
+                return false;
+            }
+            if(now-_followProgressSampleAt<350)return false;
+            uint window=now-_followProgressSampleAt;
+            Vector3 toward=_followProgressHandlerPosition-_followProgressDogPosition;toward.Z=0f;
+            float span=(float)Math.Sqrt(toward.X*toward.X+toward.Y*toward.Y);
+            float dogAdvance=span>.1f?BoneDot(dogPosition-_followProgressDogPosition,toward)/span:0f;
+            float handlerAdvance=span>.1f?BoneDot(handlerPosition-_followProgressHandlerPosition,toward)/span:0f;
+            float growth=separation-_followProgressSeparation;
+            // Side steps/turning can have nonzero speed without advancing toward
+            // the handler. Require sustained growing separation, not zero speed.
+            bool poor=window<=1000&&separation>(leashed?2f:3f)&&growth>.12f
+                &&handlerAdvance>.12f&&dogAdvance<Math.Max(.10f,handlerAdvance*.60f);
+            _followPoorProgressSamples=poor?_followPoorProgressSamples+1:0;
+            _followProgressSampleAt=now;_followProgressDogPosition=dogPosition;
+            _followProgressHandlerPosition=handlerPosition;_followProgressSeparation=separation;
+            bool urgent=leashed&&separation>PatrolLeashMaximumLength-1.5f;
+            if(poor&&_followPoorProgressSamples>=(urgent?1:2)
+                &&now-_followTaskAssignedAt>=600&&now>=_nextFollowPauseRecovery)
+            {
+                Game.LogTrivial("AdvancedK9 follow progress recovery: dogAdvance="+dogAdvance.ToString("0.00")+"m, handlerAdvance="+handlerAdvance.ToString("0.00")+"m, gapGrowth="+growth.ToString("0.00")+"m, separation="+separation.ToString("0.00")+"m, urgent="+urgent+", leash="+leashed+".");
+                IssuePersistentFollow(handler,leashed,"insufficient progress toward handler");
+                return true;
+            }
+            return false;
         }
 
         private static float handlerSpeedForFollow(Ped handler){try{return handler==null||!handler.Exists()?0f:NativeFunction.Natives.GET_ENTITY_SPEED<float>(handler);}catch{return 0f;}}
@@ -4501,6 +4560,12 @@ namespace AdvancedK9
                 NativeFunction.Natives.TASK_FOLLOW_TO_OFFSET_OF_ENTITY(_dog,handler,leashed?-.85f:-1.05f,leashed?.65f:1.15f,0f,_profile.Health<=55?1f:3f,-1,.10f,true);
             }
             else NativeFunction.Natives.TASK_FOLLOW_NAV_MESH_TO_COORD(_dog,target.X,target.Y,target.Z,_followMoveBlend,-1,.55f,0,40000f);
+            _followProgressReady=false;_followPoorProgressSamples=0;_followReversalSince=0;
+            Vector3 directionVelocity=NativeFunction.Natives.GET_ENTITY_VELOCITY<Vector3>(handler);
+            float directionSpeed=(float)Math.Sqrt(directionVelocity.X*directionVelocity.X+directionVelocity.Y*directionVelocity.Y);
+            _followHandlerDirectionReady=directionSpeed>.65f;
+            if(_followHandlerDirectionReady)_followHandlerDirection=new Vector3(directionVelocity.X/directionSpeed,directionVelocity.Y/directionSpeed,0f);
+            _nextFollowPauseRecovery=Game.GameTime+(leashed?900u:1500u);
             _followTaskAssignedAt=Game.GameTime;
             _followTaskInactiveSince=0;
             _followTaskStatus=0;
@@ -4514,8 +4579,6 @@ namespace AdvancedK9
                 _followMotionSampleReady=true;
                 _nextFollowMotionSample=Game.GameTime+1000;
                 _followStuckSince=0;
-                _followPausedSince=0;
-                _nextFollowPauseRecovery=Game.GameTime+(leashed?800u:1250u);
             }
         }
 

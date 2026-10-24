@@ -1,5 +1,13 @@
 # Changelog
 
+## Build 881 — reversal response and progress-based follow recovery (0.24.0.95)
+
+- Replace the instantaneous low-speed stall timer with 350ms position windows. Detect growing separation while the dog makes insufficient forward progress; turning and side steps no longer count as useful catch-up solely because they have speed.
+- Request a bounded follow retarget for a sustained handler direction reversal beyond roughly 110 degrees when separated. Rebase direction on each explicit task assignment so a single reversal cannot repeatedly trigger against the same old direction.
+- Recover after two poor-progress windows, or one when within the final 1.5m of leash range. Share a 900ms leashed/1500ms unleashed assignment cooldown across reversal/progress recovery. Persistent healthy movement is retained, with no destination/pace task-restart loop.
+- Log reversal alignment, projected K9/handler movement, gap growth and urgent recovery. Preserve latest-command ownership, the confirmed lying attachment, complete voice guide, supplied props and full 6.00m range/release.
+- These changes require direction-reversal and obstacle tests in game; no claim that every hesitation is eliminated.
+
 ## Build 880 — walking follow continuity and full 6m leash (0.24.0.94)
 
 - Use the asset's full 6.00m range for rendering, attachment, length clamping and safety release, replacing the former 4.50m patrol cap. The asset remains calibrated to 0.48–6.00m and does not stretch beyond its supplied maximum.
