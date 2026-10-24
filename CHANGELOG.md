@@ -1,5 +1,14 @@
 # Changelog
 
+## Build 880 — walking follow continuity and full 6m leash (0.24.0.94)
+
+- Use the asset's full 6.00m range for rendering, attachment, length clamping and safety release, replacing the former 4.50m patrol cap. The asset remains calibrated to 0.48–6.00m and does not stretch beyond its supplied maximum.
+- Keep the persistent moving follow task through brief handler speed dips during walking/turning. A stationary arrival task now requires 650ms of sustained near-zero handler speed; starting movement still responds without that stop delay.
+- Repair a stall-recovery timing issue: the prior diagnostic gate could consume the first recovery opportunity, adding another 2 seconds of delay. Leashed recovery now checks sustained lack of movement after 550ms, subject to task-age/cooldown and actual endpoint separation; completed-task recovery also reacts sooner at meaningful leash separation.
+- Do not restart healthy follow tasks merely because a destination or pace changes. Maintain collision/pathfinding, injury pace restrictions and latest-command ownership; release beyond 6m remains available for genuine overextension.
+- User confirms the lying vest attachment and interrupted-search cancellation are working. Preserve their implementations. Include the complete 57-command guide, unchanged props DLC and focused checks.
+- Walking follow still requires an in-game retest; compilation does not confirm hesitation is eliminated.
+
 ## Build 879 — persistent moving follow and live lying torso target (0.24.0.93)
 
 - Replace repeatedly reassigned moving coordinate routes with one persistent handler-relative follow task, for leashed and unleashed following. Remove destination/pace reassignment; keep per-frame pace control, handler start/stop transitions and bounded inactive/stall recovery.
