@@ -1,4 +1,4 @@
-ADVANCED K9 v0.24.0-beta — DRAG-AND-DROP INSTALL
+ADVANCED K9 v0.24.1 — DRAG-AND-DROP INSTALL
 
 1. Close GTA V and RAGE Plugin Hook.
 2. Open the compiled release ZIP.
@@ -83,5 +83,12 @@ Optional breed models are not bundled. Follow the links in README.md if wanted.
 OPTIONAL LARGE KENNEL DLC
 The package includes mods\update\x64\dlcpacks\mw_ak9kennel\dlc.rpf.
 To enable the large kennel, add <Item>dlcpacks:/mw_ak9kennel/</Item> to mods\update\update.rpf\common\data\dlclist.xml above the EUP entries, then restart GTA V.
-This DLC also registers advancek9_dual_bowl and advancek9_leash. The dual bowl has food and water surfaces; each large kennel and the loose bowl have separate 16-color controls in the AdvancedK9 menu. The retractable leash has a 3.50 m maximum length. With the DLC loaded, the plugin anchors its latch at Rex's vest and its loop at the handler's left hand; the mesh retracts and extends as they move. Beyond leash range the leash releases instead of floating in the air. If the animation cannot load, the leash command remains available without displaying an incorrect substitute. Leash diagnostics are logged in RagePluginHook.log.
+This DLC also registers advancek9_dual_bowl and advancek9_leash. The dual bowl has food and water surfaces; each large kennel and the loose bowl have separate 16-color controls in the AdvancedK9 menu. The retractable leash has a 6.00 m maximum length. With the DLC loaded, the plugin anchors its latch at Rex's vest and its loop at the handler's left hand; the mesh retracts and extends as they move. Beyond leash range the leash releases instead of floating in the air. If the animation cannot load, the leash command remains available without displaying an incorrect substitute. Leash diagnostics are logged in RagePluginHook.log.
 Choose Large in the AdvancedK9 kennel location editor for each station. Each station saves its own style and color. The original doghouse is retained as the default until selected.
+
+V0.24.1 RELEASE INFORMATION
+See CHANGELOG.md for confirmed changes since v0.24.0 and RELEASE_NOTES_v0.24.1.md
+for current limitations and the three experimental callouts. Follow hesitation
+can still cause a release during direction changes; it is not claimed resolved.
+VOICE_COMMANDS.md lists all 57 registered voice commands and accepted aliases.
+Artwork/ contains the release promotional image; no installation is required for it.

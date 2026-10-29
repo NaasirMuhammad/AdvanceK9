@@ -1,6 +1,6 @@
-# Advanced K9 v0.23.2-beta for LSPDFR
+# Advanced K9 v0.24.1 for LSPDFR
 
-AdvancedK9 v0.23.2-beta is a persistent LSPDFR/RAGE Plugin Hook police-dog partner with push-to-talk voice control, per-dog progression, user-positioned exterior station kennels and a compact Glass Tactical HUD with silent negative vehicle searches and attached result alerts. All published builds are beta builds while gameplay and model compatibility continue to be tested.
+AdvancedK9 v0.24.1 is a persistent LSPDFR/RAGE Plugin Hook police-dog partner with push-to-talk voice control, per-dog progression, user-positioned exterior station kennels and a compact Glass Tactical HUD with silent negative vehicle searches and attached result alerts. See CHANGELOG.md for confirmed changes since v0.24.0 and RELEASE_NOTES_v0.24.1.md for known limitations. The included three-callout expansion remains experimental. Follow hesitation can still cause a leash release; the latest reversal/progress recovery changes await in-game confirmation.
 
 ## Glass Tactical HUD
 
@@ -14,7 +14,7 @@ AdvancedK9 runs as an RPH plugin and starts its controller directly. It avoids a
 
 Use the compiled release ZIP, not the source ZIP. Close GTA V, then drag everything in the ZIP into the folder containing `GTA5.exe`; this installs `LemonUI.RagePluginHook.dll` in the GTA V root and merges the `Plugins` folder. In RAGE Plugin Hook settings, enable **Load all plugins on startup**. Start Story Mode, load LSPDFR, and go on duty.
 
-The compiled release includes AdvancedK9, its configuration, and the MIT-licensed LemonUI RAGE Plugin Hook runtime. It does not redistribute NAudio support assemblies, Microsoft.Win32.Registry, System.Security assemblies, ScriptHookV, GTA V, RAGE Plugin Hook, LSPDFR, Policing Redefined, Common Data Framework, or third-party dog models.
+The compiled release includes AdvancedK9, its configuration, and the MIT-licensed LemonUI RAGE Plugin Hook runtime. It also includes NAudio.Core.dll and NAudio.WinMM.dll for voice capture. It does not redistribute Microsoft.Win32.Registry or System.Security assemblies, ScriptHookV, GTA V, RAGE Plugin Hook, LSPDFR, Policing Redefined, Common Data Framework, or third-party dog models.
 
 ## Features
 
@@ -25,7 +25,7 @@ The compiled release includes AdvancedK9, its configuration, and the MIT-license
 - Expanded scent collection from vehicle seats/doors, dropped clothing, weapons, blood, personal property, and last-known-location pads, each with a distinct starting quality
 - Full-circle opening direction tests, variable wrong-direction chances, strong leash/body indication, and water/obstacle/terrain/traffic effects on trail quality, speed, and direction checks
 - Deploy/dismiss and follow/heel
-- Sit, lie down, pet, feed, physical rope leash with handler-follow movement, and dog-mounted camera
+- Sit, lie down, pet, feed, animated retractable leash with handler-follow movement, and dog-mounted camera
 - Persistent food and water care HUD, low-need warnings, separate feed/drink interactions and working-dog consumption
 - Kneeling handler petting interaction with a synchronized K9 response
 - Working leash support for follow, heel, obedience, searches, tracking, perimeter and containment; automatic release only for unrestricted actions such as apprehension, fetch, vehicle entry and K9 carrying
@@ -286,7 +286,7 @@ Vehicle searches visit all four exterior corners before the result is determined
 - This is a single-player LSPDFR mod; never load RAGE Plugin Hook in GTA Online.
 - “Non-lethal” is enforced by recalling the K9 at the configured threshold and restoring that health floor if a damage tick crosses it. Other mods, weapons, traffic and game physics can still harm an NPC.
 - Native/API compatibility can only be fully verified inside a matching GTA V + RPH + LSPDFR installation. Keep the game SDK assemblies out of source control.
-- AI voice uses the default microphone, the configured provider and the `NAudio.dll` installed by the build. Set `Enabled=false` for fully offline keyboard-only play.
+- AI voice uses the default microphone, the configured provider and the included `NAudio.Core.dll` and `NAudio.WinMM.dll` runtimes. Set `Enabled=false` for fully offline keyboard-only play.
 
 ## Developer layout
 

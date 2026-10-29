@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.24.1 maintenance release
+
+See CHANGELOG_v0.24.1.md for the confirmed public changes since v0.24.0. Follow/reversal recovery remains under in-game validation; see RELEASE_NOTES_v0.24.1.md for limitations. The runtime is the Build 881 gameplay baseline with release version metadata.
+
 ## Build 881 — reversal response and progress-based follow recovery (0.24.0.95)
 
 - Replace the instantaneous low-speed stall timer with 350ms position windows. Detect growing separation while the dog makes insufficient forward progress; turning and side steps no longer count as useful catch-up solely because they have speed.

@@ -1,4 +1,4 @@
-# AdvancedK9 voice commands — Build 881
+# AdvancedK9 voice commands — v0.24.1
 
 This reference lists all 57 commands registered in this build and every built-in English alias. Available commands can still require a target, equipment, certification, health eligibility or a compatible integration; this is not a list of features certified by testing.
 
