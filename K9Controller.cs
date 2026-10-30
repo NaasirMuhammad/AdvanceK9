@@ -4097,7 +4097,7 @@ namespace AdvancedK9
 
         private void CaptureBitePatientControl(Ped target)
         {
-            if(!_bitePatientEventStates.ContainsKey(target))_bitePatientEventStates[target]=target.BlockPermanentEvents;
+            if(!_bitePatientEventStates.ContainsKey(target))_bitePatientEventStates[target]=NativeFunction.Natives.GET_PED_CONFIG_FLAG<bool>(target,17,true);
             target.BlockPermanentEvents=true;
             NativeFunction.Natives.SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(target,true);
         }
