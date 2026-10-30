@@ -223,6 +223,9 @@ namespace AdvancedK9
         private uint _controlledBiteHoldUntil;
         private bool _controlledBiteReleased;
         private uint _nextControlledBiteVisual;
+        private uint _controlledBitePoseReadyAt;
+        private string _controlledBiteClip="";
+        private readonly Dictionary<Ped,bool> _bitePatientEventStates=new Dictionary<Ped,bool>();
         private Ped _releasedBiteTarget;
         private int _releasedBiteHealth;
         private bool _releasedBiteTreated;
@@ -350,7 +353,7 @@ namespace AdvancedK9
                 if (ChordPressed(_config.ModifierKey,_config.CommandKey)) ShowCommandMenu();
                 HandlePushToTalk();
                 MaintainK9Availability();
-                if (!DogEntityExists()) { DrainVoice(false); continue; }
+                if (!DogEntityExists()) { MaintainReleasedBiteTarget(); DrainVoice(false); continue; }
                 HandleApprehendShortcut();
                 UpdateHandlerDownProtection();
                 if (ChordPressed(_config.ModifierKey,_config.CameraKey)) Execute(K9Command.ToggleCamera);
@@ -446,6 +449,7 @@ namespace AdvancedK9
             _voiceStatus = "Off duty";
             _shift.End(_profile.Health,_profile.Stamina,_profile.Food,_profile.Water,!_deployed||_state==K9State.Dismissed);
             if (_dog!=null&&_dog.Exists()) Dismiss(false);
+            ReleaseAllBitePatientControls();
             DeleteStationKennels();
             Game.LogTrivial("AdvancedK9: player is off duty; K9, UI and voice are inactive.");
         }
@@ -1040,7 +1044,7 @@ namespace AdvancedK9
         private void TakeHandlerCommandOwnership(K9Command command)
         {
             bool interrupted=_trackFiberRunning||_state==K9State.Tracking||_state==K9State.Containing||_containTarget!=null;
-            if(_controlledBiteTarget!=null&&_controlledBiteTarget.Exists()&&!_controlledBiteTarget.IsDead)
+            if(command!=K9Command.Apprehend&&_controlledBiteTarget!=null&&_controlledBiteTarget.Exists()&&!_controlledBiteTarget.IsDead)
             {
                 BeginReleasedBiteMedicalHold(false);
                 Game.LogTrivial("AdvancedK9 bite interruption: "+CommandLabel(command)+" converted the active bite into a persistent medical hold before handler control resumed.");
@@ -1061,7 +1065,7 @@ namespace AdvancedK9
                 _hudSearchProgress=0;
             }
             // Leave a resting pose intact until its exit clip has finished.
-            if(DogEntityExists()&&_state!=K9State.Sitting&&_state!=K9State.Lying)
+            if(DogEntityExists()&&_controlledBiteTarget==null&&_state!=K9State.Sitting&&_state!=K9State.Lying)
                 _dog.Tasks.Clear();
             if(interrupted)Game.LogTrivial("AdvancedK9 command ownership: handler "+CommandLabel(command)+" invalidated obsolete tracking/containment tasks before assignment.");
         }
@@ -2836,6 +2840,7 @@ namespace AdvancedK9
         {
             if(patient==null||!patient.Exists()||_biteMedicalVehicle==null||!_biteMedicalVehicle.Exists()||_biteMedicalDriver==null||!_biteMedicalDriver.Exists())return false;
             _biteMedicalLoadingPatient=true;
+            NativeFunction.Natives.STOP_ANIM_TASK(patient,"combat@damage@writhe","writhe_loop",-4f);
             if(_releasedBiteFrozen){NativeFunction.Natives.FREEZE_ENTITY_POSITION(patient,false);_releasedBiteFrozen=false;}
             bool loaded=LoadPatientWithStretcher(patient);
             if(!loaded){_biteMedicalLoadingPatient=false;NativeFunction.Natives.TASK_HANDS_UP(patient,-1,Game.LocalPlayer.Character,-1,true);return false;}
@@ -3410,6 +3415,10 @@ namespace AdvancedK9
 
         private void Apprehend()
         {
+            if(_controlledBiteTarget!=null&&_controlledBiteTarget.Exists())
+            {
+                Acknowledge("Already holding the suspect. Command Release before arrest or treatment.");return;
+            }
             var handler=Game.LocalPlayer.Character;
             var aimedTarget=GetValidAimedSuspect(false);
             if(aimedTarget==null&&_voiceAimedTarget!=null&&_voiceAimedTarget.Exists()&&!_voiceAimedTarget.IsDead&&_voiceAimedTarget.DistanceTo(handler)<=250f&&!LspdfrBridge.IsPedCop(_voiceAimedTarget))aimedTarget=_voiceAimedTarget;
@@ -3425,9 +3434,17 @@ namespace AdvancedK9
                 Game.DisplayNotification("~y~Callout suspect lock active.~s~~n~Ignored the aimed bystander and deployed only on the assigned fugitive.");
             _voiceAimedTarget=null;
             if(target==null){_recentApprehendTarget=null;_recentApprehendTargetUntil=0;Follow();Game.DisplayNotification("~y~No valid target identified.~s~~n~Rex has been recalled. Keep an active fleeing suspect aimed while saying '"+_profile.Name+", apprehend,' or use "+KeyChord(_config.ApprehendKey)+" / LT + D-pad Up.");return;}
+            if(target==_releasedBiteTarget&&!_releasedBiteTreated)
+            {
+                Game.DisplayNotification("~y~This suspect is already in a medical hold.~s~ Request EMS or complete restraint; another bite is not required.");return;
+            }
             if(_warnedTarget==target&&_warningSurrendered){Game.DisplayNotification("~r~K9 safety interlock: the warned suspect surrendered.~s~~n~Move in for arrest; apprehension was not deployed.");return;}
             if(IsTargetComplyingOrRestrained(target)){_recentApprehendTarget=null;_recentApprehendTargetUntil=0;_scentTarget=null;Follow();Game.DisplayNotification("~r~K9 safety interlock: the suspect is complying or in custody.~s~~n~Rex has been recalled; complete the LSPDFR arrest.");return;}
             if(_config.CompatibilityProtectManagedPeds&&IsProtectedOperationalPed(target)){Game.DisplayNotification("~r~K9 safety interlock: restrained or surrendered suspect rejected.~s~~n~PR/STP stop status is not required for deployment, but protected peds cannot be bitten.");return;}
+            if(_releasedBiteTarget!=null&&_releasedBiteTarget.Exists()&&target!=_releasedBiteTarget)
+            {
+                Game.DisplayNotification("~y~A K9 bite patient still needs handoff.~s~ Complete EMS transport or restraint before another apprehension.");return;
+            }
             if(_state==K9State.InVehicle)DoorPop(false);
             ExitRestingPose();
             _state = K9State.Apprehending;
@@ -3437,8 +3454,15 @@ namespace AdvancedK9
             int healthBeforeContact=target.Health;
             NativeFunction.Natives.REQUEST_ANIM_DICT("creatures@rottweiler@melee@");
             NativeFunction.Natives.SET_PED_MAX_MOVE_BLEND_RATIO(_dog,3f);
-            NativeFunction.Natives.TASK_GO_TO_ENTITY(_dog,target,-1,.8f,9f,0f,0);
-            Game.LogTrivial("AdvancedK9 apprehension approach started: direct live-target route; native combat preparation bypassed.");
+            NativeFunction.Natives.REQUEST_ANIM_DICT("combat@damage@writhe");
+            IssueApprehensionApproach(target);
+            uint approachAssigned=Game.GameTime,nextApproachSample=Game.GameTime+500,nextApproachLog=Game.GameTime+1500;
+            Vector3 approachDogPosition=_dog.Position,approachTargetPosition=target.Position;
+            float approachGap=_dog.DistanceTo(target);
+            Vector3 modelMin,modelMax;
+            NativeFunction.Natives.GET_MODEL_DIMENSIONS(NativeFunction.Natives.GET_ENTITY_MODEL<uint>(_dog),out modelMin,out modelMax);
+            float contactRadius=Math.Max(.9f,Math.Min(1.4f,.85f+(modelMax.Y-modelMin.Y)*.25f));
+            Game.LogTrivial("AdvancedK9 apprehension approach started: live-target route, contact radius="+contactRadius.ToString("0.00")+"m; shared across names/coats.");
             Game.DisplayNotification(calloutTarget!=null?"~o~K9 deploying on the verified callout suspect.~s~~n~Bystanders are excluded by the active suspect lock.":"~o~K9 deploying immediately on aimed target.~s~~n~No traffic stop or close-range contact is required.");
             var end = Game.GameTime + 25000;
             while (DogExists() && target.Exists() && !target.IsDead && Game.GameTime < end && _state == K9State.Apprehending)
@@ -3450,10 +3474,38 @@ namespace AdvancedK9
                     return;
                 }
                 float contactDistance=_dog.DistanceTo(target);
-                // The controlled takedown supplies the visible canine contact itself.
-                // Do not wait for native combat barks or its old 4.5-second fallback.
-                bool clearContact=contactDistance<=1.2f&&Math.Abs(_dog.Position.Z-target.Position.Z)<1f&&
+                Vector3 delta=target.Position-_dog.Position;
+                float horizontalContact=(float)Math.Sqrt(delta.X*delta.X+delta.Y*delta.Y);
+                NativeFunction.Natives.SET_PED_MAX_MOVE_BLEND_RATIO(_dog,3f);
+                NativeFunction.Natives.SET_ENTITY_MAX_SPEED(_dog,16f);
+                NativeFunction.Natives.SET_PED_MOVE_RATE_OVERRIDE(_dog,_profile.Health<=55?.65f:1.35f);
+                NativeFunction.Natives.SET_PED_DESIRED_MOVE_BLEND_RATIO(_dog,_profile.Health<=55?1f:3f);
+                bool clearContact=!NativeFunction.Natives.IS_PED_IN_ANY_VEHICLE<bool>(target,false)&&horizontalContact<=contactRadius&&Math.Abs(delta.Z)<1f&&
                     NativeFunction.Natives.HAS_ENTITY_CLEAR_LOS_TO_ENTITY<bool>(_dog,target,17);
+                if(!clearContact&&Game.GameTime>=nextApproachSample)
+                {
+                    uint now=Game.GameTime;nextApproachSample=now+500;
+                    Vector3 dogMove=_dog.Position-approachDogPosition;
+                    Vector3 toward=approachTargetPosition-approachDogPosition;toward.Z=0f;
+                    float span=(float)Math.Sqrt(toward.X*toward.X+toward.Y*toward.Y);
+                    float advance=span>.01f?BoneDot(dogMove,toward)/span:0f;
+                    float growth=contactDistance-approachGap;
+                    Vector3 velocity=NativeFunction.Natives.GET_ENTITY_VELOCITY<Vector3>(_dog);
+                    bool overshooting=horizontalContact<8f&&BoneDot(velocity,delta)<-.5f;
+                    int status=NativeFunction.Natives.GET_SCRIPT_TASK_STATUS<int>(_dog,NativeFunction.Natives.GET_HASH_KEY<uint>("SCRIPT_TASK_GO_TO_ENTITY"));
+                    bool recover=advance<.15f||growth>.75f||overshooting||status==3||status==7;
+                    if(recover&&now-approachAssigned>=900)
+                    {
+                        IssueApprehensionApproach(target);approachAssigned=now;
+                        Game.LogTrivial("AdvancedK9 apprehension route recovery: gap="+contactDistance.ToString("0.00")+", advance="+advance.ToString("0.00")+", growth="+growth.ToString("0.00")+", overshoot="+overshooting+", task="+status+".");
+                    }
+                    if(now>=nextApproachLog)
+                    {
+                        nextApproachLog=now+1500;
+                        Game.LogTrivial("AdvancedK9 apprehension progress: gap="+contactDistance.ToString("0.00")+", horizontal="+horizontalContact.ToString("0.00")+", vertical="+delta.Z.ToString("0.00")+", dogSpeed="+handlerSpeedForFollow(_dog).ToString("0.00")+", targetSpeed="+handlerSpeedForFollow(target).ToString("0.00")+", task="+status+".");
+                    }
+                    approachDogPosition=_dog.Position;approachTargetPosition=target.Position;approachGap=contactDistance;
+                }
                 if (clearContact)
                 {
                     if(target.Health>=healthBeforeContact)target.Health=Math.Max(_config.NonLethalHealthFloor,healthBeforeContact-12);
@@ -3467,8 +3519,12 @@ namespace AdvancedK9
                         NativeFunction.Natives.SET_PED_DROPS_INVENTORY_WEAPON(target,heldWeapon,drop.X,drop.Y,drop.Z+.15f,0);
                     }
                     NativeFunction.Natives.SET_CURRENT_PED_WEAPON(target,unarmed,true);
-                    NativeFunction.Natives.SET_PED_TO_RAGDOLL(target,8000,10000,0,false,false,false);
+                    CaptureBitePatientControl(target);
+                    target.Tasks.ClearImmediately();
+                    NativeFunction.Natives.SET_PED_TO_RAGDOLL(target,1800,2200,0,false,false,false);
                     _controlledBiteTarget=target;
+                    _controlledBitePoseReadyAt=Game.GameTime+2200;
+                    _controlledBiteClip="";
                     _controlledBiteHoldUntil=Game.GameTime+120000;
                     _controlledBiteReleased=false;
                     _nextControlledBiteVisual=0;
@@ -3508,12 +3564,13 @@ namespace AdvancedK9
                 _releasedBiteTreatmentCandidateHealth=0;
                 _nextReleasedBiteWarning=0;
                 _releasedBiteGroundPosition=_releasedBiteTarget.Position;
-                _releasedBiteGroundAt=Game.GameTime+500;
+                _releasedBiteGroundAt=Math.Max(Game.GameTime,_controlledBitePoseReadyAt);
                 _releasedBiteFrozen=false;
                 _nextReleasedBiteGroundPose=0;
                 _releasedBiteTarget.IsPersistent=true;
                 NativeFunction.Natives.SET_ENTITY_AS_MISSION_ENTITY(_releasedBiteTarget,true,true);
-                NativeFunction.Natives.SET_PED_TO_RAGDOLL(_releasedBiteTarget,6000,8000,0,false,false,false);
+                CaptureBitePatientControl(_releasedBiteTarget);
+                if(Game.GameTime>=_releasedBiteGroundAt)EnsureBitePatientGroundPose(_releasedBiteTarget);
                 Game.LogTrivial("AdvancedK9 controlled bite released; injured suspect medical hold anchored at "+_releasedBiteTarget.Position+" pending actual EMS treatment or completed restraint.");
                 if(notify)Game.DisplayNotification("~b~K9 released.~s~ The injured suspect will remain down until EMS treatment or completed restraint.");
             }
@@ -4030,50 +4087,97 @@ namespace AdvancedK9
             // restart its live navigation task on every frame beyond 45 metres.
         }
 
+        private void IssueApprehensionApproach(Ped target)
+        {
+            NativeFunction.Natives.SET_ENTITY_MAX_SPEED(_dog,16f);
+            NativeFunction.Natives.SET_PED_MAX_MOVE_BLEND_RATIO(_dog,3f);
+            NativeFunction.Natives.SET_PED_MOVE_RATE_OVERRIDE(_dog,_profile.Health<=55?.65f:1.35f);
+            NativeFunction.Natives.TASK_GO_TO_ENTITY(_dog,target,-1,.45f,_profile.Health<=55?1f:3f,0f,0);
+        }
+
+        private void CaptureBitePatientControl(Ped target)
+        {
+            if(!_bitePatientEventStates.ContainsKey(target))_bitePatientEventStates[target]=target.BlockPermanentEvents;
+            target.BlockPermanentEvents=true;
+            NativeFunction.Natives.SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(target,true);
+        }
+
+        private void RestoreBitePatientControl(Ped target)
+        {
+            if(target==null)return;
+            bool events;
+            if(_bitePatientEventStates.TryGetValue(target,out events))
+            {
+                if(target.Exists())
+                {
+                    NativeFunction.Natives.FREEZE_ENTITY_POSITION(target,false);
+                    NativeFunction.Natives.STOP_ANIM_TASK(target,"combat@damage@writhe","writhe_loop",-4f);
+                    target.BlockPermanentEvents=events;
+                    NativeFunction.Natives.SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(target,events);
+                }
+                _bitePatientEventStates.Remove(target);
+            }
+        }
+
+        private bool IsBitePatientBeingArrested(Ped target)
+        {
+            if(_pr.IsK9PatientBeingArrested(target))return true;
+            try{return NativeFunction.Natives.IS_PED_BEING_ARRESTED<bool>(target);}
+            catch{return false;}
+        }
+
         private void MaintainControlledBiteHold()
         {
             if(_controlledBiteTarget==null)return;
-            if(!_controlledBiteTarget.Exists()||_controlledBiteTarget.IsDead||IsTargetComplyingOrRestrained(_controlledBiteTarget)||Game.GameTime>=_controlledBiteHoldUntil)
+            if(!_controlledBiteTarget.Exists()||_controlledBiteTarget.IsDead||IsTargetDurablyRestrained(_controlledBiteTarget))
             {
-                if(_controlledBiteTarget.Exists()&&IsTargetDurablyRestrained(_controlledBiteTarget))_pr.CompleteK9Custody(_controlledBiteTarget);
-                _controlledBiteTarget=null;_controlledBiteHoldUntil=0;return;
+                if(_controlledBiteTarget.Exists())
+                {
+                    if(IsTargetDurablyRestrained(_controlledBiteTarget))_pr.CompleteK9Custody(_controlledBiteTarget);
+                    else _pr.ReleaseK9Custody(_controlledBiteTarget);
+                }
+                RestoreBitePatientControl(_controlledBiteTarget);
+                _controlledBiteTarget=null;_controlledBiteHoldUntil=0;
+                if(DogExists()){_dog.Tasks.Clear();Follow();}return;
             }
-            if(!_controlledBiteTarget.IsRagdoll)
-                NativeFunction.Natives.SET_PED_TO_RAGDOLL(_controlledBiteTarget,1800,2600,0,false,false,false);
-            if(DogExists()&&_dog.DistanceTo(_controlledBiteTarget)>1.8f)
-                NativeFunction.Natives.TASK_GO_TO_ENTITY(_dog,_controlledBiteTarget,-1,1.1f,3.8f,0f,0);
-            else if(DogExists()&&Game.GameTime>=_nextControlledBiteVisual)
-                PlayControlledBiteVisual(_controlledBiteTarget,false);
+            if(IsBitePatientBeingArrested(_controlledBiteTarget)||Game.GameTime>=_controlledBiteHoldUntil)
+            {
+                BeginReleasedBiteMedicalHold(false);if(DogExists())Follow();return;
+            }
+            _pr.RefreshK9Custody(_controlledBiteTarget,"BiteHold");
+            if(Game.GameTime>=_controlledBitePoseReadyAt)EnsureBitePatientGroundPose(_controlledBiteTarget);
+            if(!DogExists()||Game.GameTime<_nextControlledBiteVisual)return;
+            _nextControlledBiteVisual=Game.GameTime+1000;
+            // The takedown is a one-shot with a held final frame. Never replay it
+            // over a grounded patient. Only recover the dog's approach if displaced.
+            bool playing=!string.IsNullOrEmpty(_controlledBiteClip)&&NativeFunction.Natives.IS_ENTITY_PLAYING_ANIM<bool>(_dog,"creatures@rottweiler@melee@",_controlledBiteClip,3);
+            if(_dog.DistanceTo(_controlledBiteTarget)>1.8f)
+                NativeFunction.Natives.TASK_GO_TO_ENTITY(_dog,_controlledBiteTarget,-1,1.1f,2f,0f,0);
+            else if(!playing)NativeFunction.Natives.TASK_STAND_STILL(_dog,1500);
         }
 
         private void PlayControlledBiteVisual(Ped target,bool firstContact)
         {
-            if(!DogExists()||target==null||!target.Exists())return;
-            _nextControlledBiteVisual=Game.GameTime+1700;
-            try
+            if(!firstContact||!DogExists()||target==null||!target.Exists())return;
+            const string dictionary="creatures@rottweiler@melee@";
+            NativeFunction.Natives.REQUEST_ANIM_DICT(dictionary);
+            uint deadline=Game.GameTime+500;
+            while(!NativeFunction.Natives.HAS_ANIM_DICT_LOADED<bool>(dictionary)&&Game.GameTime<deadline)YieldOwned();
+            if(!NativeFunction.Natives.HAS_ANIM_DICT_LOADED<bool>(dictionary))
             {
-                NativeFunction.Natives.TASK_TURN_PED_TO_FACE_ENTITY(_dog,target,350);
-                const string dictionary="creatures@rottweiler@melee@";
-                NativeFunction.Natives.REQUEST_ANIM_DICT(dictionary);
-                uint deadline=Game.GameTime+500;
-                while(!NativeFunction.Natives.HAS_ANIM_DICT_LOADED<bool>(dictionary)&&Game.GameTime<deadline)YieldOwned();
-                if(NativeFunction.Natives.HAS_ANIM_DICT_LOADED<bool>(dictionary))
-                {
-                    // This is GTA's native canine takedown motion. Replaying it while the
-                    // suspect is held down gives visible jaw/body contact without applying
-                    // repeated combat damage that could kill the patient.
-                    Vector3 local=NativeFunction.Natives.GET_OFFSET_FROM_ENTITY_GIVEN_WORLD_COORDS<Vector3>(
-                        target,_dog.Position.X,_dog.Position.Y,_dog.Position.Z);
-                    string clip=local.Y<0f?"dog_takedown_from_back":"dog_takedown_from_front";
-                    NativeFunction.Natives.TASK_PLAY_ANIM(_dog,dictionary,clip,8f,-4f,1550,0,0f,false,false,false);
-                    if(firstContact)Game.LogTrivial("AdvancedK9 controlled bite visual: native canine takedown animation started and nonlethal hold established.");
-                }
-                else if(firstContact)Game.LogTrivial("AdvancedK9 controlled bite visual: canine animation dictionary unavailable; native combat contact retained as fallback.");
+                _nextControlledBiteVisual=Game.GameTime+1000;
+                Game.LogTrivial("AdvancedK9 controlled bite animation unavailable; patient hold retained without combat damage.");return;
             }
-            catch(Exception ex) when (!(ex is CommandSupersededException))
-            {
-                if(firstContact)Game.LogTrivial("AdvancedK9 controlled bite visual fallback contained: "+ex.GetType().Name+": "+ex.Message);
-            }
+            Vector3 local=NativeFunction.Natives.GET_OFFSET_FROM_ENTITY_GIVEN_WORLD_COORDS<Vector3>(target,_dog.Position.X,_dog.Position.Y,_dog.Position.Z);
+            _controlledBiteClip=local.Y<0f?"dog_takedown_from_back":"dog_takedown_from_front";
+            // Face the actual point of contact before the clip, without a
+            // competing turn task. AF_HOLD_LAST_FRAME retains its final pose.
+            Vector3 delta=target.Position-_dog.Position;
+            _dog.Heading=(float)(Math.Atan2(-delta.X,delta.Y)*180.0/Math.PI);
+            NativeFunction.Natives.TASK_PLAY_ANIM(_dog,dictionary,_controlledBiteClip,8f,-4f,-1,2,0f,false,false,false);
+            float seconds=NativeFunction.Natives.GET_ANIM_DURATION<float>(dictionary,_controlledBiteClip);
+            _nextControlledBiteVisual=Game.GameTime+(uint)(Math.Max(1.6f,Math.Min(4f,seconds))*1000)+500;
+            Game.LogTrivial("AdvancedK9 controlled bite visual: one-shot "+_controlledBiteClip+"; final pose retained, repeat disabled.");
         }
 
         private void MaintainReleasedBiteTarget()
@@ -4096,6 +4200,7 @@ namespace AdvancedK9
                     return;
                 }
                 if(_releasedBiteDeathObservedAt!=0){_releasedBiteDeathObservedAt=0;_releasedBiteTreatmentEligibleAt=Game.GameTime+5000;_releasedBiteHealth=_releasedBiteTarget.Health;Game.LogTrivial("AdvancedK9 bite patient revived; medical hold resumed pending treatment/custody.");}
+                _pr.RefreshK9Custody(_releasedBiteTarget,_releasedBiteTreated?"TreatedAwaitingArrest":"MedicalHold");
                 if(_biteMedicalLoadingPatient)return;
                 int currentHealth=_releasedBiteTarget.Health;
                 if(!_releasedBiteTreated)
@@ -4116,6 +4221,9 @@ namespace AdvancedK9
                         {
                             _releasedBiteTreated=true;
                             _pr.RecordTreatedCustody(_releasedBiteTarget);
+                            NativeFunction.Natives.FREEZE_ENTITY_POSITION(_releasedBiteTarget,false);
+                            NativeFunction.Natives.STOP_ANIM_TASK(_releasedBiteTarget,"combat@damage@writhe","writhe_loop",-4f);
+                            _releasedBiteFrozen=false;
                             NativeFunction.Natives.TASK_HANDS_UP(_releasedBiteTarget,-1,Game.LocalPlayer.Character,-1,true);
                             Game.LogTrivial("AdvancedK9 bite patient sustained treatment confirmed; suspect transitioned from medical ground hold to enforced compliant arrest posture pending cuffs.");
                         }
@@ -4126,55 +4234,79 @@ namespace AdvancedK9
                     }
                 }
                 if(Game.GameTime<_nextReleasedBiteMaintenance)return;
-                _nextReleasedBiteMaintenance=Game.GameTime+900;
+                _nextReleasedBiteMaintenance=Game.GameTime+100;
+                if(IsBitePatientBeingArrested(_releasedBiteTarget))
+                {
+                    NativeFunction.Natives.FREEZE_ENTITY_POSITION(_releasedBiteTarget,false);
+                    NativeFunction.Natives.STOP_ANIM_TASK(_releasedBiteTarget,"combat@damage@writhe","writhe_loop",-4f);
+                    _releasedBiteFrozen=false;return;
+                }
                 if(_releasedBiteTreated)
                 {
-                    if(_releasedBiteFrozen){NativeFunction.Natives.FREEZE_ENTITY_POSITION(_releasedBiteTarget,false);_releasedBiteTarget.Tasks.Clear();_releasedBiteFrozen=false;}
-                    NativeFunction.Natives.TASK_HANDS_UP(_releasedBiteTarget,-1,Game.LocalPlayer.Character,-1,true);
+                    if(_releasedBiteFrozen)
+                    {
+                        NativeFunction.Natives.FREEZE_ENTITY_POSITION(_releasedBiteTarget,false);
+                        NativeFunction.Natives.STOP_ANIM_TASK(_releasedBiteTarget,"combat@damage@writhe","writhe_loop",-4f);
+                        _releasedBiteFrozen=false;
+                    }
+                    if(!NativeFunction.Natives.IS_PED_HANDS_UP<bool>(_releasedBiteTarget))
+                        NativeFunction.Natives.TASK_HANDS_UP(_releasedBiteTarget,-1,Game.LocalPlayer.Character,-1,true);
                 }
-                else if(Game.GameTime>=_releasedBiteGroundAt&&Game.GameTime>=_nextReleasedBiteGroundPose)
-                {
-                    _nextReleasedBiteGroundPose=Game.GameTime+3500;
-                    EnsureReleasedBiteGroundPose();
-                }
+                else if(Game.GameTime>=_releasedBiteGroundAt)EnsureBitePatientGroundPose(_releasedBiteTarget);
             }
             catch(Exception ex) when (!(ex is CommandSupersededException)){LogReleasedBiteWarning("contained maintenance failure: "+ex.GetType().Name+": "+ex.Message);}
         }
 
-        private void EnsureReleasedBiteGroundPose()
+        private void EnsureBitePatientGroundPose(Ped patient)
         {
-            if(_releasedBiteTarget==null||!_releasedBiteTarget.Exists()||_releasedBiteTarget.IsDead)return;
-            const string dictionary="combat@damage@writhe";const string animation="writhe_loop";
-            try
+            if(patient==null||!patient.Exists()||patient.IsDead||IsTargetDurablyRestrained(patient)||_biteMedicalLoadingPatient)return;
+            if(IsBitePatientBeingArrested(patient))
             {
-                bool playing=NativeFunction.Natives.IS_ENTITY_PLAYING_ANIM<bool>(_releasedBiteTarget,dictionary,animation,3);
-                if(playing){_releasedBiteFrozen=true;return;}
-                NativeFunction.Natives.FREEZE_ENTITY_POSITION(_releasedBiteTarget,false);
-                NativeFunction.Natives.REQUEST_ANIM_DICT(dictionary);uint deadline=Game.GameTime+700;
-                while(!NativeFunction.Natives.HAS_ANIM_DICT_LOADED<bool>(dictionary)&&Game.GameTime<deadline)YieldOwned();
-                if(NativeFunction.Natives.HAS_ANIM_DICT_LOADED<bool>(dictionary))
-                {
-                    _releasedBiteTarget.Tasks.ClearImmediately();
-                    _releasedBiteTarget.Position=_releasedBiteGroundPosition;
-                    NativeFunction.Natives.TASK_PLAY_ANIM(_releasedBiteTarget,dictionary,animation,4f,-2f,-1,1,0f,false,false,false);
-                    _releasedBiteFrozen=true;
-                    Game.LogTrivial("AdvancedK9 bite patient placed into a persistent downed medical animation before PR could restore standing idle.");
-                }
-                else
-                {
-                    NativeFunction.Natives.SET_PED_TO_RAGDOLL(_releasedBiteTarget,8000,10000,0,false,false,false);
-                    Game.LogTrivial("AdvancedK9 bite patient ground animation unavailable; one long ragdoll hold applied as fallback.");
-                }
+                NativeFunction.Natives.FREEZE_ENTITY_POSITION(patient,false);return;
             }
-            catch(Exception ex) when (!(ex is CommandSupersededException)){LogReleasedBiteWarning("ground-pose maintenance failed: "+ex.Message);}
+            const string dictionary="combat@damage@writhe",animation="writhe_loop";
+            CaptureBitePatientControl(patient);
+            bool playing=NativeFunction.Natives.IS_ENTITY_PLAYING_ANIM<bool>(patient,dictionary,animation,3);
+            if(!playing)
+            {
+                NativeFunction.Natives.REQUEST_ANIM_DICT(dictionary);
+                if(!NativeFunction.Natives.HAS_ANIM_DICT_LOADED<bool>(dictionary))
+                {
+                    if(!patient.IsRagdoll)NativeFunction.Natives.SET_PED_TO_RAGDOLL(patient,1500,2000,0,false,false,false);
+                    return;
+                }
+                NativeFunction.Natives.FREEZE_ENTITY_POSITION(patient,false);
+                patient.Tasks.ClearImmediately();
+                NativeFunction.Natives.TASK_PLAY_ANIM(patient,dictionary,animation,4f,-2f,-1,1,0f,true,true,true);
+                Game.LogTrivial("AdvancedK9 bite patient ground hold: started/repaired at current position; no return-to-origin teleport.");
+            }
+            // Actually anchor the patient, rather than only setting a bookkeeping
+            // flag while the pursuit controller remains free to walk them away.
+            NativeFunction.Natives.FREEZE_ENTITY_POSITION(patient,true);
+            if(patient==_releasedBiteTarget)_releasedBiteFrozen=true;
         }
 
         private void ClearReleasedBiteTarget()
         {
-            if(_releasedBiteTarget!=null&&_releasedBiteTarget.Exists()){if(_releasedBiteFrozen)NativeFunction.Natives.FREEZE_ENTITY_POSITION(_releasedBiteTarget,false);_pr.CompleteK9Custody(_releasedBiteTarget);}
+            if(_releasedBiteTarget!=null&&_releasedBiteTarget.Exists())
+            {
+                if(IsTargetDurablyRestrained(_releasedBiteTarget))_pr.CompleteK9Custody(_releasedBiteTarget);
+                else _pr.ReleaseK9Custody(_releasedBiteTarget);
+            }
+            RestoreBitePatientControl(_releasedBiteTarget);
             _releasedBiteTarget=null;_releasedBiteHealth=0;_releasedBiteTreated=false;_nextReleasedBiteMaintenance=0;_releasedBiteDeathObservedAt=0;
             _releasedBiteTreatmentEligibleAt=0;_releasedBiteTreatmentCandidateAt=0;_releasedBiteTreatmentCandidateHealth=0;_nextReleasedBiteWarning=0;
             _releasedBiteGroundPosition=Vector3.Zero;_releasedBiteGroundAt=0;_releasedBiteFrozen=false;_nextReleasedBiteGroundPose=0;
+        }
+
+        private void ReleaseAllBitePatientControls()
+        {
+            foreach(Ped patient in _bitePatientEventStates.Keys.ToArray())
+            {
+                if(patient!=null&&patient.Exists())_pr.ReleaseK9Custody(patient);
+                RestoreBitePatientControl(patient);
+            }
+            _controlledBiteTarget=null;_releasedBiteTarget=null;_controlledBiteHoldUntil=0;
         }
 
         private void LogReleasedBiteWarning(string message)
@@ -5035,6 +5167,7 @@ namespace AdvancedK9
             _trust.Save();
             _profile.Save();
             Dismiss(false);
+            ReleaseAllBitePatientControls();
             DeleteStationKennels();
         }
     }

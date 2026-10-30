@@ -8,6 +8,7 @@
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Remove="Tests\**\*.cs" />
     <Compile Remove="Bridge\**\*.cs" />
     <Compile Remove="Api\**\*.cs" />
     <Compile Remove="Callouts\**\*.cs" />

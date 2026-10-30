@@ -10,6 +10,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Bridge/BridgeEntryPoint.cs" />
+    <Compile Include="Bridge/BiteCustodyPolicy.cs" />
     <Compile Include="Bridge/Properties/AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>

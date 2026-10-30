@@ -7,6 +7,7 @@ using System.Reflection;
 using System.Text;
 using LSPD_First_Response.Mod.API;
 using Rage;
+using Rage.Native;
 
 namespace AdvancedK9.LSPDFRBridge
 {
@@ -26,6 +27,16 @@ namespace AdvancedK9.LSPDFRBridge
         private static string _lastActionRequestId="",_actionRequestId="",_actionSink="",_actionDetail="";
         private static string _lastQueryRequestId="",_queryRequestId="",_queryHandle="",_queryData="",_querySource="";
         private static bool _actionSucceeded;
+        private sealed class K9PhysicalCustody
+        {
+            public Ped Patient;
+            public bool? OriginalExcluded,OriginalKeep;
+            public int? OriginalResistance,OriginalSurrender;
+            public object OriginalAction;
+            public bool PursuitAiChanged,OriginalPursuitAiDisabled,StopRequested;
+            public DateTime ExpiresUtc;
+        }
+        private static readonly Dictionary<PoolHandle,K9PhysicalCustody> K9PhysicalHolds=new Dictionary<PoolHandle,K9PhysicalCustody>();
         private static bool _queryAvailable;
         private static string _surfaceSignature="";
         private static readonly Dictionary<string,Type[]> TypeCache=new Dictionary<string,Type[]>(StringComparer.OrdinalIgnoreCase);
@@ -57,6 +68,8 @@ namespace AdvancedK9.LSPDFRBridge
         public override void Finally()
         {
             _running=false;
+            foreach(var hold in K9PhysicalHolds.Values.ToArray())RestoreK9PhysicalCustody(Find("PolicingRedefined","Policing Redefined"),hold,true);
+            K9PhysicalHolds.Clear();
             try{if(File.Exists(StatePath))File.Delete(StatePath);if(File.Exists(TempPath))File.Delete(TempPath);if(File.Exists(RequestPath))File.Delete(RequestPath);if(File.Exists(CalloutStatePath))File.Delete(CalloutStatePath);if(File.Exists(CalloutTempPath))File.Delete(CalloutTempPath);if(File.Exists(CalloutRequestPath))File.Delete(CalloutRequestPath);}catch{}
         }
 
@@ -74,6 +87,18 @@ namespace AdvancedK9.LSPDFRBridge
             ProcessInventoryQuery(request,cdf,pr,query);
             ProcessK9Indication(request,nexus,pr,query);
             ProcessK9CustodyControl(request,pr,query as Ped);
+            foreach(var pair in K9PhysicalHolds.ToArray())
+                if(pair.Value.Patient==null||!pair.Value.Patient.Exists()||DateTime.UtcNow>pair.Value.ExpiresUtc)
+                {
+                    RestoreK9PhysicalCustody(pr,pair.Value,true);K9PhysicalHolds.Remove(pair.Key);
+                    Game.LogTrivial("AdvancedK9 bridge: expired/unavailable K9 patient hold released; per-ped pursuit AI and temporary controls restored.");
+                }
+            foreach(var hold in K9PhysicalHolds.Values)
+                if(hold.Patient!=null&&hold.Patient.Exists()&&TryLspdfrCustody(hold.Patient,"IsPedGettingArrested"))
+                {
+                    NativeFunction.Natives.FREEZE_ENTITY_POSITION(hold.Patient,false);
+                    NativeFunction.Natives.STOP_ANIM_TASK(hold.Patient,"combat@damage@writhe","writhe_loop",-4f);
+                }
             ProcessPendingOfficerSearches(pr,nexus);
             ProcessCalloutBridge(pr,stp);
             var lines=new[]{
@@ -96,6 +121,7 @@ namespace AdvancedK9.LSPDFRBridge
                 "ActionRequestId="+_actionRequestId,
                 "ActionSucceeded="+_actionSucceeded,
                 "ActionSink="+_actionSink,
+                "K9ArrestingPedHandles="+string.Join(",",K9PhysicalHolds.Values.Where(h=>h.Patient!=null&&h.Patient.Exists()&&TryLspdfrCustody(h.Patient,"IsPedGettingArrested")).Select(h=>h.Patient.Handle.ToString())),
                 "ActionDetail="+Encode(_actionDetail)
             };
             if(!Directory.Exists(DirectoryPath))Directory.CreateDirectory(DirectoryPath);
@@ -200,20 +226,107 @@ namespace AdvancedK9.LSPDFRBridge
             string id=Read(request,"RequestId");if(string.IsNullOrWhiteSpace(id)||id==_lastActionRequestId)return;
             _lastActionRequestId=_actionRequestId=id;_actionSucceeded=false;_actionSink="Policing Redefined public PedAPI";
             string phase=Read(request,"Phase");if(string.IsNullOrWhiteSpace(phase))phase="BiteHold";
-            if(pr==null){_actionDetail="PR unavailable for K9 custody phase "+phase;return;}
             if(target==null||!target.Exists()){_actionDetail="K9 custody target unavailable for phase "+phase;return;}
+            bool terminal=BiteCustodyPolicy.IsTerminal(phase);
+            K9PhysicalCustody hold;
+            if(terminal)
+            {
+                if(K9PhysicalHolds.TryGetValue(target.Handle,out hold))
+                {
+                    RestoreK9PhysicalCustody(pr,hold,phase!="Cuffed");K9PhysicalHolds.Remove(target.Handle);
+                }
+                _actionSucceeded=true;_actionDetail="phase="+phase+"; temporary K9 controls restored; no new stop registered";return;
+            }
+            if(!BiteCustodyPolicy.IsHeld(phase)){_actionDetail="Unknown K9 custody phase rejected: "+phase;return;}
+            if(!K9PhysicalHolds.TryGetValue(target.Handle,out hold))
+            {
+                hold=new K9PhysicalCustody{Patient=target,
+                    OriginalExcluded=ReadPrPedValue(pr,"GetIsPedExcludedFromCustomPursuitAttributes",target) as bool?,
+                    OriginalKeep=ReadPrPedValue(pr,"GetKeepResistanceAction",target) as bool?,
+                    OriginalResistance=ReadPrPedValue(pr,"GetPedResistanceChance",target) as int?,
+                    OriginalSurrender=ReadPrPedValue(pr,"GetPedSurrenderChance",target) as int?,
+                    OriginalAction=ReadPrPedValue(pr,"GetPedResistanceAction",target),
+                    OriginalPursuitAiDisabled=(ReadLspdfrPedValue("GetPursuitDisableAIForPed",target) as bool?)??false};
+                K9PhysicalHolds[target.Handle]=hold;
+            }
+            // A short lease prevents a vanished/crashed controller retaining a
+            // per-ped pursuit override indefinitely. The core refreshes every 4s.
+            hold.ExpiresUtc=DateTime.UtcNow.AddSeconds(15);
+            hold.PursuitAiChanged=TryLspdfrPedToggle("SetPursuitDisableAIForPed",target,true)||hold.PursuitAiChanged;
+            bool excluded=pr!=null&&TryInvokeExactPrPedApi(pr,"SetIsPedExcludedFromCustomPursuitAttributes",target,true,null);
+            bool intercepted=pr!=null&&TryInvokeExactPrPedApi(pr,"SetInterceptPedAnyArrest",target,true,null);
+            bool resistance=pr!=null&&TryInvokeExactPrPedApi(pr,"SetPedResistanceChance",target,null,0);
+            bool surrender=pr!=null&&TryInvokeExactPrPedApi(pr,"SetPedSurrenderChance",target,null,100);
+            bool action=pr!=null&&TryInvokePrResistanceNone(pr,target);
+            // A stop is for a treated, compliant suspect awaiting cuffs, not a
+            // ragdoll or physically held patient. Never manufacture arrested state.
+            bool registerStop=BiteCustodyPolicy.RegisterStop(phase);
+            bool stopped=pr!=null&&(ReadPrPedValue(pr,"IsPedStopped",target) as bool?)==true;
+            if(registerStop&&pr!=null&&!hold.StopRequested)
+            {
+                hold.StopRequested=true;
+                stopped=stopped||TryInvokeExactPrPedApi(pr,"SetPedAsStopped",target,null,null);
+            }
+            _actionSucceeded=hold.PursuitAiChanged||(excluded&&intercepted);
+            _actionDetail="phase="+phase+", stopRequested="+registerStop+", stopped="+stopped+", perPedPursuitAi="+hold.PursuitAiChanged+", excludeCustomPursuit="+excluded+", arrestIntercept="+intercepted+", resistance0="+resistance+", surrender100="+surrender+", resistanceActionNone="+action;
+            Game.LogTrivial("AdvancedK9 bridge: K9 physical custody "+(_actionSucceeded?"applied":"partially applied")+" for ped "+target.Handle+"; "+_actionDetail+". Arrest remains pending real cuffs.");
+        }
 
-            // Do not mark the ped arrested here. PR/LSPDFR must still observe the real cuffing
-            // action. These public APIs only register the stop, preserve arrest interception,
-            // and prevent escape/resistance while Rex or EMS has physical custody.
-            bool stopped=TryInvokeExactPrPedApi(pr,"SetPedAsStopped",target,null,null);
-            bool intercepted=TryInvokeExactPrPedApi(pr,"SetInterceptPedAnyArrest",target,true,null);
-            bool resistance=TryInvokeExactPrPedApi(pr,"SetPedResistanceChance",target,null,0);
-            bool surrender=TryInvokeExactPrPedApi(pr,"SetPedSurrenderChance",target,null,100);
-            bool action=TryInvokePrResistanceNone(pr,target);
-            _actionSucceeded=stopped&&intercepted;
-            _actionDetail="phase="+phase+", stopped="+stopped+", arrestIntercept="+intercepted+", resistance0="+resistance+", surrender100="+surrender+", resistanceActionNone="+action;
-            Game.LogTrivial("AdvancedK9 bridge: PR K9 custody control "+(_actionSucceeded?"applied":"partially applied")+" for ped "+target.Handle+"; "+_actionDetail+". Arrest remains pending real cuffs.");
+        private static object ReadPrPedValue(Assembly pr,string name,Ped target)
+        {
+            if(pr==null)return null;
+            foreach(Type type in Types(new[]{pr}).Where(t=>t.Name.Equals("PedAPI",StringComparison.OrdinalIgnoreCase)))
+                foreach(MethodInfo method in type.GetMethods(BindingFlags.Public|BindingFlags.Static).Where(m=>m.Name==name))
+                {
+                    var parameters=method.GetParameters();
+                    if(parameters.Length!=1||!parameters[0].ParameterType.IsInstanceOfType(target))continue;
+                    try{return method.Invoke(null,new object[]{target});}catch{}
+                }
+            return null;
+        }
+
+        private static object ReadLspdfrPedValue(string name,Ped target)
+        {
+            foreach(MethodInfo method in typeof(Functions).GetMethods(BindingFlags.Public|BindingFlags.Static).Where(m=>m.Name==name))
+            {
+                var p=method.GetParameters();if(p.Length!=1||!p[0].ParameterType.IsInstanceOfType(target))continue;
+                try{return method.Invoke(null,new object[]{target});}catch{}
+            }
+            return null;
+        }
+
+        private static bool TryLspdfrPedToggle(string name,Ped target,bool value)
+        {
+            foreach(MethodInfo method in typeof(Functions).GetMethods(BindingFlags.Public|BindingFlags.Static).Where(m=>m.Name==name))
+            {
+                var p=method.GetParameters();
+                if(p.Length!=2||!p[0].ParameterType.IsInstanceOfType(target)||p[1].ParameterType!=typeof(bool))continue;
+                try{object result=method.Invoke(null,new object[]{target,value});return method.ReturnType!=typeof(bool)||(bool)result;}
+                catch(Exception ex){Game.LogTrivial("AdvancedK9 bridge: per-ped pursuit AI toggle rejected: "+Unwrap(ex).Message);return false;}
+            }
+            return false;
+        }
+
+        private static void RestoreK9PhysicalCustody(Assembly pr,K9PhysicalCustody hold,bool releaseNative)
+        {
+            Ped target=hold.Patient;if(target==null||!target.Exists())return;
+            if(hold.PursuitAiChanged)TryLspdfrPedToggle("SetPursuitDisableAIForPed",target,hold.OriginalPursuitAiDisabled);
+            if(pr!=null)
+            {
+                if(hold.OriginalExcluded.HasValue)TryInvokeExactPrPedApi(pr,"SetIsPedExcludedFromCustomPursuitAttributes",target,hold.OriginalExcluded.Value,null);
+                TryInvokeExactPrPedApi(pr,"SetKeepResistanceAction",target,false,null);
+                if(hold.OriginalAction!=null)
+                    foreach(Type type in Types(new[]{pr}).Where(t=>t.Name=="PedAPI"))
+                    foreach(MethodInfo method in type.GetMethods(BindingFlags.Public|BindingFlags.Static).Where(m=>m.Name=="SetPedResistanceAction"))
+                    {
+                        var p=method.GetParameters();if(p.Length!=2||!p[0].ParameterType.IsInstanceOfType(target)||!p[1].ParameterType.IsInstanceOfType(hold.OriginalAction))continue;
+                        try{method.Invoke(null,new[]{(object)target,hold.OriginalAction});break;}catch{}
+                    }
+                if(hold.OriginalKeep.HasValue)TryInvokeExactPrPedApi(pr,"SetKeepResistanceAction",target,hold.OriginalKeep.Value,null);
+                if(hold.OriginalResistance.HasValue)TryInvokeExactPrPedApi(pr,"SetPedResistanceChance",target,null,hold.OriginalResistance.Value);
+                if(hold.OriginalSurrender.HasValue)TryInvokeExactPrPedApi(pr,"SetPedSurrenderChance",target,null,hold.OriginalSurrender.Value);
+            }
+            if(releaseNative)NativeFunction.Natives.FREEZE_ENTITY_POSITION(target,false);
         }
 
         private static bool TryInvokeExactPrPedApi(Assembly pr,string methodName,Ped target,bool? booleanValue,int? integerValue)
@@ -231,13 +344,19 @@ namespace AdvancedK9.LSPDFRBridge
                     else{valid=false;break;}
                 }
                 if(!valid)continue;
-                try{method.Invoke(null,args);return true;}catch(Exception ex){Game.LogTrivial("AdvancedK9 bridge: PR PedAPI."+methodName+" rejected K9 custody update: "+Unwrap(ex).Message);}
+                try{object result=method.Invoke(null,args);return method.ReturnType!=typeof(bool)||(bool)result;}catch(Exception ex){Game.LogTrivial("AdvancedK9 bridge: PR PedAPI."+methodName+" rejected K9 custody update: "+Unwrap(ex).Message);}
             }
             return false;
         }
 
         private static bool TryInvokePrResistanceNone(Assembly pr,Ped target)
         {
+            object current=ReadPrPedValue(pr,"GetPedResistanceAction",target);
+            if(current!=null&&current.ToString().Equals("None",StringComparison.OrdinalIgnoreCase))
+            {
+                TryInvokeExactPrPedApi(pr,"SetKeepResistanceAction",target,true,null);return true;
+            }
+            TryInvokeExactPrPedApi(pr,"SetKeepResistanceAction",target,false,null);
             foreach(Type type in Types(new[]{pr}).Where(t=>t.Name.Equals("PedAPI",StringComparison.OrdinalIgnoreCase)||(t.FullName??"").EndsWith(".PedAPI",StringComparison.OrdinalIgnoreCase)))
             foreach(MethodInfo method in type.GetMethods(BindingFlags.Public|BindingFlags.Static).Where(m=>m.Name.Equals("SetPedResistanceAction",StringComparison.OrdinalIgnoreCase)).OrderByDescending(m=>m.GetParameters().Length))
             {
