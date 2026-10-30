@@ -238,7 +238,7 @@ namespace AdvancedK9
         private Vector3 _releasedBiteGroundPosition;
         private uint _releasedBiteGroundAt;
         private bool _releasedBiteFrozen;
-        private uint _nextReleasedBiteGroundPose;
+        private uint _nextBiteGroundPoseRepair;
         private bool _biteMedicalResponseActive;
         private Vehicle _biteMedicalVehicle;
         private Ped _biteMedicalDriver;
@@ -3524,6 +3524,7 @@ namespace AdvancedK9
                     NativeFunction.Natives.SET_PED_TO_RAGDOLL(target,1800,2200,0,false,false,false);
                     _controlledBiteTarget=target;
                     _controlledBitePoseReadyAt=Game.GameTime+2200;
+                    _nextBiteGroundPoseRepair=0;
                     _controlledBiteClip="";
                     _controlledBiteHoldUntil=Game.GameTime+120000;
                     _controlledBiteReleased=false;
@@ -3566,7 +3567,7 @@ namespace AdvancedK9
                 _releasedBiteGroundPosition=_releasedBiteTarget.Position;
                 _releasedBiteGroundAt=Math.Max(Game.GameTime,_controlledBitePoseReadyAt);
                 _releasedBiteFrozen=false;
-                _nextReleasedBiteGroundPose=0;
+                _nextBiteGroundPoseRepair=0;
                 _releasedBiteTarget.IsPersistent=true;
                 NativeFunction.Natives.SET_ENTITY_AS_MISSION_ENTITY(_releasedBiteTarget,true,true);
                 CaptureBitePatientControl(_releasedBiteTarget);
@@ -4269,6 +4270,9 @@ namespace AdvancedK9
             bool playing=NativeFunction.Natives.IS_ENTITY_PLAYING_ANIM<bool>(patient,dictionary,animation,3);
             if(!playing)
             {
+                // Allow the assigned clip to blend in before testing for an interruption.
+                if(Game.GameTime<_nextBiteGroundPoseRepair)return;
+                _nextBiteGroundPoseRepair=Game.GameTime+350;
                 NativeFunction.Natives.REQUEST_ANIM_DICT(dictionary);
                 if(!NativeFunction.Natives.HAS_ANIM_DICT_LOADED<bool>(dictionary))
                 {
@@ -4296,7 +4300,7 @@ namespace AdvancedK9
             RestoreBitePatientControl(_releasedBiteTarget);
             _releasedBiteTarget=null;_releasedBiteHealth=0;_releasedBiteTreated=false;_nextReleasedBiteMaintenance=0;_releasedBiteDeathObservedAt=0;
             _releasedBiteTreatmentEligibleAt=0;_releasedBiteTreatmentCandidateAt=0;_releasedBiteTreatmentCandidateHealth=0;_nextReleasedBiteWarning=0;
-            _releasedBiteGroundPosition=Vector3.Zero;_releasedBiteGroundAt=0;_releasedBiteFrozen=false;_nextReleasedBiteGroundPose=0;
+            _releasedBiteGroundPosition=Vector3.Zero;_releasedBiteGroundAt=0;_releasedBiteFrozen=false;_nextBiteGroundPoseRepair=0;
         }
 
         private void ReleaseAllBitePatientControls()
