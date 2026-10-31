@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Text;
 using System.IO;
 using Rage;
+using AdvancedK9.Mdt;
 using Rage.Native;
 
 namespace AdvancedK9
@@ -32,6 +33,7 @@ namespace AdvancedK9
         public PolicingRedefinedBridge(string configuredMode="Auto",bool shareResults=true,bool useCdfInventory=true,bool shareWithNexusMdt=true)
         {
             _configuredMode=string.IsNullOrWhiteSpace(configuredMode)?"Auto":configuredMode.Trim();_shareResults=shareResults;_useCdfInventory=useCdfInventory;_shareWithNexusMdt=shareWithNexusMdt;
+            try{BiteReports.SetEnabled(_shareResults&&_shareWithNexusMdt);}catch(Exception ex){Game.LogTrivial("AdvancedK9 MDT sharing setting: "+ex.Message);}
             _pr=Find("PolicingRedefined","Policing Redefined");_cdf=Find("CommonDataFramework");_stp=Find("StopThePed","Stop The Ped","STP");
             RefreshBridgeState();SelectMode();
             if(_pr!=null&&_stp!=null)Game.LogTrivial("AdvancedK9 compatibility WARNING: PR and STP are both loaded. PR mode selected; remove STP to prevent conflicting stop/arrest tasks.");
@@ -110,6 +112,26 @@ namespace AdvancedK9
         }
 
         private static string SafeRequestValue(string value)=>string.IsNullOrWhiteSpace(value)?"K9":value.Replace("\r"," ").Replace("\n"," ").Replace("=","-").Trim();
+        internal readonly BiteReportJournal BiteReports=new BiteReportJournal(Path.Combine("Plugins","LSPDFR","AdvancedK9","BiteMdtOutbox"));
+        private readonly Dictionary<PoolHandle,string> _biteReportEpisodes=new Dictionary<PoolHandle,string>();
+        private readonly Dictionary<PoolHandle,string> _biteReportK9Names=new Dictionary<PoolHandle,string>();
+        public void RecordBiteReportEvent(Ped patient,string stage,string k9,string detail)
+        {
+            if(!_shareResults||!_shareWithNexusMdt||patient==null||!patient.Exists())return;
+            try
+            {
+                string episode;
+                if(stage=="Bite")
+                {
+                    episode=Guid.NewGuid().ToString("N");_biteReportEpisodes[patient.Handle]=episode;_biteReportK9Names[patient.Handle]=k9;
+                }
+                else if(!_biteReportEpisodes.TryGetValue(patient.Handle,out episode))return;
+                if(BiteReports.Add(new BiteReportEvent{Episode=episode,Stage=stage,Utc=DateTime.UtcNow,K9=_biteReportK9Names[patient.Handle],PedHandle=patient.Handle.ToString(),Model=patient.Model.Name,Position=patient.Position.ToString(),Detail=detail}))
+                    Game.LogTrivial("AdvancedK9 MDT: queued "+stage+" event for bite episode "+episode+"; report delivery remains pending bridge confirmation.");
+            }
+            catch(Exception ex){Game.LogTrivial("AdvancedK9 MDT event queue failure contained: "+ex.Message);}
+        }
+
         public void RecordLocatedSuspect(Ped suspect){if(_shareResults&&suspect!=null&&suspect.Exists())TryInvokeAction(new[]{"RecordK9Locate","SetLocatedSuspect","AddLocatedSuspect","RecordCanineLocate"},suspect,true,"Tracking");}
         public void RecordApprehension(Ped suspect){if(suspect==null||!suspect.Exists())return;if(_shareResults)TryInvokeAction(new[]{"RecordK9Apprehension","SetApprehendedPed","AddApprehendedPed","RecordCanineApprehension"},suspect,true,"Apprehension");SendBridgeK9CustodyControl(suspect,"BiteHold");}
         public void RecordMedicalCustody(Ped suspect){SendBridgeK9CustodyControl(suspect,"MedicalHold");}
@@ -203,3 +225,4 @@ namespace AdvancedK9
         private sealed class ReferenceComparer:IEqualityComparer<object>{public static readonly ReferenceComparer Instance=new ReferenceComparer();public new bool Equals(object x,object y)=>ReferenceEquals(x,y);public int GetHashCode(object obj)=>System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(obj);}
     }
 }
+

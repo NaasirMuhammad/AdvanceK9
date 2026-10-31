@@ -6,6 +6,7 @@ using System.Linq;
 using System.IO;
 using System.Windows.Forms;
 using Rage;
+using AdvancedK9.Mdt;
 using Rage.Native;
 using AdvancedK9.API;
 
@@ -219,6 +220,7 @@ namespace AdvancedK9
         private Ped _warnedTarget;
         private bool _warningSurrendered;
         private uint _biteStarted;
+        private uint _biteContactReportAt;
         private Ped _controlledBiteTarget;
         private uint _controlledBiteHoldUntil;
         private bool _controlledBiteReleased;
@@ -552,7 +554,7 @@ namespace AdvancedK9
             CloseSeatCalibrationDoor();_menuMode="profile"; RefreshProfileMenu();
         }
 
-        private void RefreshProfileMenu(){_menu.Update("K9 PROFILE — "+_profile.Name,new[]{L("Language")+": "+Localization.LanguageName,"K9 Roster ("+_roster.Entries.Count+")",L("Identity & Appearance"),L("HUD & Display"),L("Kennel Location Editor"),L("Vehicle Seat Configuration"),L("Profile, Health & Certifications"),"Accessory colors",VoiceMenuLabel()});}
+        private void RefreshProfileMenu(){_menu.Update("K9 PROFILE — "+_profile.Name,new[]{L("Language")+": "+Localization.LanguageName,"K9 Roster ("+_roster.Entries.Count+")",L("Identity & Appearance"),L("HUD & Display"),L("Kennel Location Editor"),L("Vehicle Seat Configuration"),L("Profile, Health & Certifications"),"Accessory colors",VoiceMenuLabel(),"Bite / EMS MDT reports"});}
         private void OpenAccessoryColors(){_menuMode="accessory_colors";_menu.Open("K9 ACCESSORY COLORS",new[]{"Leash: "+(_config.LeashPropColor+1)+" / 16","Dual bowl: "+(_config.BowlPropColor+1)+" / 16","← Back to K9 Profile"});}
         private void AdjustAccessoryColor(int index,int delta)
         {
@@ -630,6 +632,27 @@ namespace AdvancedK9
                 OpenCalloutMenu();return;
             }
             if(_menuMode!=null&&_menuMode.StartsWith("commands_group_")){int group;if(!int.TryParse(_menuMode.Substring(15),out group)||group<0||group>=CommandGroups.Length)return;if(index>=0&&index<CommandGroups[group].Length){_menu.Close();Execute(CommandGroups[group][index]);}else ShowCommandMenu();return;}
+            if(_menuMode=="bite_mdt_list")
+            {
+                if(index>=0&&index<_mdtReportEpisodes.Length){_mdtSelectedEpisode=_mdtReportEpisodes[index];OpenBiteMdtEpisode();}
+                else{_menuMode="profile";RefreshProfileMenu();}return;
+            }
+            if(_menuMode=="bite_mdt_episode")
+            {
+                try
+                {
+                    if(index==1)
+                    {
+                        string number=PromptForDogName(80);
+                        if(!string.IsNullOrWhiteSpace(number)&&!_pr.BiteReports.Bind(_mdtSelectedEpisode,number.Trim()))
+                            Game.DisplayNotification("~y~Report link unchanged.~s~ Use a valid report number. An already linked bite cannot be moved to another report.");
+                    }
+                    else if(index==2){_pr.BiteReports.RetryUncertain(_mdtSelectedEpisode);Game.DisplayNotification("~b~Unconfirmed MDT notes queued for retry.~s~ Accepted notes are preserved.");}
+                    else if(index>=3){OpenBiteMdtReports();return;}
+                    OpenBiteMdtEpisode();
+                }
+                catch(Exception ex){Game.LogTrivial("AdvancedK9 MDT menu: "+ex.Message);}return;
+            }
             if(_menuMode=="hud_config"){HandleHudMenu(index);return;}
             if(_menuMode=="accessory_colors"){if(index==0||index==1)AdjustAccessoryColor(index,1);else{_menuMode="profile";RefreshProfileMenu();}return;}
             if(_menuMode=="kennel_list"){HandleKennelList(index);return;}
@@ -643,7 +666,22 @@ namespace AdvancedK9
                 OpenAppearanceMenu();return;
             }
             if(_menuMode!="profile")return;
-            if(index==0){ChangeLanguage(1);return;}if(index==1)OpenRosterMenu();else if(index==2)OpenAppearanceMenu();else if(index==3)OpenHudConfiguration();else if(index==4)OpenKennelLocationMenu();else if(index==5)OpenSeatConfiguration();else if(index==6)Inspect();else if(index==7)OpenAccessoryColors();else if(index==8)ToggleVoice();
+            if(index==0){ChangeLanguage(1);return;}if(index==1)OpenRosterMenu();else if(index==2)OpenAppearanceMenu();else if(index==3)OpenHudConfiguration();else if(index==4)OpenKennelLocationMenu();else if(index==5)OpenSeatConfiguration();else if(index==6)Inspect();else if(index==7)OpenAccessoryColors();else if(index==8)ToggleVoice();else if(index==9)OpenBiteMdtReports();
+        }
+
+        private string[] _mdtReportEpisodes=new string[0];
+        private string _mdtSelectedEpisode="";
+        private void OpenBiteMdtReports()
+        {
+            var bites=_pr.BiteReports.Events().Where(e=>e.Stage=="Bite").OrderByDescending(e=>e.Utc).Take(20).ToArray();
+            _mdtReportEpisodes=bites.Select(e=>e.Episode).ToArray();_menuMode="bite_mdt_list";
+            _menu.Open("BITE / EMS MDT REPORTS",bites.Select(e=>e.K9+" — "+e.Utc.ToLocalTime().ToString("MM-dd HH:mm")+" — "+(string.IsNullOrEmpty(_pr.BiteReports.Report(e.Episode))?"Needs report link":_pr.BiteReports.Report(e.Episode))).Concat(new[]{"← Back to K9 Profile"}));
+        }
+        private void OpenBiteMdtEpisode()
+        {
+            _menuMode="bite_mdt_episode";
+            string report=_pr.BiteReports.Report(_mdtSelectedEpisode);
+            _menu.Open("K9 BITE REPORT",new[]{"Status: "+_pr.BiteReports.Status(_mdtSelectedEpisode),"Link to report: "+(string.IsNullOrEmpty(report)?"Enter Nexus incident number":report),"After checking MDT, retry unconfirmed notes","← Back to bite reports"});
         }
 
         private void OpenRosterMenu()
@@ -2633,6 +2671,7 @@ namespace AdvancedK9
             if(_biteMedicalResponseActive){Game.DisplayNotification("~y~AdvancedK9 EMS is already responding to the bite patient.");return;}
             if(_releasedBiteTarget==null||!_releasedBiteTarget.Exists()||_releasedBiteTarget.IsDead){Game.DisplayNotification("~y~No living released K9 bite patient is available for AdvancedK9 EMS.");return;}
             _biteMedicalResponseActive=true;
+            _pr.RecordBiteReportEvent(_releasedBiteTarget,"EMSRequested",_profile.Name,"AdvancedK9 ambulance requested for the bite patient. Treatment not yet completed.");
             Game.DisplayNotification("~b~Dispatch:~s~ AdvancedK9 EMS is responding to the bite patient's live location.");
             K9IncidentLog.Write(_profile.Name,"Medical","AdvancedK9 EMS requested for released bite patient",_releasedBiteTarget.Position);
             Game.LogTrivial("AdvancedK9 medical ownership: PR EMS request suppressed for bite patient "+ApiHandleOf(_releasedBiteTarget)+"; AdvancedK9 responder assigned.");
@@ -2717,28 +2756,35 @@ namespace AdvancedK9
                     medicalBag.Position=patient.GetOffsetPosition(new Vector3(.7f,.25f,0f));
                     NativeFunction.Natives.PLACE_OBJECT_ON_GROUND_PROPERLY(medicalBag);
                 }
+                if((!_biteMedicalDriver.Exists()||_biteMedicalDriver.DistanceTo(patient)>3f)&&(!_biteMedicalPartner.Exists()||_biteMedicalPartner.DistanceTo(patient)>3f))
+                    throw new InvalidOperationException("Paramedics did not reach the patient; treatment was not started.");
                 Game.DisplayNotification("~b~EMS:~s~ Paramedics have reached the bite patient and begun treatment.");
                 NativeFunction.Natives.TASK_START_SCENARIO_IN_PLACE(_biteMedicalDriver,"CODE_HUMAN_MEDIC_TEND_TO_DEAD",0,true);
                 if(_biteMedicalPartner.Exists()&&_biteMedicalPartner.DistanceTo(patient)<3f)
                     NativeFunction.Natives.TASK_START_SCENARIO_IN_PLACE(_biteMedicalPartner,"CODE_HUMAN_MEDIC_TEND_TO_DEAD",0,true);
+                _pr.RecordBiteReportEvent(patient,"TreatmentStarted",_profile.Name,"AdvancedK9 paramedics reached the patient and began on-scene treatment.");
                 uint treatmentUntil=Game.GameTime+(uint)(_config.BitePatientTreatmentSeconds*1000);
                 while(_biteMedicalResponseActive&&patient.Exists()&&!patient.IsDead&&Game.GameTime<treatmentUntil)WaitOwned(250);
+                if(!_biteMedicalResponseActive||Game.GameTime<treatmentUntil)throw new OperationCanceledException("EMS treatment was interrupted before completion.");
                 if(!patient.Exists()||patient.IsDead)throw new InvalidOperationException("Patient could not be medically stabilized.");
                 if(medicalBag!=null&&medicalBag.Exists()){medicalBag.Delete();medicalBag=null;}
                 patient.Health=Math.Min(patient.MaxHealth,Math.Max(patient.Health+35,75));
                 _releasedBiteHealth=patient.Health;_releasedBiteTreated=true;_pr.RecordTreatedCustody(patient);
+                _pr.RecordBiteReportEvent(patient,"TreatmentCompleted",_profile.Name,"AdvancedK9 EMS treatment completed and patient stabilized. Transport disposition not yet determined.");
                 bool transport=_random.Next(100)<_config.BitePatientTransportChance;
                 if(transport)
                 {
                     transported=TransportBitePatient(patient);
                     if(transported)
                     {
+                        _pr.RecordBiteReportEvent(patient,"Transported",_profile.Name,"Patient loaded and ambulance departed for hospital care. Hospital arrival/admission has not been verified.");
                         Game.DisplayNotification("~b~EMS:~s~ The patient requires hospital care and has been transported. Medical custody transferred to EMS.");
                         K9IncidentLog.Write(_profile.Name,"Medical","Bite patient treated and transported by AdvancedK9 EMS",patient.Position);
                     }
                 }
                 if(!transported)
                 {
+                    if(!NativeFunction.Natives.IS_PED_IN_ANY_VEHICLE<bool>(patient,false))_pr.RecordBiteReportEvent(patient,"RetainedForArrest",_profile.Name,"Treatment complete; patient remained on scene for the police arrest workflow. Completed arrest is not asserted.");
                     NativeFunction.Natives.TASK_HANDS_UP(patient,-1,Game.LocalPlayer.Character,-1,true);
                     Game.DisplayNotification("~g~EMS:~s~ Treatment is complete. The suspect is medically cleared and remains for PR/LSPDFR arrest.");
                     K9IncidentLog.Write(_profile.Name,"Medical","Bite patient treated on scene and returned to police custody",patient.Position);
@@ -2747,6 +2793,7 @@ namespace AdvancedK9
             }
             catch(Exception ex) when (!(ex is CommandSupersededException))
             {
+                _pr.RecordBiteReportEvent(patient,"EMSFailed",_profile.Name,"AdvancedK9 EMS response ended without completing its full treatment/transport workflow. No successful disposition is inferred.");
                 Game.LogTrivial("AdvancedK9 bite-patient EMS response contained: "+ex);
                 Game.DisplayNotification("~r~AdvancedK9 EMS could not complete treatment.~s~~n~The patient remains held for another medical request.");
             }
@@ -3561,6 +3608,8 @@ namespace AdvancedK9
                         Game.LogTrivial("AdvancedK9 controlled bite confirmed at "+contactDistance.ToString("0.00")+"m K9-to-suspect distance.");
                         Game.DisplayNotification("~g~Controlled K9 bite and takedown complete.~s~ The suspect is injured and held down. Command RELEASE before arrest and medical treatment.");
                         _pr.RecordApprehension(target);
+                        _biteContactReportAt=Game.GameTime;
+                        _pr.RecordBiteReportEvent(target,"Bite",_profile.Name,"Controlled nonlethal K9 takedown. Deployment source: "+reaction+"; handler warning recorded: "+(_warningGiven&&_warnedTarget==target)+"; approach: "+_controlledBiteClip+"; deployment-to-contact: "+((Game.GameTime-_biteStarted)/1000)+" seconds.");
                         _trust.Change(1, "controlled apprehension");
                         AwardOperationalXp("Controlled apprehension",15,30,1,3);
                         int biteSeconds=(int)((Game.GameTime-_biteStarted)/1000);K9DeploymentReport.Write("Player",_profile.Name,"Apprehension",reaction,_activeScentSource,_warningGiven,_activeTrackDistance,_activeTrackStarted==0?0:(int)((Game.GameTime-_activeTrackStarted)/1000),biteSeconds,"Controlled surrender",_profile.Injury,"Suspect ready for PR/STP arrest",target.Position);
@@ -3591,6 +3640,7 @@ namespace AdvancedK9
                 _controlledBiteReleased=true;
                 _releasedBiteTarget=_controlledBiteTarget;
                 _pr.RecordMedicalCustody(_releasedBiteTarget);
+                _pr.RecordBiteReportEvent(_releasedBiteTarget,"Release",_profile.Name,"Handler ended K9 contact. Bite-to-release interval: "+((Game.GameTime-_biteContactReportAt)/1000)+" seconds; patient retained for medical assessment or actual restraint.");
                 _releasedBiteHealth=_releasedBiteTarget.Health;
                 _releasedBiteTreated=false;
                 _nextReleasedBiteMaintenance=0;
@@ -4172,7 +4222,7 @@ namespace AdvancedK9
             {
                 if(_controlledBiteTarget.Exists())
                 {
-                    if(IsTargetDurablyRestrained(_controlledBiteTarget))_pr.CompleteK9Custody(_controlledBiteTarget);
+                    if(IsTargetDurablyRestrained(_controlledBiteTarget)){_pr.RecordBiteReportEvent(_controlledBiteTarget,"Cuffed",_profile.Name,"Completed restraint detected after K9 bite.");_pr.CompleteK9Custody(_controlledBiteTarget);}
                     else _pr.ReleaseK9Custody(_controlledBiteTarget);
                 }
                 RestoreBitePatientControl(_controlledBiteTarget);
@@ -4260,6 +4310,7 @@ namespace AdvancedK9
                         {
                             _releasedBiteTreated=true;
                             _pr.RecordTreatedCustody(_releasedBiteTarget);
+                            _pr.RecordBiteReportEvent(_releasedBiteTarget,"TreatmentObserved",_profile.Name,"Sustained patient recovery observed by AdvancedK9; external treatment provider and procedures were not identified.");
                             NativeFunction.Natives.FREEZE_ENTITY_POSITION(_releasedBiteTarget,false);
                             NativeFunction.Natives.STOP_ANIM_TASK(_releasedBiteTarget,"combat@damage@writhe","writhe_loop",-4f);
                             _releasedBiteFrozen=false;
@@ -4332,7 +4383,7 @@ namespace AdvancedK9
         {
             if(_releasedBiteTarget!=null&&_releasedBiteTarget.Exists())
             {
-                if(IsTargetDurablyRestrained(_releasedBiteTarget))_pr.CompleteK9Custody(_releasedBiteTarget);
+                if(IsTargetDurablyRestrained(_releasedBiteTarget)){_pr.RecordBiteReportEvent(_releasedBiteTarget,"Cuffed",_profile.Name,"Completed restraint detected after K9 bite.");_pr.CompleteK9Custody(_releasedBiteTarget);}
                 else _pr.ReleaseK9Custody(_releasedBiteTarget);
             }
             RestoreBitePatientControl(_releasedBiteTarget);
@@ -5214,4 +5265,5 @@ namespace AdvancedK9
         }
     }
 }
+
 

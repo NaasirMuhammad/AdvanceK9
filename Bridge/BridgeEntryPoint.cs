@@ -7,6 +7,7 @@ using System.Reflection;
 using System.Text;
 using LSPD_First_Response.Mod.API;
 using Rage;
+using AdvancedK9.Mdt;
 using Rage.Native;
 
 namespace AdvancedK9.LSPDFRBridge
@@ -99,6 +100,7 @@ namespace AdvancedK9.LSPDFRBridge
                     NativeFunction.Natives.FREEZE_ENTITY_POSITION(hold.Patient,false);
                     NativeFunction.Natives.STOP_ANIM_TASK(hold.Patient,"combat@damage@writhe","writhe_loop",-4f);
                 }
+            ProcessBiteMdtReports(nexus);
             ProcessPendingOfficerSearches(pr,nexus);
             ProcessCalloutBridge(pr,stp);
             var lines=new[]{
@@ -539,6 +541,84 @@ namespace AdvancedK9.LSPDFRBridge
             return false;
         }
 
+        private static readonly BiteReportJournal BiteReports=new BiteReportJournal(Path.Combine(DirectoryPath,"BiteMdtOutbox"));
+        private static DateTime _nextBiteReportPump=DateTime.MinValue;
+        private static void BiteReportStatus(string episode,string status)
+        {
+            if(BiteReports.Status(episode)==status)return;
+            BiteReports.Status(episode,status);Game.LogTrivial("AdvancedK9 MDT episode "+episode+": "+status);
+        }
+        private static string PersonaName(Ped ped)
+        {
+            if(ped==null||!ped.Exists())return "";
+            foreach(var method in typeof(Functions).GetMethods(BindingFlags.Public|BindingFlags.Static).Where(m=>m.Name=="GetPersonaForPed"))
+            {
+                var p=method.GetParameters();if(p.Length!=1||!p[0].ParameterType.IsInstanceOfType(ped))continue;
+                try{object persona=method.Invoke(null,new object[]{ped});return Convert.ToString(ReadInstanceMember(persona,"FullName"));}catch{}
+            }
+            return "";
+        }
+        private static void ProcessBiteMdtReports(Assembly nexus)
+        {
+            if(DateTime.UtcNow<_nextBiteReportPump)return;_nextBiteReportPump=DateTime.UtcNow.AddSeconds(2);
+            try
+            {
+                if(!BiteReports.Enabled)return;
+                var pending=BiteReports.Events(true).GroupBy(e=>e.Episode);
+                int writes=0;
+                foreach(var group in pending)
+                {
+                    string episode=group.Key;
+                    if(!BiteReports.Seen(episode))
+                    {
+                        var bite=group.FirstOrDefault(e=>e.Stage=="Bite");
+                        // Only link automatically at the bite itself. A later active
+                        // report must never receive an older, unbound patient's notes.
+                        if(bite!=null&&DateTime.UtcNow-bite.Utc<TimeSpan.FromSeconds(10)&&nexus!=null)
+                        {
+                            string active=ResolveNexusIncidentNumber(nexus);
+                            if(BiteReportJournal.ValidReport(active))BiteReports.Bind(episode,active);
+                        }
+                        if(bite!=null)
+                        {
+                            var patient=World.GetAllPeds().FirstOrDefault(p=>p!=null&&p.Exists()&&p.Handle.ToString()==bite.PedHandle&&string.Equals(p.Model.Name,bite.Model,StringComparison.OrdinalIgnoreCase));
+                            string name=DateTime.UtcNow-bite.Utc<TimeSpan.FromSeconds(10)?PersonaName(patient):"";
+                            string officer=DateTime.UtcNow-bite.Utc<TimeSpan.FromSeconds(10)?PersonaName(Game.LocalPlayer.Character):"";
+                            BiteReports.SaveSubject(episode,"Patient: "+(string.IsNullOrWhiteSpace(name)?"identity unavailable at capture":name)+". Handler: "+(string.IsNullOrWhiteSpace(officer)?"player handler":officer)+".");
+                        }
+                        BiteReports.MarkSeen(episode);
+                    }
+                    string report=BiteReports.Report(episode);
+                    if(string.IsNullOrWhiteSpace(report))
+                    {BiteReportStatus(episode,"Pending: link this bite to its Nexus incident number in K9 Profile > Bite / EMS MDT reports.");continue;}
+                    if(nexus==null){BiteReportStatus(episode,"Pending: NexusMDT is not loaded.");continue;}
+                    Type type=nexus.GetType("NexusMDT.Api.DispatchBridge",false);
+                    MethodInfo writer=type==null?null:type.GetMethods(BindingFlags.Public|BindingFlags.Static).FirstOrDefault(m=>m.Name=="AppendIncidentNote"&&m.GetParameters().Length==2&&m.GetParameters().All(p=>p.ParameterType==typeof(string))&&(m.ReturnType==typeof(void)||m.ReturnType==typeof(bool)));
+                    if(writer==null){BiteReportStatus(episode,"Pending: supported Nexus AppendIncidentNote API unavailable.");continue;}
+                    foreach(var e in group.OrderBy(e=>e.Utc).ThenBy(e=>Array.IndexOf(BiteReportJournal.Stages,e.Stage)))
+                    {
+                        if(BiteReportJournal.Uncertain(e))
+                        {BiteReportStatus(episode,"Delivery uncertain: check the MDT incident before retrying unconfirmed notes.");break;}
+                        if(writes>=4)return;
+                        string note="[AdvancedK9 "+episode+"/"+e.Stage+"] "+e.Utc.ToString("u")+" | K9 "+e.K9+" | "+BiteReports.Subject(episode)+" "+e.Detail+" Location: "+e.Position+".";
+                        if(!BiteReportJournal.BeginDelivery(e))continue;
+                        try
+                        {
+                            writes++;object result=writer.Invoke(null,new object[]{report,note});
+                            if(writer.ReturnType==typeof(bool)&&!(bool)result)
+                            {BiteReportJournal.Reject(e);BiteReportStatus(episode,"Pending: Nexus rejected the incident note; verify the linked incident number.");break;}
+                            BiteReportJournal.Accept(e,report);
+                            BiteReportStatus(episode,"Nexus note writer accepted "+e.Stage+" for incident "+report+". Verify the MDT report narrative.");
+                            Game.LogTrivial("AdvancedK9 MDT: API accepted event "+episode+"/"+e.Stage+" into incident "+report+"; final report persistence is owned by NexusMDT.");
+                        }
+                        catch(Exception ex)
+                        {BiteReportStatus(episode,"Delivery uncertain: "+Unwrap(ex).GetType().Name+". Check MDT before retrying; automatic duplicate retry blocked.");break;}
+                    }
+                }
+            }
+            catch(Exception ex){Game.LogTrivial("AdvancedK9 MDT report pump contained: "+ex.Message);}
+        }
+
         private static bool TryAppendNexusIncidentNote(Assembly nexus,string narrative,out string sink)
         {
             sink="";string number=ResolveNexusIncidentNumber(nexus);if(string.IsNullOrWhiteSpace(number)){sink="NexusMDT active report unavailable";return false;}
@@ -665,3 +745,4 @@ namespace AdvancedK9.LSPDFRBridge
         private sealed class ReferenceComparer:IEqualityComparer<object>{public static readonly ReferenceComparer Instance=new ReferenceComparer();public new bool Equals(object x,object y)=>ReferenceEquals(x,y);public int GetHashCode(object obj)=>System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(obj);}
     }
 }
+
