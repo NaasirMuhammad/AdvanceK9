@@ -3466,6 +3466,13 @@ namespace AdvancedK9
             Vector3 modelMin,modelMax;
             NativeFunction.Natives.GET_MODEL_DIMENSIONS(NativeFunction.Natives.GET_ENTITY_MODEL<uint>(_dog),out modelMin,out modelMax);
             float contactRadius=Math.Max(.9f,Math.Min(1.4f,.85f+(modelMax.Y-modelMin.Y)*.25f));
+            var contactWindow=new BiteContactWindow();
+            int headBone=NativeFunction.Natives.GET_PED_BONE_INDEX<int>(_dog,31086);
+            if(headBone<=0)headBone=NativeFunction.Natives.GET_ENTITY_BONE_INDEX_BY_NAME<int>(_dog,"SKEL_Head");
+            int pelvisBone=NativeFunction.Natives.GET_PED_BONE_INDEX<int>(target,11816);
+            int leftFootBone=NativeFunction.Natives.GET_PED_BONE_INDEX<int>(target,14201);
+            int rightFootBone=NativeFunction.Natives.GET_PED_BONE_INDEX<int>(target,52301);
+            Game.LogTrivial("AdvancedK9 bite contact detector: lockedPed="+target.Handle+", headBone="+headBone+", bodyBone="+pelvisBone+", mode="+(headBone>0&&pelvisBone>0?"muzzle/body swept contact":"legacy model fallback")+".");
             Game.LogTrivial("AdvancedK9 apprehension target locked: ped="+target.Handle+", live persistent pursuit, no chase timeout, contact radius="+contactRadius.ToString("0.00")+"m; shared across names/coats.");
             Game.DisplayNotification(calloutTarget!=null?"~o~K9 deploying on the verified callout suspect.~s~~n~Bystanders are excluded by the active suspect lock.":"~o~K9 deploying immediately on aimed target.~s~~n~No traffic stop or close-range contact is required.");
             try
@@ -3485,8 +3492,24 @@ namespace AdvancedK9
                     NativeFunction.Natives.SET_ENTITY_MAX_SPEED(_dog,16f);
                     NativeFunction.Natives.SET_PED_MOVE_RATE_OVERRIDE(_dog,_profile.Health<=55?.65f:1.35f);
                     NativeFunction.Natives.SET_PED_DESIRED_MOVE_BLEND_RATIO(_dog,_profile.Health<=55?1f:3f);
-                    bool clearContact=!NativeFunction.Natives.IS_PED_IN_ANY_VEHICLE<bool>(target,false)&&horizontalContact<=contactRadius&&Math.Abs(delta.Z)<1f&&
-                        NativeFunction.Natives.HAS_ENTITY_CLEAR_LOS_TO_ENTITY<bool>(_dog,target,17);
+                    bool eligibleContact=!NativeFunction.Natives.IS_PED_IN_ANY_VEHICLE<bool>(target,false)&&Math.Abs(delta.Z)<1f;
+                    // Contact ray includes world, vehicles, peds, ragdolls, objects and glass.
+                    bool contactLos=eligibleContact&&horizontalContact<=2f&&NativeFunction.Natives.HAS_ENTITY_CLEAR_LOS_TO_ENTITY<bool>(_dog,target,95);
+                    bool clearContact=false;
+                    if(headBone>0&&pelvisBone>0&&horizontalContact<=2f)
+                    {
+                        Vector3 root=target.Position;
+                        Vector3 head=NativeFunction.Natives.GET_WORLD_POSITION_OF_ENTITY_BONE<Vector3>(_dog,headBone);
+                        Vector3 forward=NativeFunction.Natives.GET_ENTITY_FORWARD_VECTOR<Vector3>(_dog);
+                        Vector3 muzzle=head+forward*.12f;
+                        Vector3 upper=NativeFunction.Natives.GET_WORLD_POSITION_OF_ENTITY_BONE<Vector3>(target,pelvisBone);
+                        Vector3 lower=leftFootBone>0&&rightFootBone>0
+                            ?(NativeFunction.Natives.GET_WORLD_POSITION_OF_ENTITY_BONE<Vector3>(target,leftFootBone)+NativeFunction.Natives.GET_WORLD_POSITION_OF_ENTITY_BONE<Vector3>(target,rightFootBone))*.5f+new Vector3(0f,0f,.15f)
+                            :upper-new Vector3(0f,0f,.65f);
+                        clearContact=contactWindow.TryCommit(Game.GameTime,ToBitePoint(muzzle-root),ToBitePoint(lower-root),ToBitePoint(upper-root),horizontalContact,delta.Z,eligibleContact,contactLos);
+                    }
+                    else if(headBone<=0||pelvisBone<=0)
+                        clearContact=eligibleContact&&contactLos&&horizontalContact<=contactRadius;
                     if(!clearContact&&Game.GameTime>=nextApproachSample)
                     {
                         uint now=Game.GameTime;nextApproachSample=now+500;
@@ -3507,6 +3530,11 @@ namespace AdvancedK9
                     }
                     if (clearContact)
                     {
+                        // Commit once, replacing pursuit before any takedown work.
+                        // The locked target and frame-by-frame safety checks remain.
+                        _state=K9State.HoldingSuspect;
+                        _dog.Tasks.ClearImmediately();
+                        Game.LogTrivial("AdvancedK9 bite contact committed: lockedPed="+target.Handle+", rootGap="+horizontalContact.ToString("0.00")+"m; pursuit replaced immediately by one takedown.");
                         if(target.Health>=healthBeforeContact)target.Health=Math.Max(_config.NonLethalHealthFloor,healthBeforeContact-12);
                         if (target.Health < _config.NonLethalHealthFloor) target.Health = _config.NonLethalHealthFloor;
                         NativeFunction.Natives.SET_PED_CAN_RAGDOLL(target,true);
@@ -4094,6 +4122,8 @@ namespace AdvancedK9
             // Long-distance recovery is owned by MaintainFollowNavigation; do not
             // restart its live navigation task on every frame beyond 45 metres.
         }
+
+        private static BitePoint ToBitePoint(Vector3 p)=>new BitePoint(p.X,p.Y,p.Z);
 
         private void IssueApprehensionApproach(Ped target)
         {
@@ -5184,3 +5214,4 @@ namespace AdvancedK9
         }
     }
 }
+
