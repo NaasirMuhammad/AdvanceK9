@@ -870,8 +870,9 @@ namespace AdvancedK9
             bool control=command==K9Command.Follow||command==K9Command.Heel||command==K9Command.Recall||
                 command==K9Command.WhistleRecall||command==K9Command.Stay||command==K9Command.Release;
             bool eligible=_profile.Health>25&&!_profile.IsRehabilitating;
+            bool chasing=_commandWorkerRunning&&_activeDogCommand==K9Command.Apprehend&&_state==K9State.Apprehending;
             _pendingDogCommand=new PendingDogCommand{Command=command,Immediate=_immediateApprehendInput,AimedTarget=_voiceAimedTarget,
-                ControlOverride=control&&eligible&&(_commandWorkerRunning||_trackFiberRunning||_searchInProgress||_state==K9State.Containing)};
+                ControlOverride=(control||chasing)&&eligible&&(_commandWorkerRunning||_trackFiberRunning||_searchInProgress||_state==K9State.Containing)};
             if(_commandWorkerRunning)
             {
                 bool atomic=_activeDogCommand==K9Command.SpawnDismiss||_activeDogCommand==K9Command.EnterVehicle||
@@ -881,7 +882,8 @@ namespace AdvancedK9
                     _activeDogCommand==K9Command.VeterinaryTransport||_activeDogCommand==K9Command.Rehabilitation||
                     _activeDogCommand==K9Command.Training||_activeDogCommand==K9Command.TrainNarcotics||
                     _activeDogCommand==K9Command.TrainExplosives||_activeDogCommand==K9Command.TrainWeapons;
-                if(control&&eligible&&!atomic&&_canineAnimationDepth==0)_taskOwnerGeneration++;
+                bool interruptChase=_activeDogCommand==K9Command.Apprehend&&_state==K9State.Apprehending;
+                if((control||interruptChase)&&eligible&&!atomic&&_canineAnimationDepth==0)_taskOwnerGeneration++;
                 else ActionNotification("~b~K9 command queued: "+CommandLabel(command)+".~s~~n~Waiting for the current transition to finish safely.");
                 return;
             }
@@ -920,6 +922,7 @@ namespace AdvancedK9
                     Game.DisplayNotification("~y~The mobile K9 veterinarian is already responding.");
                     return;
                 }
+                if(command==K9Command.Apprehend)Game.LogTrivial("AdvancedK9 apprehend command received: priorState="+_state+"; immediate response path for all input sources.");
                 _hudCommand=CommandLabel(command);
                 bool leashed=LeashActive;
                 if(LeashActive&&(command==K9Command.Training||command==K9Command.TrainNarcotics||command==K9Command.TrainExplosives||command==K9Command.TrainWeapons)){Game.DisplayNotification("~y~Remove the leash before traveling to the academy.");return;}
@@ -934,7 +937,9 @@ namespace AdvancedK9
                     Game.DisplayNotification("~y~K9 is secured in the vehicle.~s~~n~Unload through the door before giving "+CommandLabel(command)+".");
                     return;
                 }
-                if (RequiresTrustCheck(command) && !_handlerOverrideInput && !LeashActive && !(command==K9Command.Apprehend&&_immediateApprehendInput) && !TrustAllowsCommand(command)) return;
+                // Apprehend uses the same immediate response for every input source.
+                // Health, protected-ped and compliance checks still apply.
+                if (command!=K9Command.Apprehend && RequiresTrustCheck(command) && !_handlerOverrideInput && !LeashActive && !TrustAllowsCommand(command)) return;
                 if(IsHandlerOwnershipCommand(command))
                 {
                     TakeHandlerCommandOwnership(command);
@@ -3449,97 +3454,99 @@ namespace AdvancedK9
             ExitRestingPose();
             _state = K9State.Apprehending;
             _recentApprehendTarget=null;_recentApprehendTargetUntil=0;
-            _dog.Tasks.Clear();
+            _dog.Tasks.ClearImmediately();
             string reaction=calloutTarget!=null?"Callout-authorized suspect deployment":"Immediate aimed deployment";K9IncidentLog.Write(_profile.Name,"Apprehension",reaction,target.Position);_biteStarted=Game.GameTime;
             int healthBeforeContact=target.Health;
             NativeFunction.Natives.REQUEST_ANIM_DICT("creatures@rottweiler@melee@");
             NativeFunction.Natives.SET_PED_MAX_MOVE_BLEND_RATIO(_dog,3f);
             NativeFunction.Natives.REQUEST_ANIM_DICT("combat@damage@writhe");
             IssueApprehensionApproach(target);
-            uint approachAssigned=Game.GameTime,nextApproachSample=Game.GameTime+500,nextApproachLog=Game.GameTime+1500;
-            Vector3 approachDogPosition=_dog.Position,approachTargetPosition=target.Position;
-            float approachGap=_dog.DistanceTo(target);
+            var pursuitProgress=new ApprehensionPursuitProgress(Game.GameTime,_dog.Position.X,_dog.Position.Y);
+            uint nextApproachSample=Game.GameTime+500,nextApproachLog=Game.GameTime+1500;
             Vector3 modelMin,modelMax;
             NativeFunction.Natives.GET_MODEL_DIMENSIONS(NativeFunction.Natives.GET_ENTITY_MODEL<uint>(_dog),out modelMin,out modelMax);
             float contactRadius=Math.Max(.9f,Math.Min(1.4f,.85f+(modelMax.Y-modelMin.Y)*.25f));
-            Game.LogTrivial("AdvancedK9 apprehension approach started: live-target route, contact radius="+contactRadius.ToString("0.00")+"m; shared across names/coats.");
+            Game.LogTrivial("AdvancedK9 apprehension target locked: ped="+target.Handle+", live persistent pursuit, no chase timeout, contact radius="+contactRadius.ToString("0.00")+"m; shared across names/coats.");
             Game.DisplayNotification(calloutTarget!=null?"~o~K9 deploying on the verified callout suspect.~s~~n~Bystanders are excluded by the active suspect lock.":"~o~K9 deploying immediately on aimed target.~s~~n~No traffic stop or close-range contact is required.");
-            var end = Game.GameTime + 25000;
-            while (DogExists() && target.Exists() && !target.IsDead && Game.GameTime < end && _state == K9State.Apprehending)
+            try
             {
-                if(!target.IsRagdoll&&IsTargetComplyingOrRestrained(target))
+                while (DogExists() && target.Exists() && !target.IsDead && _state == K9State.Apprehending)
                 {
-                    _dog.Tasks.ClearImmediately();Follow();
-                    Game.DisplayNotification("~g~K9 deployment cancelled:~s~ the suspect complied with verbal commands before contact.");
-                    return;
-                }
-                float contactDistance=_dog.DistanceTo(target);
-                Vector3 delta=target.Position-_dog.Position;
-                float horizontalContact=(float)Math.Sqrt(delta.X*delta.X+delta.Y*delta.Y);
-                NativeFunction.Natives.SET_PED_MAX_MOVE_BLEND_RATIO(_dog,3f);
-                NativeFunction.Natives.SET_ENTITY_MAX_SPEED(_dog,16f);
-                NativeFunction.Natives.SET_PED_MOVE_RATE_OVERRIDE(_dog,_profile.Health<=55?.65f:1.35f);
-                NativeFunction.Natives.SET_PED_DESIRED_MOVE_BLEND_RATIO(_dog,_profile.Health<=55?1f:3f);
-                bool clearContact=!NativeFunction.Natives.IS_PED_IN_ANY_VEHICLE<bool>(target,false)&&horizontalContact<=contactRadius&&Math.Abs(delta.Z)<1f&&
-                    NativeFunction.Natives.HAS_ENTITY_CLEAR_LOS_TO_ENTITY<bool>(_dog,target,17);
-                if(!clearContact&&Game.GameTime>=nextApproachSample)
-                {
-                    uint now=Game.GameTime;nextApproachSample=now+500;
-                    Vector3 dogMove=_dog.Position-approachDogPosition;
-                    Vector3 toward=approachTargetPosition-approachDogPosition;toward.Z=0f;
-                    float span=(float)Math.Sqrt(toward.X*toward.X+toward.Y*toward.Y);
-                    float advance=span>.01f?BoneDot(dogMove,toward)/span:0f;
-                    float growth=contactDistance-approachGap;
-                    Vector3 velocity=NativeFunction.Natives.GET_ENTITY_VELOCITY<Vector3>(_dog);
-                    bool overshooting=horizontalContact<8f&&BoneDot(velocity,delta)<-.5f;
-                    int status=NativeFunction.Natives.GET_SCRIPT_TASK_STATUS<int>(_dog,NativeFunction.Natives.GET_HASH_KEY<uint>("SCRIPT_TASK_GO_TO_ENTITY"));
-                    bool recover=advance<.15f||growth>.75f||overshooting||status==3||status==7;
-                    if(recover&&now-approachAssigned>=900)
+                    if(!target.IsRagdoll&&IsTargetComplyingOrRestrained(target))
                     {
-                        IssueApprehensionApproach(target);approachAssigned=now;
-                        Game.LogTrivial("AdvancedK9 apprehension route recovery: gap="+contactDistance.ToString("0.00")+", advance="+advance.ToString("0.00")+", growth="+growth.ToString("0.00")+", overshoot="+overshooting+", task="+status+".");
+                        _dog.Tasks.ClearImmediately();Follow();
+                        Game.DisplayNotification("~g~K9 deployment cancelled:~s~ the suspect complied with verbal commands before contact.");
+                        return;
                     }
-                    if(now>=nextApproachLog)
+                    float contactDistance=_dog.DistanceTo(target);
+                    Vector3 delta=target.Position-_dog.Position;
+                    float horizontalContact=(float)Math.Sqrt(delta.X*delta.X+delta.Y*delta.Y);
+                    NativeFunction.Natives.SET_PED_MAX_MOVE_BLEND_RATIO(_dog,3f);
+                    NativeFunction.Natives.SET_ENTITY_MAX_SPEED(_dog,16f);
+                    NativeFunction.Natives.SET_PED_MOVE_RATE_OVERRIDE(_dog,_profile.Health<=55?.65f:1.35f);
+                    NativeFunction.Natives.SET_PED_DESIRED_MOVE_BLEND_RATIO(_dog,_profile.Health<=55?1f:3f);
+                    bool clearContact=!NativeFunction.Natives.IS_PED_IN_ANY_VEHICLE<bool>(target,false)&&horizontalContact<=contactRadius&&Math.Abs(delta.Z)<1f&&
+                        NativeFunction.Natives.HAS_ENTITY_CLEAR_LOS_TO_ENTITY<bool>(_dog,target,17);
+                    if(!clearContact&&Game.GameTime>=nextApproachSample)
                     {
-                        nextApproachLog=now+1500;
-                        Game.LogTrivial("AdvancedK9 apprehension progress: gap="+contactDistance.ToString("0.00")+", horizontal="+horizontalContact.ToString("0.00")+", vertical="+delta.Z.ToString("0.00")+", dogSpeed="+handlerSpeedForFollow(_dog).ToString("0.00")+", targetSpeed="+handlerSpeedForFollow(target).ToString("0.00")+", task="+status+".");
+                        uint now=Game.GameTime;nextApproachSample=now+500;
+                        int status=NativeFunction.Natives.GET_SCRIPT_TASK_STATUS<int>(_dog,NativeFunction.Natives.GET_HASH_KEY<uint>("SCRIPT_TASK_GO_TO_ENTITY"));
+                        bool physicalTransition=_dog.IsRagdoll||NativeFunction.Natives.IS_PED_GETTING_UP<bool>(_dog)||NativeFunction.Natives.IS_PED_JUMPING<bool>(_dog)||NativeFunction.Natives.IS_PED_FALLING<bool>(_dog);
+                        PursuitRecovery recovery=pursuitProgress.Observe(now,_dog.Position.X,_dog.Position.Y,status,physicalTransition);
+                        if(recovery!=PursuitRecovery.None)
+                        {
+                            IssueApprehensionApproach(target);
+                            pursuitProgress.Assigned(now,_dog.Position.X,_dog.Position.Y);
+                            Game.LogTrivial("AdvancedK9 apprehension route recovery: reason="+recovery+", lockedPed="+target.Handle+", gap="+contactDistance.ToString("0.00")+", task="+status+". Target movement/growing separation do not restart a running chase.");
+                        }
+                        if(now>=nextApproachLog)
+                        {
+                            nextApproachLog=now+1500;
+                            Game.LogTrivial("AdvancedK9 apprehension progress: gap="+contactDistance.ToString("0.00")+", horizontal="+horizontalContact.ToString("0.00")+", vertical="+delta.Z.ToString("0.00")+", dogSpeed="+handlerSpeedForFollow(_dog).ToString("0.00")+", targetSpeed="+handlerSpeedForFollow(target).ToString("0.00")+", task="+status+".");
+                        }
                     }
-                    approachDogPosition=_dog.Position;approachTargetPosition=target.Position;approachGap=contactDistance;
-                }
-                if (clearContact)
-                {
-                    if(target.Health>=healthBeforeContact)target.Health=Math.Max(_config.NonLethalHealthFloor,healthBeforeContact-12);
-                    if (target.Health < _config.NonLethalHealthFloor) target.Health = _config.NonLethalHealthFloor;
-                    NativeFunction.Natives.SET_PED_CAN_RAGDOLL(target,true);
-                    uint heldWeapon=NativeFunction.Natives.GET_SELECTED_PED_WEAPON<uint>(target);
-                    uint unarmed=NativeFunction.Natives.GET_HASH_KEY<uint>("WEAPON_UNARMED");
-                    if(heldWeapon!=0&&heldWeapon!=unarmed)
+                    if (clearContact)
                     {
-                        Vector3 drop=target.Position;
-                        NativeFunction.Natives.SET_PED_DROPS_INVENTORY_WEAPON(target,heldWeapon,drop.X,drop.Y,drop.Z+.15f,0);
+                        if(target.Health>=healthBeforeContact)target.Health=Math.Max(_config.NonLethalHealthFloor,healthBeforeContact-12);
+                        if (target.Health < _config.NonLethalHealthFloor) target.Health = _config.NonLethalHealthFloor;
+                        NativeFunction.Natives.SET_PED_CAN_RAGDOLL(target,true);
+                        uint heldWeapon=NativeFunction.Natives.GET_SELECTED_PED_WEAPON<uint>(target);
+                        uint unarmed=NativeFunction.Natives.GET_HASH_KEY<uint>("WEAPON_UNARMED");
+                        if(heldWeapon!=0&&heldWeapon!=unarmed)
+                        {
+                            Vector3 drop=target.Position;
+                            NativeFunction.Natives.SET_PED_DROPS_INVENTORY_WEAPON(target,heldWeapon,drop.X,drop.Y,drop.Z+.15f,0);
+                        }
+                        NativeFunction.Natives.SET_CURRENT_PED_WEAPON(target,unarmed,true);
+                        CaptureBitePatientControl(target);
+                        target.Tasks.ClearImmediately();
+                        NativeFunction.Natives.SET_PED_TO_RAGDOLL(target,1800,2200,0,false,false,false);
+                        _controlledBiteTarget=target;
+                        _controlledBitePoseReadyAt=Game.GameTime+2200;
+                        _nextBiteGroundPoseRepair=0;
+                        _controlledBiteClip="";
+                        _controlledBiteHoldUntil=Game.GameTime+120000;
+                        _controlledBiteReleased=false;
+                        _nextControlledBiteVisual=0;
+                        _state=K9State.HoldingSuspect;
+                        PlayControlledBiteVisual(target,true);
+                        Game.LogTrivial("AdvancedK9 controlled bite confirmed at "+contactDistance.ToString("0.00")+"m K9-to-suspect distance.");
+                        Game.DisplayNotification("~g~Controlled K9 bite and takedown complete.~s~ The suspect is injured and held down. Command RELEASE before arrest and medical treatment.");
+                        _pr.RecordApprehension(target);
+                        _trust.Change(1, "controlled apprehension");
+                        AwardOperationalXp("Controlled apprehension",15,30,1,3);
+                        int biteSeconds=(int)((Game.GameTime-_biteStarted)/1000);K9DeploymentReport.Write("Player",_profile.Name,"Apprehension",reaction,_activeScentSource,_warningGiven,_activeTrackDistance,_activeTrackStarted==0?0:(int)((Game.GameTime-_activeTrackStarted)/1000),biteSeconds,"Controlled surrender",_profile.Injury,"Suspect ready for PR/STP arrest",target.Position);
+                        return;
                     }
-                    NativeFunction.Natives.SET_CURRENT_PED_WEAPON(target,unarmed,true);
-                    CaptureBitePatientControl(target);
-                    target.Tasks.ClearImmediately();
-                    NativeFunction.Natives.SET_PED_TO_RAGDOLL(target,1800,2200,0,false,false,false);
-                    _controlledBiteTarget=target;
-                    _controlledBitePoseReadyAt=Game.GameTime+2200;
-                    _nextBiteGroundPoseRepair=0;
-                    _controlledBiteClip="";
-                    _controlledBiteHoldUntil=Game.GameTime+120000;
-                    _controlledBiteReleased=false;
-                    _nextControlledBiteVisual=0;
-                    _state=K9State.HoldingSuspect;
-                    PlayControlledBiteVisual(target,true);
-                    Game.LogTrivial("AdvancedK9 controlled bite confirmed at "+contactDistance.ToString("0.00")+"m K9-to-suspect distance.");
-                    Game.DisplayNotification("~g~Controlled K9 bite and takedown complete.~s~ The suspect is injured and held down. Command RELEASE before arrest and medical treatment.");
-                    _pr.RecordApprehension(target);
-                    _trust.Change(1, "controlled apprehension");
-                    AwardOperationalXp("Controlled apprehension",15,30,1,3);
-                    int biteSeconds=(int)((Game.GameTime-_biteStarted)/1000);K9DeploymentReport.Write("Player",_profile.Name,"Apprehension",reaction,_activeScentSource,_warningGiven,_activeTrackDistance,_activeTrackStarted==0?0:(int)((Game.GameTime-_activeTrackStarted)/1000),biteSeconds,"Controlled surrender",_profile.Injury,"Suspect ready for PR/STP arrest",target.Position);
-                    return;
+                    YieldOwned();
                 }
-                YieldOwned();
+            }
+            finally
+            {
+                // A new owner assigns its own task after this fiber exits. Restore
+                // the temporary pursuit movement boost without clearing its task.
+                if(DogEntityExists())NativeFunction.Natives.SET_PED_MOVE_RATE_OVERRIDE(_dog,_profile.Health<=55?.65f:1f);
+                Game.LogTrivial("AdvancedK9 apprehension target lock ended: ped="+target.Handle+", state="+_state+"; no elapsed-time recall.");
             }
             int finalBiteSeconds=(int)((Game.GameTime-_biteStarted)/1000);bool targetExists=target!=null&&target.Exists();K9DeploymentReport.Write("Player",_profile.Name,"Apprehension",reaction,_activeScentSource,_warningGiven,_activeTrackDistance,_activeTrackStarted==0?0:(int)((Game.GameTime-_activeTrackStarted)/1000),finalBiteSeconds,targetExists?(target.IsDead?"Deceased":"Not controlled"):"Entity unavailable",_profile.Injury,"Deployment ended",targetExists?target.Position:_dog.Position);Follow();
         }
@@ -4093,6 +4100,7 @@ namespace AdvancedK9
             NativeFunction.Natives.SET_ENTITY_MAX_SPEED(_dog,16f);
             NativeFunction.Natives.SET_PED_MAX_MOVE_BLEND_RATIO(_dog,3f);
             NativeFunction.Natives.SET_PED_MOVE_RATE_OVERRIDE(_dog,_profile.Health<=55?.65f:1.35f);
+            NativeFunction.Natives.SET_PED_DESIRED_MOVE_BLEND_RATIO(_dog,_profile.Health<=55?1f:3f);
             NativeFunction.Natives.TASK_GO_TO_ENTITY(_dog,target,-1,.45f,_profile.Health<=55?1f:3f,0f,0);
         }
 
