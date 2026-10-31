@@ -115,6 +115,17 @@ namespace AdvancedK9
         internal readonly BiteReportJournal BiteReports=new BiteReportJournal(Path.Combine("Plugins","LSPDFR","AdvancedK9","BiteMdtOutbox"));
         private readonly Dictionary<PoolHandle,string> _biteReportEpisodes=new Dictionary<PoolHandle,string>();
         private readonly Dictionary<PoolHandle,string> _biteReportK9Names=new Dictionary<PoolHandle,string>();
+        private static string MdtLocation(Vector3 position)
+        {
+            try
+            {
+                uint street,crossing;NativeFunction.Natives.GET_STREET_NAME_AT_COORD(position.X,position.Y,position.Z,out street,out crossing);
+                string name=NativeFunction.Natives.GET_STREET_NAME_FROM_HASH_KEY<string>(street);
+                string cross=crossing==0?"":NativeFunction.Natives.GET_STREET_NAME_FROM_HASH_KEY<string>(crossing);
+                if(!string.IsNullOrWhiteSpace(name))return name+(string.IsNullOrWhiteSpace(cross)||name==cross?"":" near "+cross);
+            }catch{}
+            return "location recorded at "+position;
+        }
         public void RecordBiteReportEvent(Ped patient,string stage,string k9,string detail)
         {
             if(!_shareResults||!_shareWithNexusMdt||patient==null||!patient.Exists())return;
@@ -126,7 +137,7 @@ namespace AdvancedK9
                     episode=Guid.NewGuid().ToString("N");_biteReportEpisodes[patient.Handle]=episode;_biteReportK9Names[patient.Handle]=k9;
                 }
                 else if(!_biteReportEpisodes.TryGetValue(patient.Handle,out episode))return;
-                if(BiteReports.Add(new BiteReportEvent{Episode=episode,Stage=stage,Utc=DateTime.UtcNow,K9=_biteReportK9Names[patient.Handle],PedHandle=patient.Handle.ToString(),Model=patient.Model.Name,Position=patient.Position.ToString(),Detail=detail}))
+                if(BiteReports.Add(new BiteReportEvent{Episode=episode,Stage=stage,Utc=DateTime.UtcNow,K9=_biteReportK9Names[patient.Handle],PedHandle=patient.Handle.ToString(),Model=patient.Model.Name,Position=MdtLocation(patient.Position),Detail=detail}))
                     Game.LogTrivial("AdvancedK9 MDT: queued "+stage+" event for bite episode "+episode+"; report delivery remains pending bridge confirmation.");
             }
             catch(Exception ex){Game.LogTrivial("AdvancedK9 MDT event queue failure contained: "+ex.Message);}

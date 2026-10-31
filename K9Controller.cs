@@ -3609,7 +3609,7 @@ namespace AdvancedK9
                         Game.DisplayNotification("~g~Controlled K9 bite and takedown complete.~s~ The suspect is injured and held down. Command RELEASE before arrest and medical treatment.");
                         _pr.RecordApprehension(target);
                         _biteContactReportAt=Game.GameTime;
-                        _pr.RecordBiteReportEvent(target,"Bite",_profile.Name,"Controlled nonlethal K9 takedown. Deployment source: "+reaction+"; handler warning recorded: "+(_warningGiven&&_warnedTarget==target)+"; approach: "+_controlledBiteClip+"; deployment-to-contact: "+((Game.GameTime-_biteStarted)/1000)+" seconds.");
+                        _pr.RecordBiteReportEvent(target,"Bite",_profile.Name,"Controlled nonlethal K9 takedown. Deployment source: "+reaction+"; handler warning recorded: "+((_warningGiven&&_warnedTarget==target)?"yes":"no")+"; approach: "+(_controlledBiteClip.EndsWith("_back",StringComparison.Ordinal)?"rear":"front")+"; deployment-to-contact: "+((Game.GameTime-_biteStarted)/1000)+" seconds.");
                         _trust.Change(1, "controlled apprehension");
                         AwardOperationalXp("Controlled apprehension",15,30,1,3);
                         int biteSeconds=(int)((Game.GameTime-_biteStarted)/1000);K9DeploymentReport.Write("Player",_profile.Name,"Apprehension",reaction,_activeScentSource,_warningGiven,_activeTrackDistance,_activeTrackStarted==0?0:(int)((Game.GameTime-_activeTrackStarted)/1000),biteSeconds,"Controlled surrender",_profile.Injury,"Suspect ready for PR/STP arrest",target.Position);

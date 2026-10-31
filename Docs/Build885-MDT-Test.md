@@ -16,7 +16,7 @@ Each milestone is captured once per episode. Repeated requests/failures of the s
 - Once linked, the bite and its medical events stay on that incident even if the active incident changes. A link cannot be moved to a different incident.
 - Notes are stored in a durable outbox under the normal AdvancedK9 data folder. Accepted milestones are not resent. An exception or interruption during delivery is held as uncertain: inspect the MDT incident before choosing **After checking MDT, retry unconfirmed notes**, since that manual retry can duplicate a note that Nexus accepted before the interruption.
 - A void API return confirms that the writer returned normally, not that Nexus saved the final report. The log distinguishes queued, pending, API-accepted and uncertain states. This is not an exactly-once transaction across both plugins.
-- Existing CompatibilityShareResults and CompatibilityShareWithNexusMDT settings must be enabled when the bite occurs. With sharing disabled, new report events are not queued and pending delivery is paused. Re-enable sharing and restart to resume pending notes.
+- Existing `[Compatibility] ShareK9Results` and `ShareWithNexusMDT` settings must be enabled when the bite occurs. With sharing disabled, new report events are not queued and pending delivery is paused. Re-enable sharing and restart to resume pending notes.
 
 ## Test sequence
 
