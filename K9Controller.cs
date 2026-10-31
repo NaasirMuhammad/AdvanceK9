@@ -2777,7 +2777,7 @@ namespace AdvancedK9
                     transported=TransportBitePatient(patient);
                     if(transported)
                     {
-                        _pr.RecordBiteReportEvent(patient,"Transported",_profile.Name,"Patient loaded and ambulance departed for hospital care. Hospital arrival/admission has not been verified.");
+                        _pr.RecordBiteReportEvent(patient,"Transported",_profile.Name,"Patient loaded into the ambulance and handed to EMS for transport. Hospital arrival/admission has not been verified.");
                         Game.DisplayNotification("~b~EMS:~s~ The patient requires hospital care and has been transported. Medical custody transferred to EMS.");
                         K9IncidentLog.Write(_profile.Name,"Medical","Bite patient treated and transported by AdvancedK9 EMS",patient.Position);
                     }
@@ -2793,7 +2793,7 @@ namespace AdvancedK9
             }
             catch(Exception ex) when (!(ex is CommandSupersededException))
             {
-                _pr.RecordBiteReportEvent(patient,"EMSFailed",_profile.Name,"AdvancedK9 EMS response ended without completing its full treatment/transport workflow. No successful disposition is inferred.");
+                _pr.RecordBiteReportEvent(patient,"EMSFailed",_profile.Name,"An error interrupted the AdvancedK9 EMS workflow. Earlier confirmed treatment or transport milestones still apply; no further outcome is inferred.");
                 Game.LogTrivial("AdvancedK9 bite-patient EMS response contained: "+ex);
                 Game.DisplayNotification("~r~AdvancedK9 EMS could not complete treatment.~s~~n~The patient remains held for another medical request.");
             }

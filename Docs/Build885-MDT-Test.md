@@ -4,7 +4,7 @@ This is an integration test build based on the confirmed Build 884 behavior. The
 
 ## Recorded milestones
 
-One bite episode groups the dog's name, available patient/handler identity, UTC event time, location, deployment-to-contact and bite-to-release intervals, release, EMS request, actual treatment start/completion, transport departure or retention for arrest, response failure and detected completed restraint. No diagnosis, hospital admission or completed arrest is invented. External recovery is labelled as observed recovery with an unidentified provider.
+One bite episode groups the dog's name, available patient/handler identity, UTC event time, location, deployment-to-contact and bite-to-release intervals, release, EMS request, actual treatment start/completion, transport handoff or retention for arrest, response failure and detected completed restraint. No diagnosis, hospital admission or completed arrest is invented. External recovery is labelled as observed recovery with an unidentified provider.
 
 Each milestone is captured once per episode. Repeated requests/failures of the same type do not produce additional entries. Name changes after the bite do not rewrite the original dog's identity.
 
