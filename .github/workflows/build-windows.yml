@@ -1,4 +1,4 @@
-name: Build AdvancedK9 Build 884 Apprehension Test
+name: Build AdvancedK9 v0.24.1
 # Produces the verified Windows release artifacts.
 on:
   workflow_dispatch:
@@ -30,7 +30,7 @@ jobs:
           dotnet build AdvancedK9.csproj -c Release --no-restore /p:ContinuousIntegrationBuild=true
       - uses: actions/upload-artifact@v4
         with:
-          name: AdvancedK9-v0.24.1.3-Build884-core
+          name: AdvancedK9-v0.24.1-core
           path: bin/**/AdvancedK9.dll
           if-no-files-found: error
       - name: Build AdvancedK9 compatibility bridge
@@ -49,12 +49,12 @@ jobs:
           dotnet build AdvancedK9.Callouts.csproj -c Release --no-restore /p:ContinuousIntegrationBuild=true -o build/callouts
       - uses: actions/upload-artifact@v4
         with:
-          name: AdvancedK9-v0.24.1.3-Build884-callouts
+          name: AdvancedK9-v0.24.1-callouts
           path: build/callouts/AdvancedK9.Callouts.dll
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
         with:
-          name: AdvancedK9-v0.24.1.3-Build884-bridge
+          name: AdvancedK9-v0.24.1-bridge
           path: artifact-bridge/AdvancedK9.LSPDFRBridge.dll
           if-no-files-found: error
       - name: Verify and package direct-install release
@@ -74,16 +74,15 @@ jobs:
           if (-not $lemon) { throw 'LemonUI.RagePluginHook.dll was not found.' }
           if (-not $naudioCore) { throw 'Required AI voice runtime NAudio.Core.dll was not found.' }
           if (-not $naudioWinMM) { throw 'Required AI voice runtime NAudio.WinMM.dll was not found.' }
-          if ([System.Reflection.AssemblyName]::GetAssemblyName($main.FullName).Version -ne [Version]'0.24.1.3') { throw 'AdvancedK9.dll version is not 0.24.1.3.' }
+          if ([System.Reflection.AssemblyName]::GetAssemblyName($main.FullName).Version -ne [Version]'0.24.1.0') { throw 'AdvancedK9.dll version is not 0.24.1.0.' }
           if ([System.Reflection.AssemblyName]::GetAssemblyName($api.FullName).Version -ne [Version]'0.24.0.0') { throw 'AdvancedK9.API.dll version is not 0.24.0.0.' }
-          if ([System.Reflection.AssemblyName]::GetAssemblyName($bridge).Version -ne [Version]'0.24.1.3') { throw 'AdvancedK9.LSPDFRBridge.dll version is not 0.24.1.3.' }
+          if ([System.Reflection.AssemblyName]::GetAssemblyName($bridge).Version -ne [Version]'0.24.1.0') { throw 'AdvancedK9.LSPDFRBridge.dll version is not 0.24.1.0.' }
           if ([System.Reflection.AssemblyName]::GetAssemblyName($callouts).Version -ne [Version]'0.24.0.52') { throw 'AdvancedK9.Callouts.dll version is not 0.24.0.52.' }
           $package = Join-Path $pwd 'release-package'
           $pluginRoot = Join-Path $package 'Plugins'
           $lspdfrRoot = Join-Path $pluginRoot 'LSPDFR'
           $configRoot = Join-Path $lspdfrRoot 'AdvancedK9'
           New-Item -ItemType Directory -Force -Path $configRoot | Out-Null
-          Copy-Item 'Docs/Build884-Contact-Transition-Test.md' (Join-Path $package 'BUILD-884-TEST-NOTES.md')
           Copy-Item $main.FullName (Join-Path $pluginRoot 'AdvancedK9.dll')
           Copy-Item $api.FullName (Join-Path $configRoot 'AdvancedK9.API.dll')
           Copy-Item $bridge (Join-Path $lspdfrRoot 'AdvancedK9.LSPDFRBridge.dll')
@@ -97,12 +96,6 @@ jobs:
           Copy-Item 'Config/AcademyCourses.json','Config/CompatibilityPresets.json' $configRoot
           Copy-Item 'Config/Portraits' $configRoot -Recurse
           Copy-Item 'INSTALL.txt','README.md','RELEASE_NOTES_v0.24.1.md','VOICE_COMMANDS.md','LICENSE','THIRD_PARTY_NOTICES.md' $package
-          $testNotice = 'BUILD 884 APPREHENSION TEST — v0.24.1.3. Read BUILD-884-TEST-NOTES.md. In-game validation pending.'
-          foreach ($doc in @('README.md','INSTALL.txt')) {
-            $docPath = Join-Path $package $doc
-            $oldText = Get-Content $docPath -Raw
-            Set-Content -Path $docPath -Value ($testNotice + [Environment]::NewLine + [Environment]::NewLine + $oldText) -Encoding utf8
-          }
           Copy-Item 'CHANGELOG_v0.24.1.md' (Join-Path $package 'CHANGELOG.md')
           $kennelDlc = Join-Path $package 'mods/update/x64/dlcpacks/mw_ak9kennel'
           New-Item -ItemType Directory -Force -Path $kennelDlc | Out-Null
@@ -125,9 +118,10 @@ jobs:
           }
       - uses: actions/upload-artifact@v4
         with:
-          name: AdvancedK9-v0.24.1.3-Build884-release
+          name: AdvancedK9-v0.24.1-release
           # upload-artifact already produces the downloadable ZIP. Uploading a
           # pre-compressed archive here creates a ZIP inside a ZIP for testers.
           path: release-package/**
           if-no-files-found: error
+
 

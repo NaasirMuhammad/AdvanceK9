@@ -28,7 +28,13 @@
 
 ## Apprehension and barking
 
-- Removed the reported bark/preparation delay before apprehension, allowing Rex to approach the suspect and begin the controlled takedown more promptly.
+- Removed the bark/preparation and random command-response delays before a valid apprehension across keyboard, controller, voice and menu controls.
+- Fixed repeated chase-task restarts that caused stutter steps, hesitation and loss of acceleration. Pursuit remains locked to the selected suspect through movement and direction changes.
+- Removed the 25-second chase timeout that recalled the dog during an active pursuit. New handler commands can still cancel the chase.
+- Fixed the first-contact pause and second approach before biting. Muzzle/body contact checks now hand pursuit directly to one front/back takedown, including contact between movement frames.
+- Prevented the full takedown animation from repeatedly restarting during the hold.
+- Improved injured-suspect custody after release so the patient remains down pending treatment or actual restraint, with coordinated pursuit control and arrest/EMS handoff.
+- Applied the same apprehension logic across supported dog names and coats.
 - Restored the manual Bark command with audible barking and its enter, bark and exit animation sequence.
 
 ## Care
@@ -40,3 +46,4 @@
 - Enabled on-duty voice deployment before a K9 has been deployed: say “Deploy K9” near a configured station kennel.
 - Added a complete guide covering all 57 registered voice commands, built-in English aliases, additional phrases for 13 language packs, wake-word requirements, dispatch commands and custom aliases.
 - Updated release installation and upgrade instructions; existing user configuration and profiles are preserved.
+

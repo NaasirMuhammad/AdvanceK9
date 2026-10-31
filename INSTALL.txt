@@ -53,6 +53,8 @@ Injured K9 transport
 Apprehension safety
   Aim a taser or firearm directly at the intended suspect, then issue the
   Apprehend command. The K9 will not select the nearest person automatically.
+  Once deployed, the selected suspect remains locked without continued aiming.
+  Issue a new handler command to cancel the chase.
 
 Detection specialties
   Complete core academy Level 3 to unlock independent narcotics, explosives
@@ -92,3 +94,4 @@ for current limitations and the three experimental callouts. Follow hesitation
 can still cause a release during direction changes; it is not claimed resolved.
 VOICE_COMMANDS.md lists all 57 registered voice commands and accepted aliases.
 Artwork/ contains the release promotional image; no installation is required for it.
+

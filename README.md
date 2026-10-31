@@ -34,7 +34,7 @@ The compiled release includes AdvancedK9, its configuration, and the MIT-license
 - Automatic natural bladder and bowel relief during safe idle periods, with urine effects and temporary dog-waste props
 - Physical ground-snapped doghouse kennels at seventeen accessible police, sheriff, highway patrol, ranger, port, airport, corrections and state locations, with labeled blue dog-icon map blips and required pickup/return
 - Track a nearby suspect or missing person for up to two minutes
-- Non-lethal apprehension with automatic recall, a configurable health floor and hands-up surrender
+- Immediate target-locked pursuit and first-contact non-lethal takedown, with a configurable health floor and persistent bite-patient medical hold
 - Fetch minigame
 - Dedicated off-street K9 academy with persistent 100/250/450/800/1,200 XP level requirements, randomized scenarios and instructional handler prompts
 - Certification-specific OB, AGI, DET, TRK and APP courses with five scored exercises per level
@@ -259,7 +259,7 @@ Inside **HUD & Display**, enable **Live HUD drag** to move the Glass Tactical ca
 
 ## Trust and handler safety
 
-Handler bond persists in `Plugins\LSPDFR\AdvancedK9\trust.dat`, while confidence persists with the individual K9 profile. Petting, feeding and safe teamwork build bond; successful progressive training builds confidence. An Elite Bond, confident, properly certified and physically fit K9 responds immediately and reliably. Hesitation is reserved for commands still being learned, weak bond/confidence, exhaustion, hunger, dehydration or injury. Safe apprehension remains locked below 25 bond.
+Handler bond persists in `Plugins\LSPDFR\AdvancedK9\trust.dat`, while confidence persists with the individual K9 profile. Petting, feeding and safe teamwork build bond; successful progressive training builds confidence. An Elite Bond, confident, properly certified and physically fit K9 responds immediately and reliably. Hesitation is reserved for commands still being learned, weak bond/confidence, exhaustion, hunger, dehydration or injury. Apprehend responds immediately to a valid handler deployment across all input sources; health, protected-target and compliance checks still apply.
 
 Academy Levels 1–5 require 100, 250, 450, 800 and 1,200 XP respectively. Sessions award 0–10 XP at Levels 1–2, 0–20 XP at Levels 3–4 and 0–30 XP at Level 5, limited by exercise performance. Narcotics, explosives and weapons certifications each require 250 XP. Drill order, layouts, scent placement, trails and tactical suspect positions vary between sessions, and prompts teach the handler the corresponding verbal command and handling sequence.
 
@@ -279,7 +279,7 @@ After a K9 sniff, AdvancedK9 retains the authoritative PR item-name list for up 
 
 When no compatibility plugin is active, standalone searches use the configured fallback probability. When PR/CDF is active but an exact inventory record is unavailable, AdvancedK9 returns a negative/no-certified-odor result instead of inventing a random hit. This prevents API changes from creating false narcotics, explosives or weapons alerts.
 
-Vehicle searches visit all four exterior corners before the result is determined. For apprehension, aim a taser or firearm directly at the intended suspect and keep that person in your sights while issuing the command; proximity alone never chooses the target.
+Vehicle searches visit all four exterior corners before the result is determined. For apprehension, aim a taser or firearm directly at the intended suspect while issuing the command; proximity alone never chooses the target. Once deployed, the dog remains locked to that suspect without requiring continued aiming. A new handler command can cancel pursuit.
 
 ## Safety and limitations
 
@@ -311,3 +311,4 @@ profile/configuration data. Third-party software, trademarks, models, textures,
 and other assets remain the property of their respective owners.
 
 See `LICENSE` and `THIRD_PARTY_NOTICES.md` for the complete terms and notices.
+
