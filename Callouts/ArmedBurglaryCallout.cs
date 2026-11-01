@@ -1579,17 +1579,17 @@ namespace AdvancedK9.Callouts
             GameFiber.StartNew(delegate
             {
                 GameFiber.Wait(8000);
-                for(int i=0;i<delayedSuspects.Count;i++)if(delayedSuspects[i]!=null&&delayedSuspects[i].Exists()&&!NativeFunction.Natives.IS_PED_CUFFED<bool>(delayedSuspects[i]))delayedSuspects[i].Dismiss();
-                if(delayedSubject!=null&&delayedSubject.Exists()&&!NativeFunction.Natives.IS_PED_CUFFED<bool>(delayedSubject))delayedSubject.Dismiss();
-                if(delayedGetaway!=null&&delayedGetaway.Exists())delayedGetaway.Dismiss();
+                for(int i=0;i<delayedSuspects.Count;i++)if(delayedSuspects[i]!=null&&delayedSuspects[i].Exists()&&!NativeFunction.Natives.IS_PED_CUFFED<bool>(delayedSuspects[i]))ReleaseCalloutSuspect(delayedSuspects[i]);
+                if(delayedSubject!=null&&delayedSubject.Exists()&&!NativeFunction.Natives.IS_PED_CUFFED<bool>(delayedSubject))ReleaseCalloutSuspect(delayedSubject);
+                if(delayedGetaway!=null&&delayedGetaway.Exists())ReleaseCalloutSuspectVehicle(delayedGetaway);
             },"AdvancedK9 delayed bank pursuit release");
-            if(!pursuitOwnedEntities)for(int i=0;i<_bankAccomplices.Count;i++)if(_bankAccomplices[i]!=null&&_bankAccomplices[i].Exists())_bankAccomplices[i].Dismiss();
+            if(!pursuitOwnedEntities)for(int i=0;i<_bankAccomplices.Count;i++)if(_bankAccomplices[i]!=null&&_bankAccomplices[i].Exists())ReleaseCalloutSuspect(_bankAccomplices[i]);
             _bankAccomplices.Clear();
             for(int i=0;i<_bankPerimeterOfficers.Count;i++)if(_bankPerimeterOfficers[i]!=null&&_bankPerimeterOfficers[i].Exists())_bankPerimeterOfficers[i].Dismiss();
             _bankPerimeterOfficers.Clear();
             for(int i=0;i<_bankPerimeterVehicles.Count;i++)if(_bankPerimeterVehicles[i]!=null&&_bankPerimeterVehicles[i].Exists())_bankPerimeterVehicles[i].Dismiss();
             _bankPerimeterVehicles.Clear();
-            for(int i=0;i<_bankGetawayVehicles.Count;i++)if(_bankGetawayVehicles[i]!=null&&_bankGetawayVehicles[i].Exists())_bankGetawayVehicles[i].Dismiss();
+            for(int i=0;i<_bankGetawayVehicles.Count;i++)if(_bankGetawayVehicles[i]!=null&&_bankGetawayVehicles[i].Exists())ReleaseCalloutSuspectVehicle(_bankGetawayVehicles[i]);
             _bankGetawayVehicles.Clear();
             for(int i=0;i<_bankScentArticles.Count;i++)if(_bankScentArticles[i]!=null&&_bankScentArticles[i].Exists())_bankScentArticles[i].Delete();
             _bankScentArticles.Clear();
@@ -1603,7 +1603,7 @@ namespace AdvancedK9.Callouts
             _airOneOfficers.Clear();
             if(_airOne!=null&&_airOne.Exists())_airOne.Dismiss();
             if(_hostage!=null&&_hostage.Exists())_hostage.Dismiss();
-            if(_getawayVehicle!=null&&_getawayVehicle.Exists())_getawayVehicle.Dismiss();
+            if(_getawayVehicle!=null&&_getawayVehicle.Exists())ReleaseCalloutSuspectVehicle(_getawayVehicle);
             base.End();
         }
     }

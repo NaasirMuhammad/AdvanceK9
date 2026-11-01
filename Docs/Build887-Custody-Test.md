@@ -10,6 +10,7 @@ Test build based on Build 886. Replace main 0.24.1.6, bridge 0.24.1.6, callouts 
 - The core relinquishes its own freeze, writhe and event-blocking controls once a provider takes over, then stops repeating suspect posture tasks. It does not clear the provider's animation/task. Treated patients receive an initial compliance task rather than repeated hands-up commands through searches or the ped menu.
 - Hospital loading defers while an external interaction/arrest animation owns the patient; after observed cuffs it can proceed without restarting the bite. The Build 886 hospital requirement and departure recovery remain.
 - AdvancedK9 callouts read a fresh lease for the exact suspect, not Rex's overall state. They suspend that suspect's scripted outcomes/hiding/escape tasks and duplicate EMS requests while the K9 or medical owner is active. A bite on another person does not lock this suspect. Queued arrest/escape work rechecks ownership after waits. General-state automatic Release/Follow commands were removed from the shared custody flow.
+- Scene cleanup retains K9/medical/provider-owned suspects and their occupied vehicles instead of dismissing them during handoff. A transient body-service anchor is cleared if the observed subject is alive again, without resurrecting or healing them.
 - Invalid-address failures retire affected core maintenance instead of retrying patient writes every frame. Temporary bridge holds have a short expiry and identity-checked restoration.
 
 ## Compatibility limits
@@ -32,4 +33,4 @@ The reported wood-like object is not yet identified. AdvancedK9 kennel props are
 6. Repeat ordinary unbitten PR interaction and the confirmed standalone apprehension/EMS path.
 7. If the floating object reappears while walking, use **Inspect nearby props** while standing near it and include the image and log.
 
-Build 886's EMS test guide and the voice command guide remain included. Automatic Nexus incident/report linking remains unverified; manual incident linking and the durable outbox remain available. Callouts remain experimental.
+Build 886's EMS transport/recovery changes remain in this build, and the voice command guide is included. Automatic Nexus incident/report linking remains unverified; manual incident linking and the durable outbox remain available. Callouts remain experimental.

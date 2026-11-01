@@ -821,7 +821,7 @@ namespace AdvancedK9.Callouts
             if(Subject==null||!Subject.Exists())return _confirmedBodyPositionSet;
             _lastSubjectPosition=Subject.Position;
             bool raw=Subject.Health<=0&&NativeFunction.Natives.IS_PED_DEAD_OR_DYING<bool>(Subject,true);
-            if(!raw){_deathObservedAt=0;return false;}
+            if(!raw){_deathObservedAt=0;if(_confirmedBodyPositionSet){_confirmedBodyPositionSet=false;_confirmedBodyPosition=Vector3.Zero;Game.LogTrivial("AdvancedK9 Callouts: recovered living subject; transient body-service anchor cleared without health/task writes.");}return false;}
             if(_deathObservedAt==0)
             {
                 _deathObservedAt=Game.GameTime;_confirmedBodyPosition=_lastSubjectPosition;_confirmedBodyPositionSet=true;CalloutPosition=_confirmedBodyPosition;
@@ -1647,6 +1647,26 @@ namespace AdvancedK9.Callouts
             Game.LogTrivial("AdvancedK9 Callouts: abandoned vehicle preserved for scene return; cleanup waits until the handler returns and leaves or ten minutes pass.");
         }
 
+        protected bool HasActiveSuspectOwner(Ped ped)
+        {
+            if(ped==null||!ped.Exists())return false;
+            try{return ExternalSuspectControl(ped)||PedIsRestrained(ped)||NativeFunction.Natives.IS_PED_BEING_ARRESTED<bool>(ped);}
+            catch{return true;} // Unknown lifetime: do not release another owner's ped.
+        }
+        protected void ReleaseCalloutSuspect(Ped ped)
+        {
+            if(ped==null||!ped.Exists())return;
+            if(HasActiveSuspectOwner(ped)){Game.LogTrivial("AdvancedK9 Callouts: scene cleanup retained suspect "+HandleOf(ped)+" for the active K9/medical/arrest owner.");return;}
+            ped.Dismiss();
+        }
+        protected void ReleaseCalloutSuspectVehicle(Vehicle vehicle)
+        {
+            if(vehicle==null||!vehicle.Exists())return;
+            if(World.GetAllPeds().Any(p=>p!=null&&p.Exists()&&p.IsInVehicle(vehicle,false)&&HasActiveSuspectOwner(p)))
+            {Game.LogTrivial("AdvancedK9 Callouts: scene cleanup retained occupied suspect vehicle for its active custody owner.");return;}
+            vehicle.Dismiss();
+        }
+
         public override void End()
         {
             if(_cleanupCompleted)return;
@@ -1660,7 +1680,7 @@ namespace AdvancedK9.Callouts
             if(SubjectBlip!=null&&SubjectBlip.Exists())SubjectBlip.Delete();
             if(Reporter!=null&&Reporter.Exists())Reporter.Dismiss();
             if(ParentTwo!=null&&ParentTwo.Exists())ParentTwo.Dismiss();
-            if(Subject!=null&&Subject.Exists())Subject.Dismiss();
+            ReleaseCalloutSuspect(Subject);
             if(SceneVehicle!=null&&SceneVehicle.Exists()){if(completedBeforeCleanup)PreserveSceneVehicleForReturn(SceneVehicle);else SceneVehicle.Dismiss();}SceneVehicle=null;
             if(EvidenceProp!=null&&EvidenceProp.Exists())EvidenceProp.Dismiss();
             if(CoverProp!=null&&CoverProp.Exists())CoverProp.Dismiss();
