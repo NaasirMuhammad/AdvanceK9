@@ -60,6 +60,20 @@ namespace AdvancedK9
             session.NextPublish=Game.GameTime+500;
         }
 
+        private void RetireSuspectSession(Ped ped,string reason)
+        {
+            if(ped==null)return;
+            if(ValidSuspect(ped))
+            {
+                try{RestoreBitePatientControl(ped);_pr.ReleaseK9Custody(ped);}
+                catch(Exception ex){Game.LogTrivial("AdvancedK9 suspect retirement: safe control restoration unavailable: "+ex.GetType().Name);}
+            }
+            SetSuspectPhase(ped,SuspectControlPhase.Unavailable,reason);
+            _bitePatientEventStates.Remove(ped);_suspectSessions.Remove(ped);
+            if(_releasedBiteTarget==ped){_releasedBiteTarget=null;_releasedBiteFrozen=false;}
+            if(_controlledBiteTarget==ped){_controlledBiteTarget=null;_controlledBiteHoldUntil=0;}
+        }
+
         private void MaintainSuspectOwnership()
         {
             foreach(var pair in _suspectSessions.ToArray())
@@ -103,10 +117,7 @@ namespace AdvancedK9
                 {
                     // An invalid-address/native argument failure retires this session;
                     // retrying it every frame risks writing into a replacement entity.
-                    SetSuspectPhase(ped,SuspectControlPhase.Unavailable,"observation failed: "+ex.GetType().Name+"; session retired");
-                    _bitePatientEventStates.Remove(ped);_suspectSessions.Remove(ped);
-                    if(_releasedBiteTarget==ped){_releasedBiteTarget=null;_releasedBiteFrozen=false;}
-                    if(_controlledBiteTarget==ped){_controlledBiteTarget=null;_controlledBiteHoldUntil=0;}
+                    RetireSuspectSession(ped,"observation failed: "+ex.GetType().Name+"; session retired");
                 }
             }
         }

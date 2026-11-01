@@ -4124,9 +4124,7 @@ namespace AdvancedK9
             try{MaintainControlledBiteHoldChecked();}
             catch(Exception ex) when (!(ex is CommandSupersededException))
             {
-                SetSuspectPhase(_controlledBiteTarget,SuspectControlPhase.Unavailable,"controlled-bite maintenance failed: "+ex.GetType().Name);
-                if(_controlledBiteTarget!=null)_bitePatientEventStates.Remove(_controlledBiteTarget);
-                _controlledBiteTarget=null;_controlledBiteHoldUntil=0;
+                RetireSuspectSession(_controlledBiteTarget,"controlled-bite maintenance failed: "+ex.GetType().Name);
                 Game.LogTrivial("AdvancedK9 controlled-bite session retired after invalid entity/native observation; no repeated patient writes.");
             }
         }
@@ -4264,7 +4262,7 @@ namespace AdvancedK9
                 }
                 else if(Game.GameTime>=_releasedBiteGroundAt)EnsureBitePatientGroundPose(_releasedBiteTarget);
             }
-            catch(Exception ex) when (!(ex is CommandSupersededException)){var failed=_releasedBiteTarget;SetSuspectPhase(failed,SuspectControlPhase.Unavailable,"released-bite maintenance failed: "+ex.GetType().Name);if(failed!=null)_bitePatientEventStates.Remove(failed);_releasedBiteTarget=null;_releasedBiteFrozen=false;LogReleasedBiteWarning("session retired after maintenance failure: "+ex.GetType().Name+": "+ex.Message);}
+            catch(Exception ex) when (!(ex is CommandSupersededException)){RetireSuspectSession(_releasedBiteTarget,"released-bite maintenance failed: "+ex.GetType().Name);LogReleasedBiteWarning("session retired after maintenance failure: "+ex.GetType().Name+": "+ex.Message);}
         }
 
         private void EnsureBitePatientGroundPose(Ped patient)
