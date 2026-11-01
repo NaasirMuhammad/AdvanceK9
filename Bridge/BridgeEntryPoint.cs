@@ -12,7 +12,7 @@ using Rage.Native;
 
 namespace AdvancedK9.LSPDFRBridge
 {
-    public sealed class EntryPoint : Plugin
+    public sealed partial class EntryPoint : Plugin
     {
         private volatile bool _running;
         private static readonly string DirectoryPath=Path.Combine("Plugins","LSPDFR","AdvancedK9");
@@ -31,6 +31,7 @@ namespace AdvancedK9.LSPDFRBridge
         private sealed class K9PhysicalCustody
         {
             public Ped Patient;
+            public AdvancedK9.Runtime.PedIdentity Identity;
             public bool? OriginalExcluded,OriginalKeep;
             public int? OriginalResistance,OriginalSurrender;
             public object OriginalAction;
@@ -70,7 +71,7 @@ namespace AdvancedK9.LSPDFRBridge
         {
             _running=false;
             foreach(var hold in K9PhysicalHolds.Values.ToArray())RestoreK9PhysicalCustody(Find("PolicingRedefined","Policing Redefined"),hold,true);
-            K9PhysicalHolds.Clear();
+            K9PhysicalHolds.Clear();WatchedSuspects.Clear();
             try{if(File.Exists(StatePath))File.Delete(StatePath);if(File.Exists(TempPath))File.Delete(TempPath);if(File.Exists(RequestPath))File.Delete(RequestPath);if(File.Exists(CalloutStatePath))File.Delete(CalloutStatePath);if(File.Exists(CalloutTempPath))File.Delete(CalloutTempPath);if(File.Exists(CalloutRequestPath))File.Delete(CalloutRequestPath);}catch{}
         }
 
@@ -87,18 +88,13 @@ namespace AdvancedK9.LSPDFRBridge
             Entity query=FindRequestedEntity(request);
             ProcessInventoryQuery(request,cdf,pr,query);
             ProcessK9Indication(request,nexus,pr,query);
+            ObserveK9ProviderOwnership(pr);
             ProcessK9CustodyControl(request,pr,query as Ped);
             foreach(var pair in K9PhysicalHolds.ToArray())
-                if(pair.Value.Patient==null||!pair.Value.Patient.Exists()||DateTime.UtcNow>pair.Value.ExpiresUtc)
+                if(!pair.Value.Identity.Matches(pair.Value.Patient)||DateTime.UtcNow>pair.Value.ExpiresUtc)
                 {
                     RestoreK9PhysicalCustody(pr,pair.Value,true);K9PhysicalHolds.Remove(pair.Key);
                     Game.LogTrivial("AdvancedK9 bridge: expired/unavailable K9 patient hold released; per-ped pursuit AI and temporary controls restored.");
-                }
-            foreach(var hold in K9PhysicalHolds.Values)
-                if(hold.Patient!=null&&hold.Patient.Exists()&&TryLspdfrCustody(hold.Patient,"IsPedGettingArrested"))
-                {
-                    NativeFunction.Natives.FREEZE_ENTITY_POSITION(hold.Patient,false);
-                    NativeFunction.Natives.STOP_ANIM_TASK(hold.Patient,"combat@damage@writhe","writhe_loop",-4f);
                 }
             ProcessBiteMdtReports(nexus);
             ProcessPendingOfficerSearches(pr,nexus);
@@ -123,7 +119,8 @@ namespace AdvancedK9.LSPDFRBridge
                 "ActionRequestId="+_actionRequestId,
                 "ActionSucceeded="+_actionSucceeded,
                 "ActionSink="+_actionSink,
-                "K9ArrestingPedHandles="+string.Join(",",K9PhysicalHolds.Values.Where(h=>h.Patient!=null&&h.Patient.Exists()&&TryLspdfrCustody(h.Patient,"IsPedGettingArrested")).Select(h=>h.Patient.Handle.ToString())),
+                "K9ArrestingPedHandles="+string.Join(",",WatchedSuspects.Values.Where(w=>w.State=="Arresting"||w.State=="Cuffed").Select(w=>w.Ped.Handle.ToString())),
+                "K9ProviderStates="+K9ProviderStates(),
                 "ActionDetail="+Encode(_actionDetail)
             };
             if(!Directory.Exists(DirectoryPath))Directory.CreateDirectory(DirectoryPath);
@@ -228,21 +225,23 @@ namespace AdvancedK9.LSPDFRBridge
             string id=Read(request,"RequestId");if(string.IsNullOrWhiteSpace(id)||id==_lastActionRequestId)return;
             _lastActionRequestId=_actionRequestId=id;_actionSucceeded=false;_actionSink="Policing Redefined public PedAPI";
             string phase=Read(request,"Phase");if(string.IsNullOrWhiteSpace(phase))phase="BiteHold";
-            if(target==null||!target.Exists()){_actionDetail="K9 custody target unavailable for phase "+phase;return;}
+            AdvancedK9.Runtime.PedIdentity identity;if(!AdvancedK9.Runtime.PedIdentity.TryCapture(target,out identity)){_actionDetail="K9 custody target invalid/zero address for phase "+phase;return;}
+            WatchSuspect(target);
             bool terminal=BiteCustodyPolicy.IsTerminal(phase);
             K9PhysicalCustody hold;
             if(terminal)
             {
                 if(K9PhysicalHolds.TryGetValue(target.Handle,out hold))
                 {
-                    RestoreK9PhysicalCustody(pr,hold,phase!="Cuffed");K9PhysicalHolds.Remove(target.Handle);
+                    RestoreK9PhysicalCustody(pr,hold,true,phase=="Cuffed"||phase=="Arresting");K9PhysicalHolds.Remove(target.Handle);
                 }
                 _actionSucceeded=true;_actionDetail="phase="+phase+"; temporary K9 controls restored; no new stop registered";return;
             }
+            WatchedSuspect provider;if(WatchedSuspects.TryGetValue(target.Handle,out provider)&&provider.State!="None"){_actionDetail="External provider owns suspect; stale K9 hold refresh ignored";return;}
             if(!BiteCustodyPolicy.IsHeld(phase)){_actionDetail="Unknown K9 custody phase rejected: "+phase;return;}
             if(!K9PhysicalHolds.TryGetValue(target.Handle,out hold))
             {
-                hold=new K9PhysicalCustody{Patient=target,
+                hold=new K9PhysicalCustody{Patient=target,Identity=identity,
                     OriginalExcluded=ReadPrPedValue(pr,"GetIsPedExcludedFromCustomPursuitAttributes",target) as bool?,
                     OriginalKeep=ReadPrPedValue(pr,"GetKeepResistanceAction",target) as bool?,
                     OriginalResistance=ReadPrPedValue(pr,"GetPedResistanceChance",target) as int?,
@@ -256,19 +255,14 @@ namespace AdvancedK9.LSPDFRBridge
             hold.ExpiresUtc=DateTime.UtcNow.AddSeconds(15);
             hold.PursuitAiChanged=TryLspdfrPedToggle("SetPursuitDisableAIForPed",target,true)||hold.PursuitAiChanged;
             bool excluded=pr!=null&&TryInvokeExactPrPedApi(pr,"SetIsPedExcludedFromCustomPursuitAttributes",target,true,null);
-            bool intercepted=pr!=null&&TryInvokeExactPrPedApi(pr,"SetInterceptPedAnyArrest",target,true,null);
+            bool intercepted=false; // Do not change PR arrest interception policy.
             bool resistance=pr!=null&&TryInvokeExactPrPedApi(pr,"SetPedResistanceChance",target,null,0);
             bool surrender=pr!=null&&TryInvokeExactPrPedApi(pr,"SetPedSurrenderChance",target,null,100);
             bool action=pr!=null&&TryInvokePrResistanceNone(pr,target);
-            // A stop is for a treated, compliant suspect awaiting cuffs, not a
-            // ragdoll or physically held patient. Never manufacture arrested state.
-            bool registerStop=BiteCustodyPolicy.RegisterStop(phase);
-            bool stopped=pr!=null&&(ReadPrPedValue(pr,"IsPedStopped",target) as bool?)==true;
-            if(registerStop&&pr!=null&&!hold.StopRequested)
-            {
-                hold.StopRequested=true;
-                stopped=stopped||TryInvokeExactPrPedApi(pr,"SetPedAsStopped",target,null,null);
-            }
+            // A treated patient is not automatically a PR stopped ped. The
+            // external interaction/arrest must be observed, never manufactured.
+            bool registerStop=false;
+            bool stopped=(ReadPrPedValue(pr,"IsPedStopped",target) as bool?)==true;
             _actionSucceeded=hold.PursuitAiChanged||(excluded&&intercepted);
             _actionDetail="phase="+phase+", stopRequested="+registerStop+", stopped="+stopped+", perPedPursuitAi="+hold.PursuitAiChanged+", excludeCustomPursuit="+excluded+", arrestIntercept="+intercepted+", resistance0="+resistance+", surrender100="+surrender+", resistanceActionNone="+action;
             Game.LogTrivial("AdvancedK9 bridge: K9 physical custody "+(_actionSucceeded?"applied":"partially applied")+" for ped "+target.Handle+"; "+_actionDetail+". Arrest remains pending real cuffs.");
@@ -276,7 +270,7 @@ namespace AdvancedK9.LSPDFRBridge
 
         private static object ReadPrPedValue(Assembly pr,string name,Ped target)
         {
-            if(pr==null)return null;
+            AdvancedK9.Runtime.PedIdentity identity;if(pr==null||!AdvancedK9.Runtime.PedIdentity.TryCapture(target,out identity))return null;
             foreach(Type type in Types(new[]{pr}).Where(t=>t.Name.Equals("PedAPI",StringComparison.OrdinalIgnoreCase)))
                 foreach(MethodInfo method in type.GetMethods(BindingFlags.Public|BindingFlags.Static).Where(m=>m.Name==name))
                 {
@@ -309,15 +303,17 @@ namespace AdvancedK9.LSPDFRBridge
             return false;
         }
 
-        private static void RestoreK9PhysicalCustody(Assembly pr,K9PhysicalCustody hold,bool releaseNative)
+        private static void RestoreK9PhysicalCustody(Assembly pr,K9PhysicalCustody hold,bool releaseNative,bool providerHandoff=false)
         {
-            Ped target=hold.Patient;if(target==null||!target.Exists())return;
+            try
+            {
+            Ped target=hold.Patient;if(hold.Identity==null||!hold.Identity.Matches(target))return;
             if(hold.PursuitAiChanged)TryLspdfrPedToggle("SetPursuitDisableAIForPed",target,hold.OriginalPursuitAiDisabled);
             if(pr!=null)
             {
                 if(hold.OriginalExcluded.HasValue)TryInvokeExactPrPedApi(pr,"SetIsPedExcludedFromCustomPursuitAttributes",target,hold.OriginalExcluded.Value,null);
                 TryInvokeExactPrPedApi(pr,"SetKeepResistanceAction",target,false,null);
-                if(hold.OriginalAction!=null)
+                if(!providerHandoff&&hold.OriginalAction!=null)
                     foreach(Type type in Types(new[]{pr}).Where(t=>t.Name=="PedAPI"))
                     foreach(MethodInfo method in type.GetMethods(BindingFlags.Public|BindingFlags.Static).Where(m=>m.Name=="SetPedResistanceAction"))
                     {
@@ -325,14 +321,17 @@ namespace AdvancedK9.LSPDFRBridge
                         try{method.Invoke(null,new[]{(object)target,hold.OriginalAction});break;}catch{}
                     }
                 if(hold.OriginalKeep.HasValue)TryInvokeExactPrPedApi(pr,"SetKeepResistanceAction",target,hold.OriginalKeep.Value,null);
-                if(hold.OriginalResistance.HasValue)TryInvokeExactPrPedApi(pr,"SetPedResistanceChance",target,null,hold.OriginalResistance.Value);
-                if(hold.OriginalSurrender.HasValue)TryInvokeExactPrPedApi(pr,"SetPedSurrenderChance",target,null,hold.OriginalSurrender.Value);
+                if(!providerHandoff&&hold.OriginalResistance.HasValue)TryInvokeExactPrPedApi(pr,"SetPedResistanceChance",target,null,hold.OriginalResistance.Value);
+                if(!providerHandoff&&hold.OriginalSurrender.HasValue)TryInvokeExactPrPedApi(pr,"SetPedSurrenderChance",target,null,hold.OriginalSurrender.Value);
             }
             if(releaseNative)NativeFunction.Natives.FREEZE_ENTITY_POSITION(target,false);
+            }
+            catch(Exception ex){Game.LogTrivial("AdvancedK9 bridge: invalid custody restore retired without retry: "+ex.GetType().Name);}
         }
 
         private static bool TryInvokeExactPrPedApi(Assembly pr,string methodName,Ped target,bool? booleanValue,int? integerValue)
         {
+            AdvancedK9.Runtime.PedIdentity identity;if(!AdvancedK9.Runtime.PedIdentity.TryCapture(target,out identity))return false;
             foreach(Type type in Types(new[]{pr}).Where(t=>t.Name.Equals("PedAPI",StringComparison.OrdinalIgnoreCase)||(t.FullName??"").EndsWith(".PedAPI",StringComparison.OrdinalIgnoreCase)))
             foreach(MethodInfo method in type.GetMethods(BindingFlags.Public|BindingFlags.Static).Where(m=>m.Name.Equals(methodName,StringComparison.OrdinalIgnoreCase)))
             {

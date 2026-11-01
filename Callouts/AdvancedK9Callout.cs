@@ -100,13 +100,34 @@ namespace AdvancedK9.Callouts
         protected virtual bool SharedOfficerArrestReady{get{return true;}}
         protected void SetCustodyObservationEnabled(bool enabled){_custodyObservationEnabled=enabled;}
         protected bool SharedSuspectTaskingBlocked{get{return UsesSuspectLifecycle&&SuspectControlLocked;}}
+        private string _lastSuspectLease="";
+        protected bool TrySuspectControl(Ped ped,out SuspectControlLease lease)
+        {
+            lease=null;AdvancedK9.Runtime.PedIdentity identity;
+            return AdvancedK9.Runtime.PedIdentity.TryCapture(ped,out identity)&&SuspectControlApi.TryRead(identity.Handle,identity.Model,identity.Address,out lease);
+        }
+        protected bool ExternalSuspectControl(Ped ped)
+        {
+            SuspectControlLease lease;bool blocked=TrySuspectControl(ped,out lease)&&lease.BlocksCalloutTasks;
+            if(ped==Subject&&blocked)
+            {
+                string signature=lease.Episode+":"+lease.Phase;
+                if(signature!=_lastSuspectLease){_lastSuspectLease=signature;Game.LogTrivial("AdvancedK9 Callouts: ped="+lease.Handle+", episode="+lease.Episode+", owner phase="+lease.Phase+"; this suspect's scripted outcome/task/medical writes suspended.");}
+            }
+            return blocked;
+        }
+        protected bool K9MedicalOwnsSubject
+        {
+            get {SuspectControlLease lease;return TrySuspectControl(Subject,out lease)&&lease.MedicalOwner;}
+        }
+
         protected bool SuspectControlLocked
         {
             get
             {
                 if(Subject==null||!Subject.Exists())return true;
                 K9ApiSnapshot snapshot;
-                bool k9Contact=AdvancedK9Api.TryGetSnapshot(out snapshot)&&(string.Equals(snapshot.State,"Apprehending",StringComparison.OrdinalIgnoreCase)||string.Equals(snapshot.State,"HoldingSuspect",StringComparison.OrdinalIgnoreCase));
+                bool k9Contact=ExternalSuspectControl(Subject);
                 ObserveSuspectLifecycle();
                 return k9Contact||MedicalResponseStarted||SubjectIsComplying()||ArrestProviderOwnsSubject;
             }
@@ -1002,14 +1023,14 @@ namespace AdvancedK9.Callouts
 
         protected void BeginNativeLspdfrOfficerArrest()
         {
-            if(_sharedBackupArrestAttempted||!SharedOfficerArrestReady||Subject==null||!Subject.Exists()||ArrestProviderOwnsSubject||SubjectIsInCustody()||!SubjectIsComplying())return;
+            if(ExternalSuspectControl(Subject)||_sharedBackupArrestAttempted||!SharedOfficerArrestReady||Subject==null||!Subject.Exists()||ArrestProviderOwnsSubject||SubjectIsInCustody()||!SubjectIsComplying())return;
             _sharedBackupArrestAttempted=true;
             BeginNativeLspdfrOfficerArrest(Subject,OfficerOne,OfficerTwo);
         }
 
         protected void BeginNativeLspdfrOfficerArrest(Ped suspect,Ped arrestOfficer,Ped lethalCover)
         {
-            if(suspect==null||!suspect.Exists()||arrestOfficer==null||!arrestOfficer.Exists())return;
+            if(suspect==null||!suspect.Exists()||ExternalSuspectControl(suspect)||arrestOfficer==null||!arrestOfficer.Exists())return;
             int targetHandle=HandleOf(suspect);if(targetHandle==0||_sharedOfficerArrestTargets.Contains(targetHandle))return;
             bool restrained=false;try{restrained=NativeFunction.Natives.IS_PED_CUFFED<bool>(suspect)||NativeFunction.Natives.IS_PED_HANDCUFFED<bool>(suspect);}catch{}
             if(restrained)return;
@@ -1018,18 +1039,18 @@ namespace AdvancedK9.Callouts
             {
                 try
                 {
-                    if(Finished||!arrestOfficer.Exists()||!suspect.Exists())return;
+                    if(Finished||!arrestOfficer.Exists()||!suspect.Exists()||ExternalSuspectControl(suspect))return;
                     uint taser=NativeFunction.Natives.GET_HASH_KEY<uint>("WEAPON_STUNGUN");
                     NativeFunction.Natives.SET_CURRENT_PED_WEAPON(arrestOfficer,taser,true);
                     if(lethalCover!=null&&lethalCover.Exists())NativeFunction.Natives.TASK_AIM_GUN_AT_ENTITY(lethalCover,suspect,-1,false);
                     NativeFunction.Natives.TASK_GO_TO_ENTITY(arrestOfficer,suspect,-1,2.2f,2.8f,0f,0);
                     uint deadline=Game.GameTime+10000;
-                    while(!Finished&&arrestOfficer.Exists()&&suspect.Exists()&&arrestOfficer.DistanceTo(suspect)>2.8f&&Game.GameTime<deadline)
+                    while(!Finished&&arrestOfficer.Exists()&&suspect.Exists()&&!ExternalSuspectControl(suspect)&&arrestOfficer.DistanceTo(suspect)>2.8f&&Game.GameTime<deadline)
                     {
                         if(PedIsRestrained(suspect)){BeginOfficerCustodyEscort(suspect,arrestOfficer,lethalCover);return;}
                         GameFiber.Wait(200);
                     }
-                    if(Finished||!arrestOfficer.Exists()||!suspect.Exists())return;
+                    if(Finished||!arrestOfficer.Exists()||!suspect.Exists()||ExternalSuspectControl(suspect))return;
                     if(PedIsRestrained(suspect)){BeginOfficerCustodyEscort(suspect,arrestOfficer,lethalCover);return;}
                     NativeFunction.Natives.TASK_ARREST_PED(arrestOfficer,suspect);
                     NativeFunction.Natives.SET_PED_KEEP_TASK(arrestOfficer,true);
@@ -1343,10 +1364,11 @@ namespace AdvancedK9.Callouts
         protected bool ProcessPostApprehensionMedical(string completionMessage)
         {
             if(_medicalResponseStarted||Subject==null||!Subject.Exists()||Subject.IsDead)return _medicalResponseStarted;
+            if(ExternalSuspectControl(Subject))return false;
             bool injured=Subject.Health<Subject.MaxHealth-5;
             if(!injured)return false;
             K9ApiSnapshot snapshot;
-            if(AdvancedK9Api.TryGetSnapshot(out snapshot)&&(string.Equals(snapshot.State,"Apprehending",StringComparison.OrdinalIgnoreCase)||string.Equals(snapshot.State,"HoldingSuspect",StringComparison.OrdinalIgnoreCase)))return false;
+            if(ExternalSuspectControl(Subject))return false;
             _medicalResponseStarted=true;
             _medicalStage="requested";
             var suspect=Subject;
@@ -1414,6 +1436,7 @@ namespace AdvancedK9.Callouts
                         if(respondingMedic.DistanceTo(suspect)>3f){contactMaintained=false;break;}
                         GameFiber.Wait(250);
                     }
+                    if(ExternalSuspectControl(suspect))return;
                     if(!contactMaintained||!respondingMedic.Exists()||!suspect.Exists())
                     {
                         _medicalStage="failed";
@@ -1449,7 +1472,7 @@ namespace AdvancedK9.Callouts
 
         private bool StopMedicalForDeath(Ped suspect)
         {
-            if(suspect==null||!suspect.Exists())return true;
+            if(suspect==null||!suspect.Exists()||ExternalSuspectControl(suspect)){_medicalStage="handed-to-k9-owner";return true;}
             if(suspect.Health>0||!NativeFunction.Natives.IS_PED_DEAD_OR_DYING<bool>(suspect,true))return false;
             _lastSubjectPosition=suspect.Position;_confirmedBodyPosition=_lastSubjectPosition;_confirmedBodyPositionSet=true;CalloutPosition=_confirmedBodyPosition;
             suspect.IsPersistent=true;NativeFunction.Natives.SET_ENTITY_AS_MISSION_ENTITY(suspect,true,true);
@@ -1538,25 +1561,9 @@ namespace AdvancedK9.Callouts
                 {
                     CalloutPosition=Subject.Position;
                     MaintainSupportContainment(custody||ArrestProviderOwnsSubject||SubjectIsInCustody());
-                    if(complying&&!custody&&!ArrestProviderOwnsSubject)BeginNativeLspdfrOfficerArrest();
-                    if((custody||SubjectIsInCustody())&&OfficerOne!=null&&OfficerOne.Exists())BeginOfficerCustodyEscort(Subject,OfficerOne,OfficerTwo);
+                    if(complying&&!custody&&!ArrestProviderOwnsSubject&&!ExternalSuspectControl(Subject))BeginNativeLspdfrOfficerArrest();
+                    if(!K9MedicalOwnsSubject&&(custody||SubjectIsInCustody())&&OfficerOne!=null&&OfficerOne.Exists())BeginOfficerCustodyEscort(Subject,OfficerOne,OfficerTwo);
                     K9ApiSnapshot snapshot;
-                    if(!_k9DisengageIssued&&AdvancedK9Api.TryGetSnapshot(out snapshot)&&
-                       (string.Equals(snapshot.State,"Apprehending",StringComparison.OrdinalIgnoreCase)||string.Equals(snapshot.State,"HoldingSuspect",StringComparison.OrdinalIgnoreCase)))
-                    {
-                        _k9DisengageIssued=true;
-                        AdvancedK9Api.SendCommand("Release",ContextId,HandleOf(Subject),"Ped",Subject.Position.X,Subject.Position.Y,Subject.Position.Z,"shared callout compliance and custody safety release");
-                        Game.LogTrivial("AdvancedK9 Callouts: shared lifecycle requested K9 release before LSPDFR arrest and medical handling.");
-                    }
-                    if((custody||SubjectIsInCustody())&&!_k9CustodyFollowIssued&&AdvancedK9Api.TryGetSnapshot(out snapshot)&&
-                       !string.Equals(snapshot.State,"Apprehending",StringComparison.OrdinalIgnoreCase)&&
-                       !string.Equals(snapshot.State,"HoldingSuspect",StringComparison.OrdinalIgnoreCase))
-                    {
-                        _k9CustodyFollowIssued=true;
-                        EndSupportTracking();
-                        AdvancedK9Api.SendCommand("Follow",ContextId,HandleOf(Subject),"Ped",Subject.Position.X,Subject.Position.Y,Subject.Position.Z,"custody confirmed; release callout K9 task ownership, clear target references, and return to handler follow");
-                        Game.LogTrivial("AdvancedK9 Callouts: custody confirmed; tracking/containment ended and Follow ownership returned to the handler.");
-                    }
                     if(!_sharedControlDispatchSent)
                     {
                         _sharedControlDispatchSent=true;
@@ -1676,3 +1683,4 @@ namespace AdvancedK9.Callouts
         public override void OnCalloutNotAccepted(){End();}
     }
 }
+

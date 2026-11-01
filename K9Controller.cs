@@ -339,6 +339,7 @@ namespace AdvancedK9
                     _onDuty = dutyNow;
                     if (_onDuty) ActivateForDuty(); else DeactivateForDuty();
                 }
+                MaintainSuspectOwnership();
                 PublishSharedApi();
                 MaintainMedicalDepartures();
                 if (!_onDuty) continue;
@@ -352,6 +353,7 @@ namespace AdvancedK9
                 DrawKennelNames();
                 _evidenceMarkers.Tick();
                 MaintainStationKennels();
+                AuditNearbyProps();
                 CaptureScentTrails();
                 UpdateCompatibilityPursuit();
                 if (ChordPressed(_config.ModifierKey, _config.SpawnKey)) Execute(K9Command.SpawnDismiss);
@@ -561,7 +563,7 @@ namespace AdvancedK9
             CloseSeatCalibrationDoor();_menuMode="profile"; RefreshProfileMenu();
         }
 
-        private void RefreshProfileMenu(){_menu.Update("K9 PROFILE — "+_profile.Name,new[]{L("Language")+": "+Localization.LanguageName,"K9 Roster ("+_roster.Entries.Count+")",L("Identity & Appearance"),L("HUD & Display"),L("Kennel Location Editor"),L("Vehicle Seat Configuration"),L("Profile, Health & Certifications"),"Accessory colors",VoiceMenuLabel(),"Bite / EMS MDT reports"});}
+        private void RefreshProfileMenu(){_menu.Update("K9 PROFILE — "+_profile.Name,new[]{L("Language")+": "+Localization.LanguageName,"K9 Roster ("+_roster.Entries.Count+")",L("Identity & Appearance"),L("HUD & Display"),L("Kennel Location Editor"),L("Vehicle Seat Configuration"),L("Profile, Health & Certifications"),"Accessory colors",VoiceMenuLabel(),"Bite / EMS MDT reports","Inspect nearby props"});}
         private void OpenAccessoryColors(){_menuMode="accessory_colors";_menu.Open("K9 ACCESSORY COLORS",new[]{"Leash: "+(_config.LeashPropColor+1)+" / 16","Dual bowl: "+(_config.BowlPropColor+1)+" / 16","← Back to K9 Profile"});}
         private void AdjustAccessoryColor(int index,int delta)
         {
@@ -673,7 +675,7 @@ namespace AdvancedK9
                 OpenAppearanceMenu();return;
             }
             if(_menuMode!="profile")return;
-            if(index==0){ChangeLanguage(1);return;}if(index==1)OpenRosterMenu();else if(index==2)OpenAppearanceMenu();else if(index==3)OpenHudConfiguration();else if(index==4)OpenKennelLocationMenu();else if(index==5)OpenSeatConfiguration();else if(index==6)Inspect();else if(index==7)OpenAccessoryColors();else if(index==8)ToggleVoice();else if(index==9)OpenBiteMdtReports();
+            if(index==0){ChangeLanguage(1);return;}if(index==1)OpenRosterMenu();else if(index==2)OpenAppearanceMenu();else if(index==3)OpenHudConfiguration();else if(index==4)OpenKennelLocationMenu();else if(index==5)OpenSeatConfiguration();else if(index==6)Inspect();else if(index==7)OpenAccessoryColors();else if(index==8)ToggleVoice();else if(index==9)OpenBiteMdtReports();else if(index==10)AuditNearbyProps(true);
         }
 
         private string[] _mdtReportEpisodes=new string[0];
@@ -1483,6 +1485,8 @@ namespace AdvancedK9
                     else{kennel.Prop.Position=configuredPosition;Game.LogTrivial("AdvancedK9 kennel ground-snap rejected unsafe Z change for "+kennel.Name+".");}
                 }
                 if(kennel.ForceLevel)NativeFunction.Natives.SET_ENTITY_ROTATION(kennel.Prop,0f,0f,kennel.Heading,2,true);
+                NativeFunction.Natives.SET_ENTITY_CAN_BE_DAMAGED(kennel.Prop,false);
+                NativeFunction.Natives.SET_ENTITY_PROOFS(kennel.Prop,true,true,true,true,true,true,true,true);
                 NativeFunction.Natives.FREEZE_ENTITY_POSITION(kennel.Prop,true);kennel.Position=kennel.Prop.Position;
                 int interior=NativeFunction.Natives.GET_INTERIOR_FROM_ENTITY<int>(kennel.Prop);
                 if(interior!=0)Game.LogTrivial("AdvancedK9 kennel exterior audit WARNING: "+kennel.Name+" resolved inside interior "+interior+" at "+kennel.Position+".");
@@ -2771,11 +2775,12 @@ namespace AdvancedK9
                 NativeFunction.Natives.TASK_START_SCENARIO_IN_PLACE(_biteMedicalDriver,"CODE_HUMAN_MEDIC_TEND_TO_DEAD",0,true);
                 if(_biteMedicalPartner.Exists()&&_biteMedicalPartner.DistanceTo(patient)<3f)
                     NativeFunction.Natives.TASK_START_SCENARIO_IN_PLACE(_biteMedicalPartner,"CODE_HUMAN_MEDIC_TEND_TO_DEAD",0,true);
+                SetSuspectPhase(patient,SuspectControlPhase.Treatment,"paramedics reached patient");
                 _pr.RecordBiteReportEvent(patient,"TreatmentStarted",_profile.Name,"AdvancedK9 paramedics reached the patient and began on-scene treatment.");
                 uint treatmentUntil=Game.GameTime+(uint)(_config.BitePatientTreatmentSeconds*1000);
-                while(_biteMedicalResponseActive&&patient.Exists()&&!patient.IsDead&&Game.GameTime<treatmentUntil)WaitOwned(250);
+                while(_biteMedicalResponseActive&&ValidSuspect(patient)&&!patient.IsDead&&Game.GameTime<treatmentUntil)WaitOwned(250);
                 if(!_biteMedicalResponseActive||Game.GameTime<treatmentUntil)throw new OperationCanceledException("EMS treatment was interrupted before completion.");
-                if(!patient.Exists()||patient.IsDead)throw new InvalidOperationException("Patient could not be medically stabilized.");
+                if(!ValidSuspect(patient)||patient.IsDead)throw new InvalidOperationException("Patient identity became unavailable during treatment; no completion asserted.");
                 if(medicalBag!=null&&medicalBag.Exists()){medicalBag.Delete();medicalBag=null;}
                 int healthBeforeTreatment=patient.Health;
                 patient.Health=Math.Min(patient.MaxHealth,Math.Max(patient.Health+35,75));
@@ -2794,9 +2799,10 @@ namespace AdvancedK9
                 }
                 if(!transported)
                 {
+                    SetSuspectPhase(patient,SuspectControlPhase.AwaitingArrest,"on-scene treatment complete; no automatic stop registration");
                     _pr.RecordTreatedCustody(patient);
                     if(!NativeFunction.Natives.IS_PED_IN_ANY_VEHICLE<bool>(patient,false))_pr.RecordBiteReportEvent(patient,"RetainedForArrest",_profile.Name,"Treatment complete; patient remained on scene for the police arrest workflow. Completed arrest is not asserted.");
-                    NativeFunction.Natives.TASK_HANDS_UP(patient,-1,Game.LocalPlayer.Character,-1,true);
+                    if(ValidSuspect(patient)&&!ProviderOwnsSuspect(patient))NativeFunction.Natives.TASK_HANDS_UP(patient,-1,Game.LocalPlayer.Character,-1,true);
                     Game.DisplayNotification("~g~EMS:~s~ Treatment is complete. The suspect is medically cleared and remains for PR/LSPDFR arrest.");
                     K9IncidentLog.Write(_profile.Name,"Medical","Bite patient treated on scene and returned to police custody",patient.Position);
                     ReturnMedicsToService();
@@ -3391,6 +3397,8 @@ namespace AdvancedK9
             }
             if(_state==K9State.InVehicle)DoorPop(false);
             ExitRestingPose();
+            if(!BeginSuspectSession(target)){Game.DisplayNotification("~y~Suspect unavailable or already controlled by an external provider.");return;}
+            if(!ValidSuspect(target)||ProviderOwnsSuspect(target))return;
             _state = K9State.Apprehending;
             _recentApprehendTarget=null;_recentApprehendTargetUntil=0;
             _dog.Tasks.ClearImmediately();
@@ -3416,7 +3424,7 @@ namespace AdvancedK9
             Game.DisplayNotification(calloutTarget!=null?"~o~K9 deploying on the verified callout suspect.~s~~n~Bystanders are excluded by the active suspect lock.":"~o~K9 deploying immediately on aimed target.~s~~n~No traffic stop or close-range contact is required.");
             try
             {
-                while (DogExists() && target.Exists() && !target.IsDead && _state == K9State.Apprehending)
+                while (DogExists() && ValidSuspect(target) && !ProviderOwnsSuspect(target) && !target.IsDead && _state == K9State.Apprehending)
                 {
                     if(!target.IsRagdoll&&IsTargetComplyingOrRestrained(target))
                     {
@@ -3471,6 +3479,7 @@ namespace AdvancedK9
                     {
                         // Commit once, replacing pursuit before any takedown work.
                         // The locked target and frame-by-frame safety checks remain.
+                        SetSuspectPhase(target,SuspectControlPhase.Bite,"confirmed physical K9 contact");
                         _state=K9State.HoldingSuspect;
                         _dog.Tasks.ClearImmediately();
                         Game.LogTrivial("AdvancedK9 bite contact committed: lockedPed="+target.Handle+", rootGap="+horizontalContact.ToString("0.00")+"m; pursuit replaced immediately by one takedown.");
@@ -3514,10 +3523,11 @@ namespace AdvancedK9
             {
                 // A new owner assigns its own task after this fiber exits. Restore
                 // the temporary pursuit movement boost without clearing its task.
+                SuspectSession session;if(_suspectSessions.TryGetValue(target,out session)&&session.State.Phase==SuspectControlPhase.Chasing)SetSuspectPhase(target,SuspectControlPhase.Released,"chase ended before bite; no stale task ownership retained");
                 if(DogEntityExists())NativeFunction.Natives.SET_PED_MOVE_RATE_OVERRIDE(_dog,_profile.Health<=55?.65f:1f);
                 Game.LogTrivial("AdvancedK9 apprehension target lock ended: ped="+target.Handle+", state="+_state+"; no elapsed-time recall.");
             }
-            int finalBiteSeconds=(int)((Game.GameTime-_biteStarted)/1000);bool targetExists=target!=null&&target.Exists();K9DeploymentReport.Write("Player",_profile.Name,"Apprehension",reaction,_activeScentSource,_warningGiven,_activeTrackDistance,_activeTrackStarted==0?0:(int)((Game.GameTime-_activeTrackStarted)/1000),finalBiteSeconds,targetExists?(target.IsDead?"Deceased":"Not controlled"):"Entity unavailable",_profile.Injury,"Deployment ended",targetExists?target.Position:_dog.Position);Follow();
+            int finalBiteSeconds=(int)((Game.GameTime-_biteStarted)/1000);bool targetExists=ValidSuspect(target);K9DeploymentReport.Write("Player",_profile.Name,"Apprehension",reaction,_activeScentSource,_warningGiven,_activeTrackDistance,_activeTrackStarted==0?0:(int)((Game.GameTime-_activeTrackStarted)/1000),finalBiteSeconds,targetExists?(target.IsDead?"Deceased":"Not controlled"):"Entity unavailable",_profile.Injury,"Deployment ended",targetExists?target.Position:_dog.Position);Follow();
         }
         private void ReleaseControlledBite()
         {
@@ -3527,10 +3537,11 @@ namespace AdvancedK9
         }
         private void BeginReleasedBiteMedicalHold(bool notify)
         {
-            if(_controlledBiteTarget!=null&&_controlledBiteTarget.Exists()&&!_controlledBiteTarget.IsDead)
+            if(ValidSuspect(_controlledBiteTarget)&&!ProviderOwnsSuspect(_controlledBiteTarget)&&!_controlledBiteTarget.IsDead)
             {
                 _controlledBiteReleased=true;
                 _releasedBiteTarget=_controlledBiteTarget;
+                SetSuspectPhase(_releasedBiteTarget,SuspectControlPhase.MedicalHold,"handler released physical K9 contact");
                 _pr.RecordMedicalCustody(_releasedBiteTarget);
                 _pr.RecordBiteReportEvent(_releasedBiteTarget,"Release",_profile.Name,"Handler ended K9 contact. Bite-to-release interval: "+((Game.GameTime-_biteContactReportAt)/1000)+" seconds; patient retained for medical assessment or actual restraint.");
                 _releasedBiteHealth=_releasedBiteTarget.Health;
@@ -4078,6 +4089,7 @@ namespace AdvancedK9
 
         private void CaptureBitePatientControl(Ped target)
         {
+            if(!ValidSuspect(target)||ProviderOwnsSuspect(target))return;
             if(!_bitePatientEventStates.ContainsKey(target))_bitePatientEventStates[target]=NativeFunction.Natives.GET_PED_CONFIG_FLAG<bool>(target,17,true);
             target.BlockPermanentEvents=true;
             NativeFunction.Natives.SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(target,true);
@@ -4089,7 +4101,7 @@ namespace AdvancedK9
             bool events;
             if(_bitePatientEventStates.TryGetValue(target,out events))
             {
-                if(target.Exists())
+                if(ValidSuspect(target))
                 {
                     NativeFunction.Natives.FREEZE_ENTITY_POSITION(target,false);
                     NativeFunction.Natives.STOP_ANIM_TASK(target,"combat@damage@writhe","writhe_loop",-4f);
@@ -4109,7 +4121,20 @@ namespace AdvancedK9
 
         private void MaintainControlledBiteHold()
         {
+            try{MaintainControlledBiteHoldChecked();}
+            catch(Exception ex) when (!(ex is CommandSupersededException))
+            {
+                SetSuspectPhase(_controlledBiteTarget,SuspectControlPhase.Unavailable,"controlled-bite maintenance failed: "+ex.GetType().Name);
+                if(_controlledBiteTarget!=null)_bitePatientEventStates.Remove(_controlledBiteTarget);
+                _controlledBiteTarget=null;_controlledBiteHoldUntil=0;
+                Game.LogTrivial("AdvancedK9 controlled-bite session retired after invalid entity/native observation; no repeated patient writes.");
+            }
+        }
+
+        private void MaintainControlledBiteHoldChecked()
+        {
             if(_controlledBiteTarget==null)return;
+            if(!ValidSuspect(_controlledBiteTarget)||ProviderOwnsSuspect(_controlledBiteTarget)){_controlledBiteTarget=null;_controlledBiteHoldUntil=0;if(DogExists())Follow();return;}
             if(!_controlledBiteTarget.Exists()||_controlledBiteTarget.IsDead||IsTargetDurablyRestrained(_controlledBiteTarget))
             {
                 if(_controlledBiteTarget.Exists())
@@ -4144,6 +4169,7 @@ namespace AdvancedK9
             NativeFunction.Natives.REQUEST_ANIM_DICT(dictionary);
             uint deadline=Game.GameTime+500;
             while(!NativeFunction.Natives.HAS_ANIM_DICT_LOADED<bool>(dictionary)&&Game.GameTime<deadline)YieldOwned();
+            if(!ValidSuspect(target)||ProviderOwnsSuspect(target))return;
             if(!NativeFunction.Natives.HAS_ANIM_DICT_LOADED<bool>(dictionary))
             {
                 _nextControlledBiteVisual=Game.GameTime+1000;
@@ -4166,6 +4192,7 @@ namespace AdvancedK9
             try
             {
                 if(_releasedBiteTarget==null)return;
+                if(!ValidSuspect(_releasedBiteTarget)||ProviderOwnsSuspect(_releasedBiteTarget))return;
                 if(_biteMedicalLoadingPatient)return;
                 if(!_releasedBiteTarget.Exists()||IsTargetDurablyRestrained(_releasedBiteTarget))
                 {
@@ -4202,6 +4229,7 @@ namespace AdvancedK9
                         else if(Game.GameTime-_releasedBiteTreatmentCandidateAt>=1500)
                         {
                             _releasedBiteTreated=true;
+                            SetSuspectPhase(_releasedBiteTarget,SuspectControlPhase.AwaitingArrest,"sustained external recovery observed");
                             _pr.RecordTreatedCustody(_releasedBiteTarget);
                             _pr.RecordBiteReportEvent(_releasedBiteTarget,"TreatmentObserved",_profile.Name,"Sustained patient recovery observed by AdvancedK9; external treatment provider and procedures were not identified.");
                             NativeFunction.Natives.FREEZE_ENTITY_POSITION(_releasedBiteTarget,false);
@@ -4232,17 +4260,16 @@ namespace AdvancedK9
                         NativeFunction.Natives.STOP_ANIM_TASK(_releasedBiteTarget,"combat@damage@writhe","writhe_loop",-4f);
                         _releasedBiteFrozen=false;
                     }
-                    if(!NativeFunction.Natives.IS_PED_HANDS_UP<bool>(_releasedBiteTarget))
-                        NativeFunction.Natives.TASK_HANDS_UP(_releasedBiteTarget,-1,Game.LocalPlayer.Character,-1,true);
+                    // No repeated hands-up task: PR/NPCI searches and arrest animations own their transitions.
                 }
                 else if(Game.GameTime>=_releasedBiteGroundAt)EnsureBitePatientGroundPose(_releasedBiteTarget);
             }
-            catch(Exception ex) when (!(ex is CommandSupersededException)){LogReleasedBiteWarning("contained maintenance failure: "+ex.GetType().Name+": "+ex.Message);}
+            catch(Exception ex) when (!(ex is CommandSupersededException)){var failed=_releasedBiteTarget;SetSuspectPhase(failed,SuspectControlPhase.Unavailable,"released-bite maintenance failed: "+ex.GetType().Name);if(failed!=null)_bitePatientEventStates.Remove(failed);_releasedBiteTarget=null;_releasedBiteFrozen=false;LogReleasedBiteWarning("session retired after maintenance failure: "+ex.GetType().Name+": "+ex.Message);}
         }
 
         private void EnsureBitePatientGroundPose(Ped patient)
         {
-            if(patient==null||!patient.Exists()||patient.IsDead||IsTargetDurablyRestrained(patient)||_biteMedicalLoadingPatient)return;
+            if(!SuspectPoseAllowed(patient)||patient.IsDead||IsTargetDurablyRestrained(patient)||_biteMedicalLoadingPatient)return;
             if(IsBitePatientBeingArrested(patient))
             {
                 NativeFunction.Natives.FREEZE_ENTITY_POSITION(patient,false);return;
@@ -4261,6 +4288,7 @@ namespace AdvancedK9
                     if(!patient.IsRagdoll)NativeFunction.Natives.SET_PED_TO_RAGDOLL(patient,1500,2000,0,false,false,false);
                     return;
                 }
+                if(!SuspectPoseAllowed(patient))return;
                 NativeFunction.Natives.FREEZE_ENTITY_POSITION(patient,false);
                 patient.Tasks.ClearImmediately();
                 NativeFunction.Natives.TASK_PLAY_ANIM(patient,dictionary,animation,4f,-2f,-1,1,0f,true,true,true);
@@ -4274,8 +4302,10 @@ namespace AdvancedK9
 
         private void ClearReleasedBiteTarget()
         {
-            if(_releasedBiteTarget!=null&&_releasedBiteTarget.Exists())
+            if(ValidSuspect(_releasedBiteTarget))
             {
+                SuspectSession control;
+                if(!_suspectSessions.TryGetValue(_releasedBiteTarget,out control)||control.State.Phase!=SuspectControlPhase.HospitalTransport)SetSuspectPhase(_releasedBiteTarget,IsTargetDurablyRestrained(_releasedBiteTarget)?SuspectControlPhase.Cuffed:SuspectControlPhase.Released,"bite reference cleared after handoff");
                 if(IsTargetDurablyRestrained(_releasedBiteTarget)){_pr.RecordBiteReportEvent(_releasedBiteTarget,"Cuffed",_profile.Name,"Completed restraint detected after K9 bite.");_pr.CompleteK9Custody(_releasedBiteTarget);}
                 else _pr.ReleaseK9Custody(_releasedBiteTarget);
             }
@@ -4289,7 +4319,8 @@ namespace AdvancedK9
         {
             foreach(Ped patient in _bitePatientEventStates.Keys.ToArray())
             {
-                if(patient!=null&&patient.Exists())_pr.ReleaseK9Custody(patient);
+                if(ValidSuspect(patient))_pr.ReleaseK9Custody(patient);
+                SetSuspectPhase(patient,SuspectControlPhase.Released,"plugin/duty shutdown");
                 RestoreBitePatientControl(patient);
             }
             _controlledBiteTarget=null;_releasedBiteTarget=null;_controlledBiteHoldUntil=0;

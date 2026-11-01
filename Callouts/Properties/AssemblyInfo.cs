@@ -3,6 +3,7 @@ using System.Reflection;
 [assembly: AssemblyDescription("Isolated LSPDFR callout expansion for AdvancedK9 Beta")]
 [assembly: AssemblyCompany("mtennekten")]
 [assembly: AssemblyProduct("AdvancedK9 Callouts Beta")]
-[assembly: AssemblyVersion("0.24.0.52")]
-[assembly: AssemblyFileVersion("0.24.0.52")]
+[assembly: AssemblyVersion("0.24.0.53")]
+[assembly: AssemblyFileVersion("0.24.0.53")]
 [assembly: AssemblyInformationalVersion("0.24.0-beta+build807-targeted-stabilization.52")]
+

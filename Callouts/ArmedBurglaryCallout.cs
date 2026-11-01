@@ -906,17 +906,18 @@ namespace AdvancedK9.Callouts
 
         private void SendRobberThroughBankExit(Ped robber,int seat)
         {
-            if(robber==null||!robber.Exists()||_getawayVehicle==null||!_getawayVehicle.Exists())return;
+            if(robber==null||!robber.Exists()||ExternalSuspectControl(robber)||_getawayVehicle==null||!_getawayVehicle.Exists())return;
             Vehicle getaway=_getawayVehicle;Vector3 exit=Scene;
             GameFiber.StartNew(delegate
             {
                 try
                 {
+                    if(ExternalSuspectControl(robber))return;
                     robber.Tasks.ClearImmediately();
                     NativeFunction.Natives.TASK_FOLLOW_NAV_MESH_TO_COORD(robber,exit.X,exit.Y,exit.Z,3.2f,12000,1.2f,0,0f);
                     uint exitDeadline=Game.GameTime+12000;
                     while(!Finished&&!_bankCleanupStarted&&robber.Exists()&&getaway.Exists()&&robber.DistanceTo(exit)>3.5f&&Game.GameTime<exitDeadline)GameFiber.Wait(200);
-                    if(Finished||_bankCleanupStarted||!robber.Exists()||!getaway.Exists())return;
+                    if(Finished||_bankCleanupStarted||!robber.Exists()||!getaway.Exists()||ExternalSuspectControl(robber))return;
                     NativeFunction.Natives.TASK_ENTER_VEHICLE(robber,getaway,30000,seat,4.2f,1,0);
                 }
                 catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: robber bank-exit route contained: "+ex.Message);}
@@ -1049,9 +1050,10 @@ namespace AdvancedK9.Callouts
             MaintainPoliceEmergencyLights();
             if(player.DistanceTo(Scene)<45f)UnlockNearbyBankDoors();
             UpdateEstablishSceneBriefing(player);
-            if(Subject.Health<Subject.MaxHealth-5&&!Subject.IsDead&&(Subject.IsRagdoll||SubjectIsInCustody()||SuspectControlLocked))ProcessPostApprehensionMedical("");
-            if(_bankScenario==1){ProcessVehicleEscape(player);base.Process();return;}
+            if(!ExternalSuspectControl(Subject)&&Subject.Health<Subject.MaxHealth-5&&!Subject.IsDead&&(Subject.IsRagdoll||SubjectIsInCustody()||SuspectControlLocked))ProcessPostApprehensionMedical("");
+            if(_bankScenario==1){if(!ExternalSuspectControl(Subject))ProcessVehicleEscape(player);base.Process();return;}
             if(_bankScenario==2||_bankScenario==3){ProcessBankContainment(player);base.Process();return;}
+            if(ExternalSuspectControl(Subject)){base.Process();return;}
             if(player.DistanceTo(Scene)<80f)ControlLiveTraffic(Scene,24f);
             if(_suspectLocated&&player.DistanceTo(Subject)<65f)ControlLiveTraffic(Subject.Position,22f);
             if(!_sceneBriefed&&player.DistanceTo(Scene)<35f)
@@ -1072,7 +1074,7 @@ namespace AdvancedK9.Callouts
                 for(int i=0;i<_bankAccomplices.Count;i++)
                 {
                     Ped robber=_bankAccomplices[i];
-                    if(robber!=null&&robber.Exists()&&!robber.IsDead)NativeFunction.Natives.TASK_COMBAT_PED(robber,player,0,16);
+                    if(robber!=null&&robber.Exists()&&!robber.IsDead&&!ExternalSuspectControl(robber))NativeFunction.Natives.TASK_COMBAT_PED(robber,player,0,16);
                 }
                 SubjectBlip=Subject.AttachBlip();SubjectBlip.IsRouteEnabled=true;
                 _verbalGraceUntil=Game.GameTime+12000;
@@ -1314,6 +1316,7 @@ namespace AdvancedK9.Callouts
                     }
                     if(!Subject.Exists()||Subject.IsDead)return;
                     DisarmSurrenderingRobber(Subject);
+                    if(ExternalSuspectControl(Subject))return;
                     Subject.Tasks.ClearImmediately();NativeFunction.Natives.TASK_HANDS_UP(Subject,120000,arrestOfficer!=null&&arrestOfficer.Exists()?arrestOfficer:Game.LocalPlayer.Character,-1,true);
                     GameFiber.Wait(1200);
                     BeginNativeLspdfrOfficerArrest(Subject,arrestOfficer,coverOfficer);
@@ -1388,7 +1391,8 @@ namespace AdvancedK9.Callouts
             {
                 ReleaseHostageToPerimeter();
                 DisarmSurrenderingRobber(Subject);
-                Subject.Tasks.ClearImmediately();NativeFunction.Natives.TASK_HANDS_UP(Subject,120000,player,-1,true);
+                if(ExternalSuspectControl(Subject))return;
+                    Subject.Tasks.ClearImmediately();NativeFunction.Natives.TASK_HANDS_UP(Subject,120000,player,-1,true);
                 for(int i=0;i<_bankAccomplices.Count;i++)if(_bankAccomplices[i]!=null&&_bankAccomplices[i].Exists()){DisarmSurrenderingRobber(_bankAccomplices[i]);NativeFunction.Natives.TASK_HANDS_UP(_bankAccomplices[i],120000,player,-1,true);}
                 ActivateBankEntryTeam();
                 Game.DisplayNotification("~g~Negotiation successful.~s~ The hostage is coming out. Four existing perimeter officers are holding cover and will arrest both suspects when you reach them.");
@@ -1443,7 +1447,7 @@ namespace AdvancedK9.Callouts
             var robbers=new List<Ped>();robbers.Add(Subject);robbers.AddRange(_bankAccomplices);
             for(int i=0;i<robbers.Count;i++)
             {
-                Ped robber=robbers[i];if(robber==null||!robber.Exists())continue;
+                Ped robber=robbers[i];if(robber==null||!robber.Exists()||ExternalSuspectControl(robber))continue;
                 Vehicle vehicle=negotiatedVehicle!=null&&negotiatedVehicle.Exists()?negotiatedVehicle:(i<_bankGetawayVehicles.Count?_bankGetawayVehicles[i]:null);
                 robber.Tasks.ClearImmediately();
                 if(vehicle!=null&&vehicle.Exists())NativeFunction.Natives.TASK_ENTER_VEHICLE(robber,vehicle,30000,i==0?-1:i-1,3.5f,1,0);
@@ -1466,6 +1470,7 @@ namespace AdvancedK9.Callouts
         {
             _outcomeTaskIssued=true;
             if(_hostage!=null&&_hostage.Exists())NativeFunction.Natives.TASK_COWER(_hostage,-1);
+            if(ExternalSuspectControl(Subject))return;
             Subject.Tasks.ClearImmediately();NativeFunction.Natives.TASK_COMBAT_PED(Subject,player,0,16);
             for(int i=0;i<_bankAccomplices.Count;i++)if(_bankAccomplices[i]!=null&&_bankAccomplices[i].Exists())NativeFunction.Natives.TASK_COMBAT_PED(_bankAccomplices[i],player,0,16);
             if(_sceneIndex==0)DeployPacificSwatForBreach();
@@ -1603,3 +1608,4 @@ namespace AdvancedK9.Callouts
         }
     }
 }
+

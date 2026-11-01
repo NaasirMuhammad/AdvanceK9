@@ -11,6 +11,8 @@
   <ItemGroup>
     <Compile Include="Bridge/BridgeEntryPoint.cs" />
     <Compile Include="Bridge/BiteCustodyPolicy.cs" />
+    <Compile Include="Bridge/CustodyObservation.cs" />
+    <Compile Include="Runtime/PedIdentity.cs" />
     <Compile Include="Mdt/BiteReportJournal.cs" />
     <Compile Include="Bridge/Properties/AssemblyInfo.cs" />
   </ItemGroup>
@@ -23,4 +25,5 @@
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
   </ItemGroup>
 </Project>
+
 

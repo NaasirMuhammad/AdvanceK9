@@ -1,4 +1,4 @@
-name: Build AdvancedK9 Build 886 EMS and MDT Test
+name: Build AdvancedK9 Build 887 Suspect Ownership Test
 # Produces the verified Windows release artifacts.
 on:
   workflow_dispatch:
@@ -26,6 +26,8 @@ jobs:
         run: dotnet run --project Tests/BiteReportJournal.Tests.csproj -c Release
       - name: Replay EMS hospital and scene-clear regressions
         run: dotnet run --project Tests/EmsDeparture.Tests.csproj -c Release
+      - name: Replay suspect ownership and invalid entity regressions
+        run: dotnet run --project Tests/SuspectControl.Tests.csproj -c Release
       - name: Build AdvancedK9 main plugin
         shell: pwsh
         run: |
@@ -34,7 +36,7 @@ jobs:
           dotnet build AdvancedK9.csproj -c Release --no-restore /p:ContinuousIntegrationBuild=true
       - uses: actions/upload-artifact@v4
         with:
-          name: AdvancedK9-v0.24.1.5-Build886-core
+          name: AdvancedK9-v0.24.1.6-Build887-core
           path: bin/**/AdvancedK9.dll
           if-no-files-found: error
       - name: Build AdvancedK9 compatibility bridge
@@ -53,12 +55,12 @@ jobs:
           dotnet build AdvancedK9.Callouts.csproj -c Release --no-restore /p:ContinuousIntegrationBuild=true -o build/callouts
       - uses: actions/upload-artifact@v4
         with:
-          name: AdvancedK9-v0.24.1.5-Build886-callouts
+          name: AdvancedK9-v0.24.1.6-Build887-callouts
           path: build/callouts/AdvancedK9.Callouts.dll
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
         with:
-          name: AdvancedK9-v0.24.1.5-Build886-bridge
+          name: AdvancedK9-v0.24.1.6-Build887-bridge
           path: artifact-bridge/AdvancedK9.LSPDFRBridge.dll
           if-no-files-found: error
       - name: Verify and package direct-install release
@@ -78,16 +80,16 @@ jobs:
           if (-not $lemon) { throw 'LemonUI.RagePluginHook.dll was not found.' }
           if (-not $naudioCore) { throw 'Required AI voice runtime NAudio.Core.dll was not found.' }
           if (-not $naudioWinMM) { throw 'Required AI voice runtime NAudio.WinMM.dll was not found.' }
-          if ([System.Reflection.AssemblyName]::GetAssemblyName($main.FullName).Version -ne [Version]'0.24.1.5') { throw 'AdvancedK9.dll version is not 0.24.1.5.' }
+          if ([System.Reflection.AssemblyName]::GetAssemblyName($main.FullName).Version -ne [Version]'0.24.1.6') { throw 'AdvancedK9.dll version is not 0.24.1.6.' }
           if ([System.Reflection.AssemblyName]::GetAssemblyName($api.FullName).Version -ne [Version]'0.24.0.0') { throw 'AdvancedK9.API.dll version is not 0.24.0.0.' }
-          if ([System.Reflection.AssemblyName]::GetAssemblyName($bridge).Version -ne [Version]'0.24.1.5') { throw 'AdvancedK9.LSPDFRBridge.dll version is not 0.24.1.5.' }
-          if ([System.Reflection.AssemblyName]::GetAssemblyName($callouts).Version -ne [Version]'0.24.0.52') { throw 'AdvancedK9.Callouts.dll version is not 0.24.0.52.' }
+          if ([System.Reflection.AssemblyName]::GetAssemblyName($bridge).Version -ne [Version]'0.24.1.6') { throw 'AdvancedK9.LSPDFRBridge.dll version is not 0.24.1.6.' }
+          if ([System.Reflection.AssemblyName]::GetAssemblyName($callouts).Version -ne [Version]'0.24.0.53') { throw 'AdvancedK9.Callouts.dll version is not 0.24.0.53.' }
           $package = Join-Path $pwd 'release-package'
           $pluginRoot = Join-Path $package 'Plugins'
           $lspdfrRoot = Join-Path $pluginRoot 'LSPDFR'
           $configRoot = Join-Path $lspdfrRoot 'AdvancedK9'
           New-Item -ItemType Directory -Force -Path $configRoot | Out-Null
-          Copy-Item 'Docs/Build886-EMS-MDT-Test.md' (Join-Path $package 'BUILD-886-EMS-MDT-TEST.md')
+          Copy-Item 'Docs/Build887-Custody-Test.md' (Join-Path $package 'BUILD-887-CUSTODY-TEST.md')
           Copy-Item $main.FullName (Join-Path $pluginRoot 'AdvancedK9.dll')
           Copy-Item $api.FullName (Join-Path $configRoot 'AdvancedK9.API.dll')
           Copy-Item $bridge (Join-Path $lspdfrRoot 'AdvancedK9.LSPDFRBridge.dll')
@@ -101,7 +103,7 @@ jobs:
           Copy-Item 'Config/AcademyCourses.json','Config/CompatibilityPresets.json' $configRoot
           Copy-Item 'Config/Portraits' $configRoot -Recurse
           Copy-Item 'INSTALL.txt','README.md','RELEASE_NOTES_v0.24.1.md','VOICE_COMMANDS.md','LICENSE','THIRD_PARTY_NOTICES.md' $package
-          $notice = 'BUILD 886 EMS AND MDT INTEGRATION TEST — v0.24.1.5. Read BUILD-886-EMS-MDT-TEST.md. In-game validation pending.'
+          $notice = 'BUILD 887 SUSPECT OWNERSHIP TEST — v0.24.1.6. Read BUILD-887-CUSTODY-TEST.md. In-game validation pending.'
           foreach ($doc in @('README.md','INSTALL.txt')) {
             $docPath = Join-Path $package $doc
             $text = Get-Content $docPath -Raw
@@ -129,7 +131,7 @@ jobs:
           }
       - uses: actions/upload-artifact@v4
         with:
-          name: AdvancedK9-v0.24.1.5-Build886-release
+          name: AdvancedK9-v0.24.1.6-Build887-release
           # upload-artifact already produces the downloadable ZIP. Uploading a
           # pre-compressed archive here creates a ZIP inside a ZIP for testers.
           path: release-package/**

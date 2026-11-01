@@ -441,6 +441,7 @@ namespace AdvancedK9.Callouts
                 return;
             }
             if(Finished||Subject==null||!Subject.Exists()){if(!Finished)Resolve("~r~Fugitive Trail ended: suspect unavailable.");return;}
+            if(ExternalSuspectControl(Subject)){base.Process();return;}
             var player=Game.LocalPlayer.Character;
             if(player.DistanceTo(Scene)<80f)ControlLiveTraffic(Scene,24f);
             if(_suspectLocated&&player.DistanceTo(Subject)<65f)ControlLiveTraffic(Subject.Position,22f);
@@ -583,12 +584,6 @@ namespace AdvancedK9.Callouts
                     TransitionSuspectAwayFromHiding();
                     _fleeActive=false;_outcomeTaskIssued=true;
                     K9ApiSnapshot liveK9;
-                    if(!_k9DisengageIssued&&AdvancedK9Api.TryGetSnapshot(out liveK9)&&(liveK9.State=="Apprehending"||liveK9.State=="HoldingSuspect"))
-                    {
-                        _k9DisengageIssued=true;
-                        AdvancedK9Api.SendCommand("Release",ContextId,HandleOf(Subject),"Ped",Subject.Position.X,Subject.Position.Y,Subject.Position.Z,"callout compliance/custody safety release");
-                        Game.LogTrivial("AdvancedK9 Callouts: compliance/custody detected; K9 release requested exactly once (release transitions the dog to medical standby).");
-                    }
                     if(!_controlDispatchSent&&!ArrestProviderOwnsSubject)
                     {
                         _controlDispatchSent=true;
@@ -751,7 +746,7 @@ namespace AdvancedK9.Callouts
         {
             if(!_isHidingAnimationPlaying)return;
             _isHidingAnimationPlaying=false;
-            if(Subject==null||!Subject.Exists())return;
+            if(Subject==null||!Subject.Exists()||ExternalSuspectControl(Subject))return;
             NativeFunction.Natives.SET_PED_KEEP_TASK(Subject,false);
             Subject.Tasks.ClearImmediately();
             Game.LogTrivial("AdvancedK9 Callouts: suspect task persistence released and hiding animation cleared safely.");
@@ -764,3 +759,4 @@ namespace AdvancedK9.Callouts
         }
     }
 }
+

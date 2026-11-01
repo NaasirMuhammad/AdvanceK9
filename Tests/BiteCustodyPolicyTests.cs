@@ -18,14 +18,14 @@ internal static class BiteCustodyPolicyTests
             Check(!BiteCustodyPolicy.RegisterStop(physical),physical+" must not manufacture a stop");
             Check(!BiteCustodyPolicy.IsTerminal(physical),physical+" must not restore pursuit AI");
         }
-        foreach(var finalPhase in new[]{"Cuffed","Released"})
+        foreach(var finalPhase in new[]{"Cuffed","Released","Arresting"})
         {
             Check(BiteCustodyPolicy.IsTerminal(finalPhase),finalPhase+" must restore temporary controls");
             Check(!BiteCustodyPolicy.IsHeld(finalPhase),finalPhase+" must not reacquire custody");
             Check(!BiteCustodyPolicy.RegisterStop(finalPhase),finalPhase+" must not register a new stop");
         }
         Check(BiteCustodyPolicy.IsHeld("TreatedAwaitingArrest"),"Treatment must retain compliance pending real cuffs");
-        Check(BiteCustodyPolicy.RegisterStop("TreatedAwaitingArrest"),"Only treated compliance may request a stop");
+        Check(!BiteCustodyPolicy.RegisterStop("TreatedAwaitingArrest"),"Treatment must not manufacture a PR stop or reopen its ped menu lifecycle");
         foreach(var invalid in new string[]{null,"","Arrested","Unknown"})
             Check(!BiteCustodyPolicy.IsHeld(invalid)&&!BiteCustodyPolicy.IsTerminal(invalid)&&!BiteCustodyPolicy.RegisterStop(invalid),"Unknown phase must not acquire or fabricate custody");
         Console.WriteLine("Bite custody regression checks passed (physical hold, treatment, cuffs, release, invalid phases).");
