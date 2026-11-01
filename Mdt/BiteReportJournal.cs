@@ -16,7 +16,7 @@ namespace AdvancedK9.Mdt
 
     internal sealed class BiteReportJournal
     {
-        internal static readonly string[] Stages={"Bite","Release","EMSRequested","TreatmentStarted","TreatmentCompleted","TreatmentObserved","Transported","RetainedForArrest","EMSFailed","Cuffed"};
+        internal static readonly string[] Stages={"Bite","Release","EMSRequested","TreatmentStarted","TreatmentCompleted","TreatmentObserved","Transported","RetainedForArrest","EMSFailed","Cuffed","HospitalRequired"};
         private readonly string _directory;
         internal BiteReportJournal(string directory){_directory=directory;}
         internal static bool ValidReport(string number)=>number!=null&&Regex.IsMatch(number,@"\A[A-Za-z0-9][A-Za-z0-9._/-]{0,79}\z");
@@ -93,3 +93,4 @@ namespace AdvancedK9.Mdt
         {foreach(var e in Events().Where(e=>e.Episode==id&&!Accepted(e)))Reject(e);}
     }
 }
+

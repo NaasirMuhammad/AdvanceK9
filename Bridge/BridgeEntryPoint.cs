@@ -571,7 +571,7 @@ namespace AdvancedK9.LSPDFRBridge
                     string episode=group.Key;
                     if(!BiteReports.Seen(episode))
                     {
-                        var bite=group.FirstOrDefault(e=>e.Stage=="Bite");
+                        var bite=BiteReports.Events().FirstOrDefault(e=>e.Episode==episode&&e.Stage=="Bite");
                         // Only link automatically at the bite itself. A later active
                         // report must never receive an older, unbound patient's notes.
                         if(bite!=null&&DateTime.UtcNow-bite.Utc<TimeSpan.FromSeconds(10)&&nexus!=null)
@@ -639,17 +639,18 @@ namespace AdvancedK9.LSPDFRBridge
             {
                 foreach(PropertyInfo property in type.GetProperties(BindingFlags.Public|BindingFlags.Static).Where(p=>names.Any(n=>p.Name.Equals(n,StringComparison.OrdinalIgnoreCase))&&p.PropertyType==typeof(string)))try{string value=property.GetValue(null,null) as string;if(IsPlausibleIncidentNumber(value))return value;}catch{}
                 foreach(MethodInfo method in type.GetMethods(BindingFlags.Public|BindingFlags.Static).Where(m=>names.Any(n=>m.Name.Equals(n,StringComparison.OrdinalIgnoreCase))&&m.ReturnType==typeof(string)&&m.GetParameters().Length==0))try{string value=method.Invoke(null,null) as string;if(IsPlausibleIncidentNumber(value))return value;}catch{}
-                foreach(PropertyInfo property in type.GetProperties(BindingFlags.Public|BindingFlags.Static).Where(p=>ContainsAny(p.Name,"CurrentCall","ActiveCall","CurrentIncident","ActiveIncident")))try{string value=ReadNumberFromObject(property.GetValue(null,null));if(IsPlausibleIncidentNumber(value))return value;}catch{}
+                foreach(MethodInfo method in type.GetMethods(BindingFlags.Public|BindingFlags.Static).Where(m=>new[]{"GetCurrentIncident","GetActiveIncident","GetCurrentCall","GetActiveCall"}.Contains(m.Name)&&m.GetParameters().Length==0&&m.ReturnType!=typeof(void)))try{string value=ReadNumberFromObject(method.Invoke(null,null));if(IsPlausibleIncidentNumber(value))return value;}catch{}
+                foreach(PropertyInfo property in type.GetProperties(BindingFlags.Public|BindingFlags.Static).Where(p=>p.GetIndexParameters().Length==0&&ContainsAny(p.Name,"CurrentCall","ActiveCall","CurrentIncident","ActiveIncident")))try{string value=ReadNumberFromObject(property.GetValue(null,null));if(IsPlausibleIncidentNumber(value))return value;}catch{}
             }
             return "";
         }
 
         private static string ReadNumberFromObject(object value)
         {
-            if(value==null)return "";foreach(string name in new[]{"Number","ReportNumber","IncidentNumber","CallNumber"}){object candidate=ReadInstanceMember(value,name);if(candidate!=null)return Convert.ToString(candidate);}return "";
+            if(value==null)return "";if(value is string)return (string)value;foreach(string name in new[]{"Number","ReportNumber","IncidentNumber","CallNumber"}){object candidate=ReadInstanceMember(value,name);if(candidate!=null)return Convert.ToString(candidate);}return "";
         }
 
-        private static bool IsPlausibleIncidentNumber(string value)=>!string.IsNullOrWhiteSpace(value)&&value.Length<=80&&value.IndexOf("AdvancedK9",StringComparison.OrdinalIgnoreCase)<0;
+        private static bool IsPlausibleIncidentNumber(string value)=>BiteReportJournal.ValidReport(value)&&!new[]{"none","null","unknown","unavailable"}.Contains(value.ToLowerInvariant())&&value.IndexOf("AdvancedK9",StringComparison.OrdinalIgnoreCase)<0;
 
         private static bool TryNamedWriter(Assembly assembly,IEnumerable<string> names,Entity target,bool positive,string specialty,string k9,string id,string narrative,out string sink)
         {
@@ -698,6 +699,11 @@ namespace AdvancedK9.LSPDFRBridge
 
         private static void LogIntegrationSurfaces(Assembly cdf,Assembly pr,Assembly nexus)
         {
+            if(nexus!=null)foreach(Type type in Types(new[]{nexus}).Where(t=>(t.FullName??"").StartsWith("NexusMDT.Api.",StringComparison.Ordinal)))
+            {
+                foreach(var member in type.GetMembers(BindingFlags.Public|BindingFlags.Static).Where(m=>ContainsAny(m.Name,"Incident","CurrentCall","ActiveCall","Report","Dismiss","Code4")))
+                    Game.LogTrivial("AdvancedK9 MDT public integration surface: "+type.FullName+"."+member+".");
+            }
             Game.LogTrivial("AdvancedK9 bridge inventory integration: CDF="+(cdf!=null)+", PR="+(pr!=null)+", NexusMDT="+(nexus!=null)+"; AdvancedK9 never modifies third-party inventory files or records.");
             foreach(Assembly assembly in new[]{cdf,pr,nexus}.Where(a=>a!=null))foreach(Type type in Types(new[]{assembly}))foreach(MethodInfo method in type.GetMethods(BindingFlags.Public|BindingFlags.Static|BindingFlags.Instance).Where(m=>ContainsAny(m.Name,"GetPedData","GetVehicleData","GetPedSearchItems","GetVehicleSearchItems","AppendIncidentNote","CaptureSearch","RecordK9Indication","IsPedArrested","IsPedCuffed","SetPedAsStopped","SetInterceptPedAnyArrest","SetPedResistanceChance","SetPedSurrenderChance","SetPedResistanceAction","Custody","RequestPoliceTransport","RequestPrisonerTransport","DispatchNarrat","SpeakIncident","DispatchEvent")))Game.LogTrivial("AdvancedK9 bridge API surface: "+type.FullName+"."+method.Name+"("+string.Join(",",method.GetParameters().Select(p=>p.ParameterType.Name+" "+p.Name))+ ").");
         }
@@ -745,4 +751,5 @@ namespace AdvancedK9.LSPDFRBridge
         private sealed class ReferenceComparer:IEqualityComparer<object>{public static readonly ReferenceComparer Instance=new ReferenceComparer();public new bool Equals(object x,object y)=>ReferenceEquals(x,y);public int GetHashCode(object obj)=>System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(obj);}
     }
 }
+
 

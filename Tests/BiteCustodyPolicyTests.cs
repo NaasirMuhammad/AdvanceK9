@@ -12,7 +12,7 @@ internal static class BiteCustodyPolicyTests
     {
         // Regression: repeatedly registering a physical patient as a stopped ped
         // made PR immediately release that state and resume the pursuit.
-        foreach(var physical in new[]{"BiteHold","MedicalHold"})
+        foreach(var physical in new[]{"BiteHold","MedicalHold","HospitalTransport"})
         {
             Check(BiteCustodyPolicy.IsHeld(physical),physical+" must retain custody");
             Check(!BiteCustodyPolicy.RegisterStop(physical),physical+" must not manufacture a stop");
@@ -31,3 +31,4 @@ internal static class BiteCustodyPolicyTests
         Console.WriteLine("Bite custody regression checks passed (physical hold, treatment, cuffs, release, invalid phases).");
     }
 }
+

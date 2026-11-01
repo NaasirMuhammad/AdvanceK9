@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework><EnableDefaultCompileItems>false</EnableDefaultCompileItems></PropertyGroup>
+  <ItemGroup>
+    <Compile Include="EmsDepartureTests.cs" />
+    <Compile Include="../Medical/EmsDeparturePolicy.cs" Link="EmsDeparturePolicy.cs" />
+    <Compile Include="../Medical/NexusSceneClearSignal.cs" Link="NexusSceneClearSignal.cs" />
+  </ItemGroup>
+</Project>
