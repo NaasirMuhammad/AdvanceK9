@@ -57,6 +57,49 @@ namespace AdvancedK9.LSPDFRBridge
                 catch(Exception ex){Game.LogTrivial("AdvancedK9 custody observer retired invalid suspect: "+ex.GetType().Name);WatchedSuspects.Remove(pair.Key);K9PhysicalHolds.Remove(pair.Key);}
             }
         }
+        private static bool EndMedicalPursuit(Ped target,out string detail)
+        {
+            detail="Pursuit API unavailable; ambulance departure deferred.";
+            try
+            {
+                var flags=BindingFlags.Public|BindingFlags.Static;
+                var functions=typeof(LSPD_First_Response.Mod.API.Functions);
+                var get=functions.GetMethods(flags).FirstOrDefault(m=>m.Name=="GetActivePursuit"&&m.GetParameters().Length==0);
+                if(get==null)return false;
+                object pursuit=get.Invoke(null,null);
+                if(pursuit==null||pursuit.Equals(Activator.CreateInstance(pursuit.GetType())))
+                {detail="No active player pursuit.";return true;}
+                var running=functions.GetMethod("IsPursuitStillRunning",flags,null,new[]{pursuit.GetType()},null);
+                var members=functions.GetMethod("GetPursuitPeds",flags,null,new[]{pursuit.GetType()},null);
+                if(running==null||members==null)return false;
+                if(!(bool)running.Invoke(null,new[]{pursuit})){detail="Pursuit already ended.";return true;}
+                var roster=members.Invoke(null,new[]{pursuit}) as IEnumerable<Ped>;
+                if(roster==null)return false;
+                var suspects=roster.ToArray();
+                if(!suspects.Any(p=>p==target)){detail="Patient is not a member of the active pursuit.";return true;}
+                var remove=functions.GetMethod("RemovePedFromPursuit",flags,null,new[]{pursuit.GetType(),typeof(Ped)},null);
+                if(remove!=null)
+                {
+                    remove.Invoke(null,new[]{pursuit,(object)target});
+                    if(!(bool)running.Invoke(null,new[]{pursuit})||
+                        (members.Invoke(null,new[]{pursuit}) is IEnumerable<Ped> remaining&&!remaining.Any(p=>p==target)))
+                    {detail="EMS patient removed from pursuit; other members preserved.";return true;}
+                }
+                if(suspects.Length==1)
+                {
+                    var end=functions.GetMethod("ForceEndPursuit",flags,null,new[]{pursuit.GetType()},null);
+                    if(end==null)return false;
+                    end.Invoke(null,new[]{pursuit});
+                    bool ended=!(bool)running.Invoke(null,new[]{pursuit});
+                    detail=ended?"Single-suspect pursuit ended at medical handoff.":"Single-suspect pursuit ending; awaiting confirmation.";
+                    return ended;
+                }
+                detail="Patient remains in multi-suspect pursuit; no supported per-suspect removal. Other suspects were not cleared.";
+                return false;
+            }
+            catch(Exception ex){detail="Pursuit transition failed: "+ex.GetType().Name;return false;}
+        }
+
         private static string K9ProviderStates()=>string.Join(";",WatchedSuspects.Values.Select(w=>w.Identity.Handle+"~"+w.Identity.Model+"~"+w.Identity.Address+"~"+w.State));
     }
 }

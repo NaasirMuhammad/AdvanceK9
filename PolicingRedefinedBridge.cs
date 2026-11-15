@@ -165,6 +165,28 @@ namespace AdvancedK9
             if(SendBridgeK9CustodyControl(suspect,phase))_nextK9CustodyRefresh[suspect.Handle]=Game.GameTime+4000;
         }
 
+        internal bool TryEndMedicalPursuit(Ped patient)
+        {
+            AdvancedK9.Runtime.PedIdentity identity;
+            if(!AdvancedK9.Runtime.PedIdentity.TryCapture(patient,out identity))return false;
+            RefreshBridgeState();
+            if(!BridgeAvailable())return false;
+            string id=Guid.NewGuid().ToString("N");
+            try
+            {
+                WriteBridgeRequest(new[]{"Action=K9CustodyControl","RequestId="+id,"Handle="+patient.Handle,"Type=Ped","Phase=EmsPursuitHandoff",
+                    "Address="+identity.Address,"Model="+identity.Model,"UtcTicks="+DateTime.UtcNow.Ticks});
+                uint deadline=Game.GameTime+3500;
+                while(Game.GameTime<deadline&&identity.Matches(patient))
+                {
+                    GameFiber.Wait(100);RefreshBridgeState();
+                    if(_bridgeActionRequestId==id)return _bridgeActionSucceeded;
+                }
+            }
+            catch(Exception ex){Game.LogTrivial("AdvancedK9 EMS pursuit handoff request failed: "+ex.Message);}
+            return false;
+        }
+
         private bool SendBridgeK9CustodyControl(Ped suspect,string phase)
         {
             if(!BridgeAvailable()||suspect==null||!suspect.Exists())return false;

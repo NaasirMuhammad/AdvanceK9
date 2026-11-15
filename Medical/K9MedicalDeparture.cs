@@ -14,6 +14,7 @@ namespace AdvancedK9
         {
             internal Vehicle Ambulance;
             internal Ped Driver,Partner,Patient;
+            internal bool PursuitHandoffConfirmed;
             internal bool Hospital,Departed,Cancelled,RetryRequested;
             internal string K9;
             internal int Attempts;
@@ -26,7 +27,7 @@ namespace AdvancedK9
         private void MaintainMedicalDepartures()
         {
             foreach(var crew in _medicalDepartures.Where(c=>c.Hospital&&!c.Departed&&!c.Cancelled))
-                if(Living(crew.Patient))_pr.RefreshK9Custody(crew.Patient,"HospitalTransport");
+                if(ValidSuspect(crew.Patient)&&Living(crew.Patient)&&!crew.PursuitHandoffConfirmed)_pr.RefreshK9Custody(crew.Patient,"HospitalTransport");
         }
 
         private void RequestMedicalSceneClear()
@@ -81,7 +82,7 @@ namespace AdvancedK9
                         crew.Attempts++;crew.RetryRequested=false;
                         bool patientLoaded=!crew.Hospital||(Living(crew.Patient)&&crew.Patient.IsInVehicle(crew.Ambulance,false));
                         if(crew.Hospital&&!patientLoaded)patientLoaded=LoadPatientWithStretcher(crew);
-                        if((!crew.Hospital||patientLoaded)&&BoardMedicalCrew(crew)&&
+                        if((!crew.Hospital||patientLoaded)&&BoardMedicalCrew(crew)&&(!crew.Hospital||ConfirmMedicalPursuitHandoff(crew))&&
                             EmsDeparturePolicy.CanDepart(InMedicalSeat(crew.Driver,crew.Ambulance,-1),Living(crew.Partner),InMedicalSeat(crew.Partner,crew.Ambulance,0),crew.Hospital,patientLoaded))
                         {
                             StartMedicalDrive(crew);
@@ -188,15 +189,15 @@ namespace AdvancedK9
             var patient=crew.Patient;var ambulance=crew.Ambulance;
             var carrier=Living(crew.Partner)?crew.Partner:crew.Driver;
             if(!ValidSuspect(patient)||!Living(patient)||!Living(carrier)||ambulance==null||!ambulance.Exists()||!MedicalLoadingAllowed(patient))return false;
-            Rage.Object bed=null;Model model=default(Model);bool loaded=false,attached=false;
+            Rage.Object bed=null;Model model=default(Model);bool loaded=false,attached=false,patientChanged=false;
             Vector3 original=patient.Position;bool originallyRagdoll=NativeFunction.Natives.CAN_PED_RAGDOLL<bool>(patient);
             try
             {
                 // The first two historic prop names are not stock GTA assets.
-                // v_med_emptybed is a base-game wheeled medical gurney.
-                foreach(string name in new[]{_config.BitePatientStretcherModel,"v_med_emptybed"}.Distinct(StringComparer.OrdinalIgnoreCase))
+                // Use the ambulance stretcher asset, not the hospital-room bed.
+                foreach(string name in new[]{_config.BitePatientStretcherModel,"m25_2_prop_m52_gurney_01a"}.Distinct(StringComparer.OrdinalIgnoreCase))
                 {
-                    if(string.IsNullOrWhiteSpace(name))continue;
+                    if(string.IsNullOrWhiteSpace(name)||name.Trim().Equals("v_med_emptybed",StringComparison.OrdinalIgnoreCase))continue;
                     Model candidate=new Model(name);
                     if(!candidate.IsValid)continue;
                     NativeFunction.Natives.REQUEST_MODEL(candidate.Hash);
@@ -208,35 +209,39 @@ namespace AdvancedK9
                     bed=new Rage.Object(model,rear);model.Dismiss();
                     if(bed!=null&&bed.Exists()){Game.LogTrivial("AdvancedK9 EMS stretcher model loaded: "+name+".");break;}
                 }
-                if(bed==null||!bed.Exists())return false;
-                bed.IsPersistent=true;NativeFunction.Natives.SET_ENTITY_COLLISION(bed,false,false);
-                NativeFunction.Natives.PLACE_OBJECT_ON_GROUND_PROPERLY(bed);
+                if(bed==null||!bed.Exists()){Game.LogTrivial("AdvancedK9 EMS: ambulance stretcher unavailable. Install a compatible stretcher model; hospital assignment retained.");return false;}
+                bed.IsPersistent=true;NativeFunction.Natives.FREEZE_ENTITY_POSITION(bed,true);
+                NativeFunction.Natives.SET_ENTITY_COLLISION(bed,false,false);
+                Vector3 minimum,maximum;NativeFunction.Natives.GET_MODEL_DIMENSIONS(bed.Model.Hash,out minimum,out maximum);
                 Vector3 rearPoint=ambulance.GetOffsetPosition(new Vector3(0f,-4f,0f));
                 carrier.Tasks.Clear();
                 if(!WalkMedicalCarrier(crew,carrier,rearPoint,1.7f))return false;
-                // Keep wheels at the ground height while the medic pushes the
-                // gurney ahead of their body, rather than hanging it from a pelvis bone.
-                Vector3 local=NativeFunction.Natives.GET_OFFSET_FROM_ENTITY_GIVEN_WORLD_COORDS<Vector3>(carrier,bed.Position.X,bed.Position.Y,bed.Position.Z);
-                NativeFunction.Natives.ATTACH_ENTITY_TO_ENTITY(bed,carrier,0,0f,1.5f,local.Z,0f,0f,0f,false,false,false,true,2,true);
                 Vector3 nearPatient=patient.GetOffsetPosition(new Vector3(0f,-1.5f,0f));
-                if(!WalkMedicalCarrier(crew,carrier,nearPatient,1.8f)||!MedicalLoadingAllowed(patient))return false;
-                NativeFunction.Natives.DETACH_ENTITY(bed,true,true);
-                bed.Heading=carrier.Heading;NativeFunction.Natives.PLACE_OBJECT_ON_GROUND_PROPERLY(bed);
-                patient.Tasks.ClearImmediately();NativeFunction.Natives.FREEZE_ENTITY_POSITION(patient,false);_releasedBiteFrozen=false;
+                if(!WalkMedicalCarrier(crew,carrier,nearPatient,1.8f,bed,minimum,maximum)||!MedicalLoadingAllowed(patient))return false;
+                const string poseDict="dead",poseClip="dead_a";
+                NativeFunction.Natives.REQUEST_ANIM_DICT(poseDict);
+                uint animUntil=Game.GameTime+2200;
+                while(_running&&!crew.Cancelled&&!NativeFunction.Natives.HAS_ANIM_DICT_LOADED<bool>(poseDict)&&Game.GameTime<animUntil)GameFiber.Wait(50);
+                if(!MedicalLoadingAllowed(patient)||crew.Cancelled||!NativeFunction.Natives.HAS_ANIM_DICT_LOADED<bool>(poseDict)||
+                   NativeFunction.Natives.GET_ANIM_DURATION<float>(poseDict,poseClip)<=0f)return false;
+                patientChanged=true;patient.Tasks.ClearImmediately();NativeFunction.Natives.FREEZE_ENTITY_POSITION(patient,false);_releasedBiteFrozen=false;
                 NativeFunction.Natives.STOP_ANIM_TASK(patient,"combat@damage@writhe","writhe_loop",-4f);
                 NativeFunction.Natives.SET_PED_CAN_RAGDOLL(patient,false);
                 NativeFunction.Natives.SET_ENTITY_COLLISION(patient,false,false);
-                NativeFunction.Natives.REQUEST_ANIM_DICT("anim@gangops@morgue@table@");
-                uint animUntil=Game.GameTime+2000;
-                while(_running&&!crew.Cancelled&&!NativeFunction.Natives.HAS_ANIM_DICT_LOADED<bool>("anim@gangops@morgue@table@")&&Game.GameTime<animUntil)GameFiber.Wait(100);
-                if(crew.Cancelled)return false;
-                if(NativeFunction.Natives.HAS_ANIM_DICT_LOADED<bool>("anim@gangops@morgue@table@"))
-                    NativeFunction.Natives.TASK_PLAY_ANIM(patient,"anim@gangops@morgue@table@","body_search",4f,-4f,-1,1,0f,false,false,false);
-                // Stock gurney mattress height; configurable for a supplied addon.
-                NativeFunction.Natives.ATTACH_ENTITY_TO_ENTITY(patient,bed,0,0f,0f,_config.BitePatientStretcherPatientZ,0f,0f,0f,false,false,false,true,2,true);attached=true;
-                local=NativeFunction.Natives.GET_OFFSET_FROM_ENTITY_GIVEN_WORLD_COORDS<Vector3>(carrier,bed.Position.X,bed.Position.Y,bed.Position.Z);
-                NativeFunction.Natives.ATTACH_ENTITY_TO_ENTITY(bed,carrier,0,0f,1.5f,local.Z,0f,0f,0f,false,false,false,true,2,true);
-                if(!WalkMedicalCarrier(crew,carrier,rearPoint,1.8f))return false;
+                float deck=minimum.Z+_config.BitePatientStretcherPatientZ;
+                var deckPoint=bed.GetOffsetPosition(new Vector3(0f,0f,deck));
+                patient.Position=deckPoint;patient.Heading=carrier.Heading;
+                NativeFunction.Natives.ATTACH_ENTITY_TO_ENTITY(patient,bed,0,0f,0f,deck,0f,0f,carrier.Heading-bed.Heading,false,false,false,true,2,true);attached=true;
+                NativeFunction.Natives.TASK_PLAY_ANIM(patient,poseDict,poseClip,8f,-4f,-1,1,0f,true,true,true);
+                uint poseUntil=Game.GameTime+1000;
+                while(MedicalLoadingAllowed(patient)&&!crew.Cancelled&&Game.GameTime<poseUntil&&
+                      !NativeFunction.Natives.IS_ENTITY_PLAYING_ANIM<bool>(patient,poseDict,poseClip,3))GameFiber.Wait(50);
+                if(!MedicalLoadingAllowed(patient)||crew.Cancelled||!NativeFunction.Natives.IS_ENTITY_ATTACHED_TO_ENTITY<bool>(patient,bed)||
+                   !NativeFunction.Natives.IS_ENTITY_PLAYING_ANIM<bool>(patient,poseDict,poseClip,3))return false;
+                SetSuspectPhase(patient,SuspectControlPhase.HospitalTransport,"patient secured on EMS stretcher");
+                Game.LogTrivial("AdvancedK9 EMS: patient attachment and lying animation verified; beginning pursuit handoff.");
+                if(!ConfirmMedicalPursuitHandoff(crew))return false;
+                if(!WalkMedicalCarrier(crew,carrier,rearPoint,1.8f,bed,minimum,maximum,patient))return false;
                 NativeFunction.Natives.SET_VEHICLE_DOOR_OPEN(ambulance,2,false,false);NativeFunction.Natives.SET_VEHICLE_DOOR_OPEN(ambulance,3,false,false);
                 GameFiber.Wait(900);
                 if(crew.Cancelled||!ValidSuspect(patient)||!Living(patient)||!ambulance.Exists()||!MedicalLoadingAllowed(patient))return false;
@@ -252,7 +257,7 @@ namespace AdvancedK9
             catch(Exception ex){Game.LogTrivial("AdvancedK9 EMS stretcher recovery: "+ex.Message);return false;}
             finally
             {
-                if(ValidSuspect(patient))
+                if(patientChanged&&ValidSuspect(patient))
                 {
                     if(attached)NativeFunction.Natives.DETACH_ENTITY(patient,true,true);
                     NativeFunction.Natives.SET_ENTITY_COLLISION(patient,true,true);
@@ -260,6 +265,7 @@ namespace AdvancedK9
                     if(!loaded&&attached){patient.Position=original;patient.Tasks.ClearImmediately();}
                 }
                 if(bed!=null&&bed.Exists())bed.Delete();
+                if(Living(carrier))NativeFunction.Natives.STOP_ANIM_TASK(carrier,"anim@heists@box_carry@","idle",-4f);
             }
         }
 
@@ -270,12 +276,47 @@ namespace AdvancedK9
                 (!session.State.ProviderOwns||session.State.Phase==SuspectControlPhase.Cuffed);
         }
 
-        private bool WalkMedicalCarrier(MedicalDeparture crew,Ped carrier,Vector3 destination,float stop)
+        private bool WalkMedicalCarrier(MedicalDeparture crew,Ped carrier,Vector3 destination,float stop,Rage.Object stretcher=null,Vector3 minimum=default(Vector3),Vector3 maximum=default(Vector3),Ped patient=null)
         {
             NativeFunction.Natives.TASK_FOLLOW_NAV_MESH_TO_COORD(carrier,destination.X,destination.Y,destination.Z,1.1f,20000,stop,false,carrier.Heading);
             uint deadline=Game.GameTime+22000;
-            while(_running&&!crew.Cancelled&&(!crew.Hospital||MedicalLoadingAllowed(crew.Patient))&&Living(carrier)&&carrier.DistanceTo(destination)>stop+.4f&&Game.GameTime<deadline)GameFiber.Wait(150);
-            return !crew.Cancelled&&(!crew.Hospital||MedicalLoadingAllowed(crew.Patient))&&Living(carrier)&&carrier.DistanceTo(destination)<=stop+.4f;
+            if(stretcher!=null)NativeFunction.Natives.REQUEST_ANIM_DICT("anim@heists@box_carry@");
+            uint nextPush=0;
+            do
+            {
+                if(!_running||crew.Cancelled||!Living(carrier)||!MedicalLoadingAllowed(crew.Patient))return false;
+                if(patient!=null&&(!NativeFunction.Natives.IS_ENTITY_ATTACHED_TO_ENTITY<bool>(patient,stretcher)||
+                   !NativeFunction.Natives.IS_ENTITY_PLAYING_ANIM<bool>(patient,"dead","dead_a",3)))return false;
+                if(stretcher!=null&&stretcher.Exists())
+                {
+                    float front=.42f-minimum.Y;
+                    bool transverse=maximum.X-minimum.X>maximum.Y-minimum.Y;
+                    if(transverse)front=.42f+maximum.X;
+                    Vector3 point=carrier.GetOffsetPosition(new Vector3(0f,front,0f));
+                    float ground;
+                    if(NativeFunction.Natives.GET_GROUND_Z_FOR_3D_COORD<bool>(point.X,point.Y,point.Z+1.1f,out ground,false)&&Math.Abs(ground-point.Z)<2f)
+                    {
+                        stretcher.Heading=carrier.Heading+(transverse?90f:0f);
+                        stretcher.Position=new Vector3(point.X,point.Y,ground-minimum.Z+.015f);
+                    }
+                    if(Game.GameTime>=nextPush&&NativeFunction.Natives.HAS_ANIM_DICT_LOADED<bool>("anim@heists@box_carry@")&&
+                       !NativeFunction.Natives.IS_ENTITY_PLAYING_ANIM<bool>(carrier,"anim@heists@box_carry@","idle",3))
+                    {
+                        nextPush=Game.GameTime+800;
+                        NativeFunction.Natives.TASK_PLAY_ANIM(carrier,"anim@heists@box_carry@","idle",4f,-4f,-1,49,0f,false,false,false);
+                    }
+                }
+                if(carrier.DistanceTo(destination)<=stop+.4f)return true;
+                GameFiber.Yield();
+            }while(Game.GameTime<deadline);
+            return false;
+        }
+
+        private bool ConfirmMedicalPursuitHandoff(MedicalDeparture crew)
+        {
+            if(!ValidSuspect(crew.Patient)||crew.Cancelled)return false;
+            crew.PursuitHandoffConfirmed=_pr.TryEndMedicalPursuit(crew.Patient);
+            return crew.PursuitHandoffConfirmed&&ValidSuspect(crew.Patient)&&Living(crew.Patient)&&!crew.Cancelled;
         }
 
         private void StartMedicalDrive(MedicalDeparture crew)

@@ -89,6 +89,8 @@ namespace AdvancedK9
                 }
                 try
                 {
+                    if(session.State.Phase==SuspectControlPhase.HospitalTransport)
+                    {if(Game.GameTime>=session.NextPublish)PublishSuspectLease(session);continue;}
                     string provider=_pr.SuspectProviderState(session.Identity.Handle,session.Identity.Model,session.Identity.Address);
                     bool cuffed=IsTargetDurablyRestrained(ped)||provider=="Cuffed";
                     bool arresting=!cuffed&&(provider=="Arresting"||NativeFunction.Natives.IS_PED_BEING_ARRESTED<bool>(ped));

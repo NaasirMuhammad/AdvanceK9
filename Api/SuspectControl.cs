@@ -17,7 +17,7 @@ namespace AdvancedK9.API
         {
             if(Phase==SuspectControlPhase.Unavailable||(Phase==SuspectControlPhase.Released&&next!=SuspectControlPhase.Unavailable))return false;
             if(ProviderOwns && next!=SuspectControlPhase.Unavailable &&
-                !(next==SuspectControlPhase.Cuffed) && !(next==SuspectControlPhase.Arresting&&Phase==SuspectControlPhase.ProviderInteraction))return false;
+                !(next==SuspectControlPhase.Cuffed) && !(next==SuspectControlPhase.HospitalTransport&&Phase==SuspectControlPhase.Cuffed) && !(next==SuspectControlPhase.Arresting&&Phase==SuspectControlPhase.ProviderInteraction))return false;
             if(Phase==next)return false;Phase=next;return true;
         }
     }

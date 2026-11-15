@@ -72,7 +72,7 @@ namespace AdvancedK9
         public bool UseAdvancedK9BiteMedicalResponse = true;
         public int BitePatientTransportChance = 30;
         public int BitePatientTreatmentSeconds = 10;
-        public string BitePatientStretcherModel = "v_med_emptybed";
+        public string BitePatientStretcherModel = "m25_2_prop_m52_gurney_01a";
         public float BitePatientStretcherPatientZ = .85f;
         public string PortraitFile = "";
         public readonly Dictionary<K9Command,string[]> CustomCommandPhrases=new Dictionary<K9Command,string[]>();

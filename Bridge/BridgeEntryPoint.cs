@@ -226,6 +226,13 @@ namespace AdvancedK9.LSPDFRBridge
             _lastActionRequestId=_actionRequestId=id;_actionSucceeded=false;_actionSink="Policing Redefined public PedAPI";
             string phase=Read(request,"Phase");if(string.IsNullOrWhiteSpace(phase))phase="BiteHold";
             AdvancedK9.Runtime.PedIdentity identity;if(!AdvancedK9.Runtime.PedIdentity.TryCapture(target,out identity)){_actionDetail="K9 custody target invalid/zero address for phase "+phase;return;}
+            if(phase=="EmsPursuitHandoff")
+            {
+                if(Read(request,"Address")!=identity.Address.ToString()||Read(request,"Model")!=identity.Model.ToString())return;
+                _actionSucceeded=EndMedicalPursuit(target,out _actionDetail);
+                Game.LogTrivial("AdvancedK9 EMS pursuit handoff: ped="+identity.Handle+"; "+_actionDetail);
+                return;
+            }
             WatchSuspect(target);
             bool terminal=BiteCustodyPolicy.IsTerminal(phase);
             K9PhysicalCustody hold;

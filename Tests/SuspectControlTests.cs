@@ -17,6 +17,7 @@ static class SuspectControlTests
         Check(!state.Set(SuspectControlPhase.ProviderInteraction),"An older stop observation cannot downgrade an arrest.");
         Check(state.Set(SuspectControlPhase.Cuffed),"Observed restraint completes the arrest stage.");
         Check(!state.Set(SuspectControlPhase.Arresting)&&!state.Set(SuspectControlPhase.Bite),"Completed restraint cannot regress into bite/arrest animation tasking.");
+        Check(state.Set(SuspectControlPhase.HospitalTransport), "Confirmed EMS loading can take custody after cuffs.");
         Check(state.Set(SuspectControlPhase.Unavailable),"Deleted/replaced entities retire the session.");
         Check(!state.Set(SuspectControlPhase.MedicalHold),"A retired entity cannot be reactivated by stale work.");
         var released=new SuspectControlState();released.Set(SuspectControlPhase.Released);
