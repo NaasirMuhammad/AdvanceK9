@@ -82,6 +82,15 @@ namespace AdvancedK9.Callouts
             catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: Missing Teen acceptance failed safely: "+ex);End();return false;}
         }
 
+        protected override void UpdateNpcaiCast()
+        {
+            string update=_subjectLocated?"Police have located your child. You are waiting for the recovery team to give you more information.":"Your child is missing. You supplied her shirt for the canine search and are waiting at her last known location.";
+            NpcaiStory(Reporter,"You are one of the missing teen's parents. "+update,"Nervous");
+            NpcaiStory(ParentTwo,"You are the other parent of the missing teen. "+update,"Scared");
+            if(_subjectLocated)NpcaiStory(Subject,"You are the teenager the officers have just found. You were separated from your parents. Tell the officer what you need now."+
+                (_outcome==2?" You have a minor injury and need assistance.":""),"Scared");
+        }
+
         public override void Process()
         {
             try
@@ -126,3 +135,4 @@ namespace AdvancedK9.Callouts
         }
     }
 }
+

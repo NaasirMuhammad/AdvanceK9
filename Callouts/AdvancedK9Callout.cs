@@ -427,6 +427,59 @@ namespace AdvancedK9.Callouts
             catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: emergency-light maintenance contained: "+ex.Message);}
         }
 
+        private NpcaiScene _npcaiScene;
+        private string _npcaiBriefing,_npcaiInitial;
+        private uint _nextNpcaiUpdate;
+
+        protected virtual void UpdateNpcaiCast() { }
+        protected void NpcaiStory(Ped ped,string story,string mood="Cooperative",bool stay=false)
+            => _npcaiScene?.Story(ped,story,mood,stay);
+        protected string NpcaiOfficerUpdate => _npcaiBriefing??"Await further confirmed updates.";
+        protected void CloseNpcaiScene()=>_npcaiScene?.Close();
+
+        private void PublishNpcaiDispatch(string eventName,string message)
+        {
+            if(Finished||_lifecycleClosed)return;
+            if(eventName=="CalloutAccepted"&&_npcaiScene==null)
+            {
+                _npcaiScene=new NpcaiScene(ContextId??GetType().Name);
+                _npcaiInitial=GetType().Name=="ArmedBurglaryCallout"
+                    ?"Respond to a reported bank robbery. Establish contact with the scene commander. Confirm the occupants, weapons and escape route on arrival."
+                    :message;
+                _npcaiBriefing=_npcaiInitial;
+            }
+            else if(_npcaiScene!=null)
+            {
+                switch(eventName)
+                {
+                    case "ScentAcquired": case "SubjectLocated": case "SuspectLocated":
+                    case "BailoutTrackReady": case "NegotiationsStarted": case "NegotiatedEscape":
+                    case "PeacefulResolution": case "ArrestStarted": case "CustodyConfirmed":
+                    case "MedicalRequested": case "MedicalTreatmentStarted": case "MedicalComplete":
+                    case "TransportLoaded": case "TransportComplete":
+                        _npcaiBriefing=message;break;
+                    default:return;
+                }
+            }
+            _npcaiScene?.Brief(_npcaiBriefing,Scene);
+            _nextNpcaiUpdate=0;
+        }
+
+        private void TickNpcai()
+        {
+            if(_npcaiScene==null||!_npcaiScene.Available||Game.GameTime<_nextNpcaiUpdate)return;
+            _nextNpcaiUpdate=Game.GameTime+750;
+            try
+            {
+                NpcaiStory(OfficerOne,"You are the contact officer at the command post. Latest confirmed update: "+NpcaiOfficerUpdate);
+                NpcaiStory(OfficerTwo,"You are the assigned patrol support officer. Coordinate with the contact officer. Latest confirmed update: "+NpcaiOfficerUpdate);
+                NpcaiStory(OfficerThree,"You are maintaining scene security. Latest confirmed update: "+NpcaiOfficerUpdate);
+                UpdateNpcaiCast();
+                _npcaiScene.Greet(OfficerOne,NpcaiOfficerUpdate);
+            }
+            catch(Exception ex){Game.LogTrivial("AdvancedK9 NPCAI cast update: "+ex.Message);}
+        }
+
         protected void DispatchUpdate(string message,string scannerAudio,Vector3 position)
         {
             DispatchUpdate("StatusUpdate",_incidentVariant,_incidentJurisdiction,_incidentVehicle,_incidentSuspect,_incidentDirection,_incidentRisk,message,scannerAudio,position);
@@ -452,6 +505,7 @@ namespace AdvancedK9.Callouts
             string signature=eventName+"|"+scenarioVariant+"|"+k9State+"|"+_medicalStage+"|"+_custodyOwner+"|"+message;
             if(signature==_lastDispatchSignature&&Game.GameTime-_lastDispatchAt<15000){Game.LogTrivial("AdvancedK9 Callouts: duplicate dispatch transition suppressed: "+eventName+".");return;}
             _lastDispatchSignature=signature;_lastDispatchAt=Game.GameTime;
+            PublishNpcaiDispatch(eventName,message);
             Game.DisplayNotification("~b~Dispatch:~s~ "+message);
             PublishCalloutInterfaceMessage(structured);
             bool nexusOwnsAudio=AppDomain.CurrentDomain.GetAssemblies().Any(a=>a.GetName().Name.IndexOf("Nexus",StringComparison.OrdinalIgnoreCase)>=0);
@@ -1543,6 +1597,7 @@ namespace AdvancedK9.Callouts
         public override void Process()
         {
             if(Finished){base.Process();return;}
+            TickNpcai();
             MaintainSpawnedPoliceAssets();
             MaintainPoliceEmergencyLights();
             MaintainCivilianSceneExclusion();
@@ -1676,6 +1731,7 @@ namespace AdvancedK9.Callouts
             Finished=true;
             _backupInvestigationActive=false;
             _cleanupCompleted=true;
+            CloseNpcaiScene();
             ClearSceneRoute();
             if(SubjectBlip!=null&&SubjectBlip.Exists())SubjectBlip.Delete();
             if(Reporter!=null&&Reporter.Exists())Reporter.Dismiss();

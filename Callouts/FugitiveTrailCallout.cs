@@ -414,6 +414,14 @@ namespace AdvancedK9.Callouts
             return false;
         }
 
+        protected override void UpdateNpcaiCast()
+        {
+            if(_suspectLocated||ArrestProviderOwnsSubject)
+                NpcaiStory(Subject,"You were driving the abandoned gray Primo and fled the traffic stop. Police have found you."+
+                    (ArrestProviderOwnsSubject?" Police are taking control of the scene and you are no longer trying to evade them.":" Explain your own decision to flee, without inventing evidence or accomplices."),
+                    ArrestProviderOwnsSubject?"Cooperative":"Nervous",K9MedicalOwnsSubject);
+        }
+
         public override void Process()
         {
             MaintainSpawnedPoliceAssets();

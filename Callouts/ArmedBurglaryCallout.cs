@@ -1030,6 +1030,20 @@ namespace AdvancedK9.Callouts
             Game.LogTrivial("AdvancedK9 Callouts: EstablishScene dossier published for NPCI/Nexus officer interaction at "+BankNames[_sceneIndex]+".");
         }
 
+        protected override void UpdateNpcaiCast()
+        {
+            NpcaiStory(Reporter,"You are the bank manager at the protected command post. Report only what you know personally: a robbery took place and the police secured you outside. You do not know the suspects' current locations or plans.","Nervous");
+            if(_hostage!=null)NpcaiStory(_hostage,
+                (_managerIsHostage?"You are the bank manager. ":"You are a bank employee. ")+
+                (_hostageReleased?"You have been released from captivity. Describe only what happened to you inside.":"You are being held inside the bank. You are frightened and cannot safely move. Do not claim to know the robbers' escape plans."),
+                "Scared",!_hostageReleased);
+            string suspect=ArrestProviderOwnsSubject?"Police are taking custody. Speak about your own part in the robbery.":
+                _negotiationStarted&&!_hostageReleased?"You are speaking during an active police negotiation. You cannot promise a release, surrender, or escape outcome that has not happened.":
+                "You were involved in the bank robbery. You know your own actions, but do not invent demands, evidence, or a change in the scene.";
+            if(_suspectLocated||_negotiationStarted||ArrestProviderOwnsSubject)NpcaiStory(Subject,suspect,
+                ArrestProviderOwnsSubject?"Cooperative":"Defiant",K9MedicalOwnsSubject);
+        }
+
         public override void Process()
         {
             var player=Game.LocalPlayer.Character;
@@ -1565,6 +1579,7 @@ namespace AdvancedK9.Callouts
         {
             if(_bankCleanupStarted)return;
             _bankCleanupStarted=true;
+            CloseNpcaiScene();
             if(_primaryContactBlip!=null&&_primaryContactBlip.Exists())_primaryContactBlip.Delete();
             bool pursuitOwnedEntities=_bankPursuitStarted||_bankGetawayDeparted;
             try{if(_bankPursuitStarted)EndBankPursuit();}catch(System.Exception ex){Game.LogTrivial("AdvancedK9 Callouts: bank pursuit shutdown contained: "+ex.Message);}
