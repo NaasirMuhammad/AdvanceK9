@@ -10,5 +10,8 @@ namespace AdvancedK9.Medical
         internal static bool CanDepart(bool driverInAssignedSeat,bool partnerAvailable,bool partnerInAssignedSeat,bool hospital,bool patientLoaded)
             => driverInAssignedSeat && (!partnerAvailable || partnerInAssignedSeat) && (!hospital || patientLoaded);
 
+        internal static bool RetainStretcher(bool loaded,bool secured,bool running,bool cancelled,bool patientAlive,bool equipmentAvailable)
+            => !loaded&&secured&&running&&!cancelled&&patientAlive&&equipmentAvailable;
+
     }
 }

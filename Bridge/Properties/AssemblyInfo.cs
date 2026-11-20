@@ -4,9 +4,9 @@ using System.Reflection;
 [assembly: AssemblyDescription("LSPDFR AppDomain companion for AdvancedK9")]
 [assembly: AssemblyCompany("mtennekten")]
 [assembly: AssemblyProduct("AdvancedK9 LSPDFR Bridge")]
-[assembly: AssemblyVersion("0.24.1.7")]
-[assembly: AssemblyFileVersion("0.24.1.7")]
-[assembly: AssemblyInformationalVersion("0.24.1-custody-test+build888")]
+[assembly: AssemblyVersion("0.24.1.8")]
+[assembly: AssemblyFileVersion("0.24.1.8")]
+[assembly: AssemblyInformationalVersion("0.24.1-custody-test+build890")]
 
 
 
