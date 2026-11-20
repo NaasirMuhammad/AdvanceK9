@@ -437,7 +437,7 @@ namespace AdvancedK9
         }
         private void ShutdownMedicalResponders()
         {
-            _biteMedicalResponseActive=false;_medicalAssessmentGeneration++;
+            _biteMedicalResponseActive=false;_medicalArrivalInProgress=false;_medicalArrivalRecoveryRequested=false;_medicalAssessmentGeneration++;
             ReturnMedicsToService();
             foreach(var crew in _medicalDepartures.ToArray()){crew.Cancelled=true;ReleaseMedicalCrew(crew);}
             _biteMedicalLoadingPatient=false;

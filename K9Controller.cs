@@ -360,6 +360,7 @@ namespace AdvancedK9
                 if (ChordPressed(_config.ModifierKey, _config.KennelKey)) ShowKennelMenu();
                 if (ChordPressed(_config.ModifierKey,_config.CommandKey)) ShowCommandMenu();
                 HandlePushToTalk();
+                HandleMedicalRecoveryShortcut();
                 MaintainK9Availability();
                 if (!DogEntityExists()) { MaintainReleasedBiteTarget(); DrainVoice(false); continue; }
                 HandleApprehendShortcut();
@@ -2683,6 +2684,7 @@ namespace AdvancedK9
             if(_biteMedicalResponseActive){Game.DisplayNotification("~y~AdvancedK9 EMS is already responding to the bite patient.");return;}
             if(_releasedBiteTarget==null||!_releasedBiteTarget.Exists()||_releasedBiteTarget.IsDead){Game.DisplayNotification("~y~No living released K9 bite patient is available for AdvancedK9 EMS.");return;}
             _biteMedicalResponseActive=true;
+            _medicalArrivalRecoveryRequested=false;
             _pr.RecordBiteReportEvent(_releasedBiteTarget,"EMSRequested",_profile.Name,"AdvancedK9 ambulance requested for the bite patient. Treatment not yet completed.");
             Game.DisplayNotification("~b~Dispatch:~s~ AdvancedK9 EMS is responding to the bite patient's live location.");
             K9IncidentLog.Write(_profile.Name,"Medical","AdvancedK9 EMS requested for released bite patient",_releasedBiteTarget.Position);
@@ -2715,11 +2717,14 @@ namespace AdvancedK9
                 NativeFunction.Natives.SET_VEHICLE_SIREN(_biteMedicalVehicle,true);
                 _biteMedicalBlip=_biteMedicalVehicle.AttachBlip();_biteMedicalBlip.Name="AdvancedK9 EMS";_biteMedicalBlip.Color=Color.Red;
                 Vector3 medicalStage=FindSafeMedicalStaging(patient.Position,_biteMedicalVehicle.Position);
+                _medicalArrivalInProgress=true;
+                if(_config.EmsRecoveryKey!=Keys.None)Game.DisplayNotification("~b~EMS:~s~ If the ambulance gets stuck, hold ~y~"+_config.EmsRecoveryKey+"~s~ to bring it to the scene.");
                 NativeFunction.Natives.TASK_VEHICLE_DRIVE_TO_COORD_LONGRANGE(_biteMedicalDriver,_biteMedicalVehicle,medicalStage.X,medicalStage.Y,medicalStage.Z,13f,786468,8f);
                 uint deadline=Game.GameTime+75000;
                 bool finalApproach=false;
                 while(_biteMedicalResponseActive&&patient.Exists()&&!patient.IsDead&&_biteMedicalVehicle.Exists()&&_biteMedicalDriver.Exists()&&Game.GameTime<deadline&&_biteMedicalVehicle.Position.DistanceTo(medicalStage)>8f)
                 {
+                    if(TryRecoverMedicalArrival(patient,ref medicalStage))break;
                     float remaining=_biteMedicalVehicle.Position.DistanceTo(medicalStage);
                     if(!finalApproach&&remaining<=30f)
                     {
@@ -2738,6 +2743,7 @@ namespace AdvancedK9
                     NativeFunction.Natives.SET_PED_INTO_VEHICLE(_biteMedicalDriver,_biteMedicalVehicle,-1);NativeFunction.Natives.SET_PED_INTO_VEHICLE(_biteMedicalPartner,_biteMedicalVehicle,0);
                     Game.LogTrivial("AdvancedK9 EMS used the validated roadside staging fallback after the original route did not reach it.");
                 }
+                _medicalArrivalInProgress=false;_medicalArrivalRecoveryRequested=false;
                 NativeFunction.Natives.SET_VEHICLE_SIREN(_biteMedicalVehicle,false);
                 NativeFunction.Natives.TASK_VEHICLE_TEMP_ACTION(_biteMedicalDriver,_biteMedicalVehicle,27,2200);WaitOwned(1700);
                 NativeFunction.Natives.SET_VEHICLE_FORWARD_SPEED(_biteMedicalVehicle,0f);
@@ -2816,7 +2822,7 @@ namespace AdvancedK9
             }
             finally
             {
-                _biteMedicalResponseActive=false;
+                _biteMedicalResponseActive=false;_medicalArrivalInProgress=false;_medicalArrivalRecoveryRequested=false;
                 if(_biteMedicalBlip!=null&&_biteMedicalBlip.Exists())_biteMedicalBlip.Delete();_biteMedicalBlip=null;
                 _medicalAssessmentGeneration++;
                 if(!transported)ReturnMedicsToService();

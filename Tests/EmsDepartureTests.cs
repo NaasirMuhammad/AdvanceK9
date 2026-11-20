@@ -21,6 +21,17 @@ static class EmsDepartureTests
         Check(!EmsDeparturePolicy.RetainStretcher(false,true,false,false,true,true),"Shutdown must release the stretcher attachment.");
         Check(!EmsDeparturePolicy.RetainStretcher(false,false,true,false,true,true),"An unsecured patient cannot be retained as loaded.");
         Check(!EmsDeparturePolicy.RetainStretcher(false,true,true,false,true,false),"Missing equipment cannot retain an attachment.");
+        var hold=new MedicalRecoveryHold();
+        Check(!hold.Update(true,true,100,1500),"A tap must not move an ambulance.");
+        Check(!hold.Update(true,true,1599,1500),"Recovery must wait for the entire hold.");
+        Check(hold.Update(true,true,1600,1500),"A full deliberate hold requests recovery.");
+        Check(!hold.Update(true,true,5000,1500),"Holding the key cannot repeatedly warp the crew.");
+        hold.Update(false,true,5001,1500);
+        Check(!hold.Update(true,false,5100,1500),"A hold without an arriving crew cannot arm recovery.");
+        Check(!hold.Update(true,true,7100,1500),"A held menu key cannot trigger when an ambulance becomes available.");
+        hold.Update(false,true,7200,1500);hold.Update(true,true,7300,1500);
+        Check(!hold.Update(true,false,7400,1500),"Treatment invalidates arrival recovery.");
+        Check(!hold.Update(true,true,9000,1500),"A cancelled hold must be released before retrying.");
         var signal=new NexusSceneClearSignal();
         string prefix="[11/1/2026 1:36:34 AM.052] LSPD First Response: NexusDispatch: ";
         Check(!signal.Feed(prefix+"[DispatchPipeline] Transcript: \"Code four\"\n"),"Transcript alone must not dismiss EMS.");

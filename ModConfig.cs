@@ -18,6 +18,8 @@ namespace AdvancedK9
         public Keys PushToTalkKey = Keys.V;
         public Keys KennelKey = Keys.U;
         public Keys ApprehendKey = Keys.G;
+        public Keys EmsRecoveryKey = Keys.Back;
+        public int EmsRecoveryHoldMilliseconds = 1500;
         public bool ControllerApprehendEnabled = true;
         public int ControllerApprehendModifier = 25;
         public int ControllerApprehendButton = 188;
@@ -105,6 +107,8 @@ namespace AdvancedK9
             result.PushToTalkKey = ini.ReadEnum("Keys", "PushToTalk", result.PushToTalkKey);
             result.KennelKey = ini.ReadEnum("Keys", "KennelProfile", result.KennelKey);
             result.ApprehendKey = ini.ReadEnum("Keys", "Apprehend", result.ApprehendKey);
+            result.EmsRecoveryKey = ini.ReadEnum("Keys", "EmsRecovery", result.EmsRecoveryKey);
+            result.EmsRecoveryHoldMilliseconds = Math.Max(750, Math.Min(5000, ini.ReadInt32("Medical", "EmsRecoveryHoldMilliseconds", result.EmsRecoveryHoldMilliseconds)));
             result.ControllerApprehendEnabled = ini.ReadBoolean("Controller", "ApprehendEnabled", result.ControllerApprehendEnabled);
             result.ControllerApprehendModifier = Math.Max(0, Math.Min(360, ini.ReadInt32("Controller", "ApprehendModifierControl", result.ControllerApprehendModifier)));
             result.ControllerApprehendButton = Math.Max(0, Math.Min(360, ini.ReadInt32("Controller", "ApprehendButtonControl", result.ControllerApprehendButton)));
