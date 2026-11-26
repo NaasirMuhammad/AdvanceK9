@@ -30,7 +30,7 @@ namespace AdvancedK9
                 _biteMedicalVehicle==null||!_biteMedicalVehicle.Exists()||
                 !Living(_biteMedicalDriver)||!Living(_biteMedicalPartner))return false;
             Vector3 destination;
-            if(!TryFindMedicalRecoveryPosition(patient,out destination))
+            if(!TryFindMedicalRecoveryPosition(out destination))
             {
                 Game.DisplayNotification("~y~EMS:~s~ No clear roadside arrival position found. Clear some space and hold "+_config.EmsRecoveryKey+" to retry.");
                 Game.LogTrivial("AdvancedK9 EMS: manual arrival recovery rejected; no clear nearby road position.");
@@ -44,29 +44,35 @@ namespace AdvancedK9
             NativeFunction.Natives.SET_PED_INTO_VEHICLE(_biteMedicalDriver,ambulance,-1);
             NativeFunction.Natives.SET_PED_INTO_VEHICLE(_biteMedicalPartner,ambulance,0);
             medicalStage=ambulance.Position;
-            Game.LogTrivial("AdvancedK9 EMS: player requested arrival recovery; existing ambulance and crew moved to "+medicalStage+". Treatment has not been skipped.");
-            Game.DisplayNotification("~b~EMS:~s~ Ambulance brought to the scene. Paramedics are approaching the patient.");
+            Game.LogTrivial("AdvancedK9 EMS: player requested arrival recovery at the handler street location; existing ambulance and crew moved to "+medicalStage+". Treatment has not been skipped.");
+            Game.DisplayNotification("~b~EMS:~s~ Ambulance brought to your street location. Paramedics are approaching the patient.");
             return true;
         }
 
-        private bool TryFindMedicalRecoveryPosition(Ped patient,out Vector3 result)
+        private bool TryFindMedicalRecoveryPosition(out Vector3 result)
         {
             result=default(Vector3);
+            var handler=Game.LocalPlayer.Character;
+            if(handler==null||!handler.Exists())return false;
+            Vector3 origin=handler.Position;
             var vehicles=World.GetAllVehicles();var peds=World.GetAllPeds();
-            foreach(float radius in new[]{12f,18f,25f,32f})
+            // Start at the player's street location. Prefer the nearest clear road
+            // point while leaving enough room to avoid placing the vehicle on them.
+            var candidates=new System.Collections.Generic.List<Vector3>();
+            foreach(float radius in new[]{0f,8f,12f,16f})
                 for(int i=0;i<16;i++)
-                {
-                    var candidate=World.GetNextPositionOnStreet(patient.Position+HeadingOffset(i*22.5f,radius));
-                    float distance=candidate.DistanceTo(patient.Position);
-                    if(distance<9f||distance>38f||Math.Abs(candidate.Z-patient.Position.Z)>3f)continue;
-                    // Leave room for the ambulance body, medics and rear doors.
-                    if(vehicles.Any(v=>v!=null&&v.Exists()&&v!=_biteMedicalVehicle&&v.DistanceTo(candidate)<8f))continue;
-                    if(peds.Any(p=>p!=null&&p.Exists()&&p!=_biteMedicalDriver&&p!=_biteMedicalPartner&&p.DistanceTo(candidate)<6f))continue;
-                    float ground;
-                    if(!NativeFunction.Natives.GET_GROUND_Z_FOR_3D_COORD<bool>(candidate.X,candidate.Y,candidate.Z+2f,out ground,false)||
-                        Math.Abs(ground-candidate.Z)>2f)continue;
-                    result=new Vector3(candidate.X,candidate.Y,ground+.15f);return true;
-                }
+                    candidates.Add(World.GetNextPositionOnStreet(origin+HeadingOffset(i*22.5f,radius)));
+            foreach(var candidate in candidates.OrderBy(c=>c.DistanceTo(origin)))
+            {
+                float distance=candidate.DistanceTo(origin);
+                if(distance<7f||distance>24f||Math.Abs(candidate.Z-origin.Z)>3f)continue;
+                if(vehicles.Any(v=>v!=null&&v.Exists()&&v!=_biteMedicalVehicle&&v.DistanceTo(candidate)<8f))continue;
+                if(peds.Any(p=>p!=null&&p.Exists()&&p!=_biteMedicalDriver&&p!=_biteMedicalPartner&&p.DistanceTo(candidate)<6f))continue;
+                float ground;
+                if(!NativeFunction.Natives.GET_GROUND_Z_FOR_3D_COORD<bool>(candidate.X,candidate.Y,candidate.Z+2f,out ground,false)||
+                    Math.Abs(ground-candidate.Z)>2f)continue;
+                result=new Vector3(candidate.X,candidate.Y,ground+.15f);return true;
+            }
             return false;
         }
     }

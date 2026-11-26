@@ -2718,7 +2718,7 @@ namespace AdvancedK9
                 _biteMedicalBlip=_biteMedicalVehicle.AttachBlip();_biteMedicalBlip.Name="AdvancedK9 EMS";_biteMedicalBlip.Color=Color.Red;
                 Vector3 medicalStage=FindSafeMedicalStaging(patient.Position,_biteMedicalVehicle.Position);
                 _medicalArrivalInProgress=true;
-                if(_config.EmsRecoveryKey!=Keys.None)Game.DisplayNotification("~b~EMS:~s~ If the ambulance gets stuck, hold ~y~"+_config.EmsRecoveryKey+"~s~ to bring it to the scene.");
+                if(_config.EmsRecoveryKey!=Keys.None)Game.DisplayNotification("~b~EMS:~s~ If the ambulance gets stuck, hold ~y~"+_config.EmsRecoveryKey+"~s~ to bring it to your street location.");
                 NativeFunction.Natives.TASK_VEHICLE_DRIVE_TO_COORD_LONGRANGE(_biteMedicalDriver,_biteMedicalVehicle,medicalStage.X,medicalStage.Y,medicalStage.Z,13f,786468,8f);
                 uint deadline=Game.GameTime+75000;
                 bool finalApproach=false;

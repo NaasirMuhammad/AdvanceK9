@@ -14,7 +14,7 @@ namespace AdvancedK9
         {
             internal Vehicle Ambulance;
             internal Ped Driver,Partner,Patient;
-            internal bool PursuitHandoffConfirmed, HandoffInProgress;
+            internal bool PursuitHandoffConfirmed, HandoffInProgress, HandoffWorkerStarted, HandoffClosed;
             internal Rage.Object Stretcher;
             internal bool PatientOnStretcher, PatientOriginallyRagdoll;
             internal float PatientDeckOffset, PatientHeadingOffset;
@@ -86,7 +86,8 @@ namespace AdvancedK9
                         crew.Attempts++;crew.RetryRequested=false;
                         bool patientLoaded=!crew.Hospital||(Living(crew.Patient)&&crew.Patient.IsInVehicle(crew.Ambulance,false));
                         if(crew.Hospital&&!patientLoaded)patientLoaded=LoadPatientWithStretcher(crew);
-                        if((!crew.Hospital||patientLoaded)&&BoardMedicalCrew(crew)&&(!crew.Hospital||ConfirmMedicalPursuitHandoff(crew))&&
+                        if(crew.Hospital&&patientLoaded)BeginMedicalPursuitHandoff(crew);
+                        if((!crew.Hospital||patientLoaded)&&BoardMedicalCrew(crew)&&
                             EmsDeparturePolicy.CanDepart(InMedicalSeat(crew.Driver,crew.Ambulance,-1),Living(crew.Partner),InMedicalSeat(crew.Partner,crew.Ambulance,0),crew.Hospital,patientLoaded))
                         {
                             StartMedicalDrive(crew);
@@ -140,6 +141,7 @@ namespace AdvancedK9
                     _pr.RecordBiteReportEvent(crew.Patient,"EMSFailed",crew.K9,"Hospital transport could not depart because the response vehicle became unavailable. No medical clearance or completed transport is asserted; request replacement EMS.");
                     Game.DisplayNotification("~r~EMS:~s~ Hospital transport needs a replacement ambulance. Request EMS again; the patient has not been medically cleared.");
                 }
+                crew.HandoffClosed=true;
                 _medicalDepartures.Remove(crew);
                 ReleaseMedicalCrew(crew);
             }
@@ -270,9 +272,8 @@ namespace AdvancedK9
                 }
                 stage="verify retained patient";
                 if(!EnsureStretcherPatient(crew))return false;
-                stage="pursuit handoff";
-                Game.LogTrivial("AdvancedK9 EMS: patient attachment and lying animation verified; beginning pursuit handoff.");
-                if(!ConfirmMedicalPursuitHandoff(crew))return false;
+                BeginMedicalPursuitHandoff(crew);
+                Game.LogTrivial("AdvancedK9 EMS: secured patient moving to ambulance immediately; scene clearance and pursuit acknowledgement are not loading gates.");
                 stage="move patient to ambulance";
                 if(!WalkMedicalCarrier(crew,carrier,rearPoint,1.8f,bed,minimum,maximum,patient))return false;
                 NativeFunction.Natives.SET_VEHICLE_DOOR_OPEN(ambulance,2,false,false);NativeFunction.Natives.SET_VEHICLE_DOOR_OPEN(ambulance,3,false,false);
@@ -373,9 +374,36 @@ namespace AdvancedK9
             return false;
         }
 
+        private void BeginMedicalPursuitHandoff(MedicalDeparture crew)
+        {
+            if(crew.HandoffWorkerStarted||crew.HandoffClosed||crew.Cancelled)return;
+            crew.HandoffWorkerStarted=true;
+            GameFiber.StartNew(()=>
+            {
+                int attempts=0;
+                while(_running&&!crew.Cancelled&&!crew.HandoffClosed&&Living(crew.Patient)&&ValidSuspect(crew.Patient))
+                {
+                    try
+                    {
+                        attempts++;
+                        if(ConfirmMedicalPursuitHandoff(crew))
+                        {
+                            Game.LogTrivial("AdvancedK9 EMS: pursuit handoff confirmed in background; attempts="+attempts+".");
+                            return;
+                        }
+                        if(attempts==1||attempts%6==0)
+                            Game.LogTrivial("AdvancedK9 EMS: pursuit handoff acknowledgement pending; hospital loading/departure continues independently. Other pursuit suspects are not cleared.");
+                    }
+                    catch(Exception ex){Game.LogTrivial("AdvancedK9 EMS background pursuit handoff: "+ex.GetType().Name+": "+ex.Message);}
+                    uint retryAt=Game.GameTime+5000;
+                    while(_running&&!crew.Cancelled&&!crew.HandoffClosed&&Game.GameTime<retryAt)GameFiber.Wait(200);
+                }
+            },"AdvancedK9.EMSPursuitHandoff");
+        }
+
         private bool ConfirmMedicalPursuitHandoff(MedicalDeparture crew)
         {
-            if(!ValidSuspect(crew.Patient)||crew.Cancelled)return false;
+            if(!ValidSuspect(crew.Patient)||crew.Cancelled||crew.HandoffClosed)return false;
             if(crew.PursuitHandoffConfirmed)return true;
             crew.HandoffInProgress=true;
             try{crew.PursuitHandoffConfirmed=_pr.TryEndMedicalPursuit(crew.Patient);}
@@ -422,6 +450,7 @@ namespace AdvancedK9
         }
         private static void ReleaseMedicalCrew(MedicalDeparture crew)
         {
+            crew.HandoffClosed=true;
             if(crew.PatientOnStretcher&&crew.Patient!=null&&crew.Patient.Exists())
             {
                 NativeFunction.Natives.DETACH_ENTITY(crew.Patient,true,true);
