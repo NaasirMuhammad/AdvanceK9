@@ -274,6 +274,7 @@ namespace AdvancedK9
         private readonly Dictionary<string,uint> _lastOperationalXp=new Dictionary<string,uint>(StringComparer.OrdinalIgnoreCase);
         private bool _deployed;
         private bool _downed;
+        private int _k9MedicalRecoveryDepth;
         private uint _medicalProtectionUntil;
         private bool _carryingDog;
         private bool _carriedForAccess;
@@ -1588,7 +1589,8 @@ namespace AdvancedK9
                 NativeFunction.Natives.SET_PED_CAN_RAGDOLL(sleeping,true);
                 _dog=sleeping;kennel.Resident=null;kennel.ResidentProfileId=null;
                 _profile.PrepareDeployment();
-                _dog.Health=Math.Max(100,(int)(_dog.MaxHealth*_profile.Health/100f));
+                _dog.MaxHealth=K9HealthScale.Maximum(_dog.MaxHealth);
+                _dog.Health=K9HealthScale.ToEntity(_dog.MaxHealth,_profile.Health);
                 _dog.IsInvincible=true;
                 _medicalProtectionUntil=Game.GameTime+3000;
                 ConfigureK9RelationshipGroup(Game.LocalPlayer.Character);
@@ -1608,7 +1610,7 @@ namespace AdvancedK9
             ActionNotification("~b~K9 " + _profile.Name + "~s~ picked up from " + kennel.Name + ".~n~" + _profile.Breed + " • " + _profile.Vest + " vest");
         }
 
-        private bool CreateDogAt(Vector3 position,float heading)
+        private bool CreateDogAt(Vector3 position,float heading,bool medicalRecovery=false)
         {
             var selectedModel = _profile.ModelName;
             var model = new Model(selectedModel);
@@ -1628,8 +1630,9 @@ namespace AdvancedK9
             model.Dismiss();
             NativeFunction.Natives.RESURRECT_PED(_dog);
             NativeFunction.Natives.CLEAR_PED_TASKS_IMMEDIATELY(_dog);
-            _profile.PrepareDeployment();
-            _dog.Health = Math.Max(100, (int)(_dog.MaxHealth * _profile.Health / 100f));
+            if(!medicalRecovery)_profile.PrepareDeployment();
+            _dog.MaxHealth=K9HealthScale.Maximum(_dog.MaxHealth);
+            _dog.Health=K9HealthScale.ToEntity(_dog.MaxHealth,_profile.Health);
             _dog.IsPersistent = true;
             _dog.BlockPermanentEvents = true;
             ConfigureK9RelationshipGroup(officer);
@@ -2083,24 +2086,83 @@ namespace AdvancedK9
 
         private void Inspect(){Game.DisplayNotification("~b~K9 "+_profile.Name+" — FIELD INSPECTION~s~~n~Health: "+_profile.Health+"%  Stamina: "+_profile.Stamina+"%~n~Bond: "+_trust.Level+"/100 ("+_trust.Rank+")  Confidence: "+_profile.Confidence+"/100~n~Training: Level "+_profile.TrainingLevel+"/5 • "+_profile.TrainingLevelProgress+"/"+_profile.CurrentTrainingRequirement+" XP~n~~g~Completed certifications:~s~ "+Certifications());Game.DisplayNotification("~b~ROSTER & DUTY STATUS~s~~n~Profile: "+_profile.ProfileId+" • Kennel: "+(string.IsNullOrWhiteSpace(_roster.Active.KennelKey)?"Unassigned":_roster.Active.KennelKey)+"~n~Status: "+(_profile.IsRehabilitating?"Rehabilitation "+_profile.RehabilitationProgress+"%":_roster.Active.Status)+"~n~~b~DUTY EQUIPMENT~s~~n~Meals "+_profile.FoodMeals+"  Water "+_profile.WaterBottles+"  First aid "+_profile.FirstAidKits+"~n~Scent bags "+_profile.ScentBags+"  Treats "+_profile.Treats+"~n~~b~Integration:~s~ "+_pr.ModeLabel);}
         private string Certifications(){string s="";if(_profile.ObedienceCertified)s+="OB ";if(_profile.AgilityCertified)s+="AGI ";if(_profile.DetectionCertified)s+="DET ";if(_profile.NarcoticsCertified)s+="NAR ";if(_profile.ExplosivesCertified)s+="BOMB ";if(_profile.WeaponsCertified)s+="WPN ";if(_profile.TrackingCertified)s+="TRK ";if(_profile.ApprehensionCertified)s+="APP ";return s.Length==0?"In training":s.Trim();}
-        private void FirstAid(){if(!DogEntityExists()){Game.DisplayNotification("~y~No deployed K9 is available for treatment.");return;}if(!_downed&&_profile.Health>=95){Game.DisplayNotification("~g~No field treatment required.");return;}if(!_profile.UseFirstAid()){Game.DisplayNotification("~r~No first-aid kits. Restock at the patrol vehicle.");return;}if(_carryingDog)SetDownCarriedK9(false);int restored=Math.Max(35,_profile.Health);bool wasDowned=_downed;_profile.SetInjury("Serious — stabilized; veterinary treatment required",restored);if(wasDowned)RecreateDogAfterFieldTreatment(restored);else RestoreDogAfterTreatment(restored);_downed=false;_state=K9State.Injured;if(_blip!=null&&_blip.Exists()){_blip.Color=Color.DodgerBlue;_blip.Name="K9 "+_profile.Name;}LieDown();WaitOwned(1800);_profile.ChangeTrust(2);K9IncidentLog.Write(_profile.Name,"Medical","Emergency field revival and stabilization",_dog.Position);Game.LogTrivial("AdvancedK9: downed K9 stabilized by field first aid with persistent recovery entity at "+_dog.Position+".");Game.DisplayNotification("~g~K9 stabilized in the field.~s~~n~Use Veterinary Transport or Veterinary Care for definitive treatment.");}
-
-        private void RecreateDogAfterFieldTreatment(int healthPercent)
+        private void FirstAid()
         {
-            Vector3 position=_dog.Position;float heading=_dog.Heading;
-            if(_blip!=null&&_blip.Exists())_blip.Delete();
-            _dog.Delete();_dog=null;
-            if(!CreateDogAt(position,heading))throw new InvalidOperationException("Unable to recreate the treated K9 entity.");
-            _profile.SetInjury("Serious — stabilized; veterinary treatment required",healthPercent);
-            int health=Math.Max(1,(int)(_dog.MaxHealth*Math.Max(1,Math.Min(100,healthPercent))/100f));
-            _dog.Health=health;NativeFunction.Natives.SET_ENTITY_HEALTH(_dog,health);_dog.IsInvincible=true;_medicalProtectionUntil=Game.GameTime+12000;
-            for(int i=0;i<30;i++)
+            if(!DogEntityExists()){Game.DisplayNotification("~y~No deployed K9 is available for treatment.");return;}
+            if(!_downed&&_profile.Health>=95){Game.DisplayNotification("~g~No field treatment required.");return;}
+            if(_profile.FirstAidKits<=0){Game.DisplayNotification("~r~No first-aid kits. Restock at the patrol vehicle.");return;}
+            if(_carryingDog)SetDownCarriedK9(false);
+            int restored=Math.Max(35,Math.Min(100,_profile.Health+20));
+            if(_downed)RecreateDogAfterFieldTreatment(restored);else RestoreDogAfterTreatment(restored);
+            // Consume equipment only after the replacement/restore is verified.
+            if(!_profile.UseFirstAid())throw new InvalidOperationException("First-aid equipment became unavailable.");
+            _profile.SetInjury("Serious — stabilized; veterinary treatment required",restored);
+            _downed=false;_state=K9State.Injured;
+            if(_blip!=null&&_blip.Exists()){_blip.Color=Color.DodgerBlue;_blip.Name="K9 "+_profile.Name;}
+            LieDown();WaitOwned(1800);_profile.ChangeTrust(2);
+            K9IncidentLog.Write(_profile.Name,"Medical","Emergency field revival and stabilization",_dog.Position);
+            Game.LogTrivial("AdvancedK9: K9 field stabilization completed after living-state verification; entity health="+_dog.Health+", profile health="+_profile.Health+".");
+            Game.DisplayNotification("~g~K9 stabilized in the field.~s~~n~Use Veterinary Transport or Veterinary Care for definitive treatment.");
+        }
+
+        private void RecreateDogAfterFieldTreatment(int healthPercent)=>RecoverK9MedicalEntity(healthPercent,true);
+
+        private void RecoverK9MedicalEntity(int healthPercent,bool replace)
+        {
+            if(!DogEntityExists())throw new InvalidOperationException("K9 entity unavailable for treatment.");
+            _k9MedicalRecoveryDepth++;
+            Ped recovering=null;
+            try
             {
-                if(_dog.IsDead||NativeFunction.Natives.IS_PED_DEAD_OR_DYING<bool>(_dog,true))NativeFunction.Natives.RESURRECT_PED(_dog);
-                _dog.Health=health;NativeFunction.Natives.SET_ENTITY_HEALTH(_dog,health);_dog.IsInvincible=true;_dog.BlockPermanentEvents=true;
-                WaitOwned(100);
+                Vector3 position=_dog.Position;float heading=_dog.Heading;
+                if(replace)
+                {
+                    DeleteLeashRope();ReleaseVehicleSeat();
+                    if(_blip!=null&&_blip.Exists())_blip.Delete();
+                    _dog.Delete();_dog=null;
+                    if(!CreateDogAt(position,heading,true))throw new InvalidOperationException("Unable to recreate the treated K9 entity.");
+                }
+                recovering=_dog;
+                recovering.MaxHealth=K9HealthScale.Maximum(recovering.MaxHealth);
+                int health=K9HealthScale.ToEntity(recovering.MaxHealth,healthPercent);
+                recovering.IsInvincible=true;_medicalProtectionUntil=Game.GameTime+12000;
+                NativeFunction.Natives.FREEZE_ENTITY_POSITION(recovering,false);
+                NativeFunction.Natives.DETACH_ENTITY(recovering,true,true);
+                NativeFunction.Natives.RESURRECT_PED(recovering);
+                NativeFunction.Natives.REVIVE_INJURED_PED(recovering);
+                NativeFunction.Natives.CLEAR_PED_TASKS_IMMEDIATELY(recovering);
+                NativeFunction.Natives.SET_ENTITY_COORDS_NO_OFFSET(recovering,position.X,position.Y,position.Z,false,false,false);
+                recovering.Heading=heading;
+                NativeFunction.Natives.SET_ENTITY_COLLISION(recovering,true,true);
+                NativeFunction.Natives.SET_PED_CAN_RAGDOLL(recovering,true);
+                recovering.Health=health;recovering.BlockPermanentEvents=true;
+                ConfigureAmbientGunfireImmunity();
+                int stable=0;
+                for(int i=0;i<50&&stable<10;i++)
+                {
+                    WaitOwned(100);
+                    if(!DogEntityExists()||_dog!=recovering)throw new InvalidOperationException("K9 changed during medical stabilization.");
+                    bool terminal=recovering.IsDead||NativeFunction.Natives.IS_PED_DEAD_OR_DYING<bool>(recovering,true);
+                    if(terminal){stable=0;NativeFunction.Natives.RESURRECT_PED(recovering);NativeFunction.Natives.REVIVE_INJURED_PED(recovering);}
+                    else if(recovering.Health>100)stable++;
+                    else stable=0;
+                    recovering.Health=health;recovering.IsInvincible=true;
+                }
+                if(stable<10)throw new InvalidOperationException("K9 did not remain alive through the stabilization window.");
+                _downed=false;_state=K9State.Injured;
+                _medicalProtectionUntil=Game.GameTime+12000;
+                Game.LogTrivial("AdvancedK9 medical recovery verified: replaced="+replace+", health="+recovering.Health+", max="+recovering.MaxHealth+", requested profile="+healthPercent+", stable samples="+stable+".");
             }
-            Game.LogTrivial("AdvancedK9 medical recovery: replaced GTA's terminal ped instance after field stabilization.");
+            catch
+            {
+                if(_deployed&&DogEntityExists()&&(recovering==null||_dog==recovering))
+                {
+                    _downed=true;_state=K9State.Injured;_dog.IsInvincible=true;
+                    _profile.SetInjury("Critical — treatment incomplete; first aid or veterinary treatment required",1);
+                }
+                throw;
+            }
+            finally{_k9MedicalRecoveryDepth--;}
         }
 
         private void Rest(){if(!DogExists())return;LieDown();ActionNotification("~b~K9 rest cycle started.~s~ Maintain a safe perimeter.");WaitOwned(8000);_profile.Rest();K9IncidentLog.Write(_profile.Name,"Care","Rest cycle",_dog.Position);ActionNotification("~g~K9 rested.~s~ Stamina restored.");}
@@ -2201,27 +2263,7 @@ namespace AdvancedK9
             }
         }
 
-        private void RestoreDogAfterTreatment(int healthPercent)
-        {
-            if(!DogEntityExists())return;
-            Vector3 recoveryPosition=_dog.Position;float recoveryHeading=_dog.Heading;
-            NativeFunction.Natives.FREEZE_ENTITY_POSITION(_dog,false);NativeFunction.Natives.DETACH_ENTITY(_dog,true,true);
-            if(_dog.IsDead||NativeFunction.Natives.IS_PED_DEAD_OR_DYING<bool>(_dog,true))NativeFunction.Natives.RESURRECT_PED(_dog);
-            NativeFunction.Natives.SET_ENTITY_COORDS_NO_OFFSET(_dog,recoveryPosition.X,recoveryPosition.Y,recoveryPosition.Z,false,false,false);_dog.Heading=recoveryHeading;
-            NativeFunction.Natives.REVIVE_INJURED_PED(_dog);NativeFunction.Natives.CLEAR_PED_TASKS_IMMEDIATELY(_dog);
-            int health=Math.Max(1,(int)(_dog.MaxHealth*Math.Max(1,Math.Min(100,healthPercent))/100f));
-            _dog.Health=health;NativeFunction.Natives.SET_ENTITY_HEALTH(_dog,health);NativeFunction.Natives.SET_ENTITY_COLLISION(_dog,true,true);NativeFunction.Natives.SET_PED_CAN_RAGDOLL(_dog,true);
-            // Treatment can occur in the middle of an active firefight. Keep the
-            // revived ped protected long enough for the death state and combat
-            // damage queued on the prior frame to clear.
-            _dog.IsInvincible=true;_medicalProtectionUntil=Game.GameTime+12000;_dog.BlockPermanentEvents=true;ConfigureAmbientGunfireImmunity();
-            WaitOwned(150);
-            if(DogEntityExists()&&(_dog.IsDead||NativeFunction.Natives.IS_PED_DEAD_OR_DYING<bool>(_dog,true)))
-            {
-                NativeFunction.Natives.RESURRECT_PED(_dog);NativeFunction.Natives.SET_ENTITY_COORDS_NO_OFFSET(_dog,recoveryPosition.X,recoveryPosition.Y,recoveryPosition.Z,false,false,false);
-                _dog.Health=health;NativeFunction.Natives.SET_ENTITY_HEALTH(_dog,health);NativeFunction.Natives.CLEAR_PED_TASKS_IMMEDIATELY(_dog);
-            }
-        }
+        private void RestoreDogAfterTreatment(int healthPercent)=>RecoverK9MedicalEntity(healthPercent,false);
 
         private void ToggleCarryK9()
         {
@@ -4007,20 +4049,20 @@ namespace AdvancedK9
 
         private void MaintainK9Availability()
         {
-            if(!_deployed)return;
+            if(!_deployed||_k9MedicalRecoveryDepth>0)return;
             if(DogEntityExists())
             {
                 _lastDogPosition=_dog.Position;_lastDogHeading=_dog.Heading;
                 if(_downed)
                 {
                     if(_dog.IsDead)NativeFunction.Natives.RESURRECT_PED(_dog);
-                    _dog.Health=Math.Max(1,_dog.Health);_dog.IsInvincible=true;_dog.BlockPermanentEvents=true;
+                    _dog.Health=Math.Max(101,_dog.Health);_dog.IsInvincible=true;_dog.BlockPermanentEvents=true;
                     return;
                 }
                 if(!_dog.IsDead)return;
                 NativeFunction.Natives.RESURRECT_PED(_dog);
                 NativeFunction.Natives.CLEAR_PED_TASKS_IMMEDIATELY(_dog);
-                _dog.Health=1;_dog.IsInvincible=true;_dog.BlockPermanentEvents=true;
+                _dog.Health=K9HealthScale.ToEntity(_dog.MaxHealth,1);_dog.IsInvincible=true;_dog.BlockPermanentEvents=true;
                 _profile.SetInjury("Critical — downed; field first aid required",1);
                 _taskOwnerGeneration++;_pendingDogCommand=null;
                 _state=K9State.Injured;_downed=true;DeleteLeashRope();ReleaseVehicleSeat();_camera.Disable();
@@ -4036,7 +4078,7 @@ namespace AdvancedK9
             Game.LogTrivial("AdvancedK9: deployed K9 entity disappeared; recreating a recoverable downed K9 at last known position.");
             if(CreateDogAt(_lastDogPosition,_lastDogHeading))
             {
-                _dog.Health=1;_dog.IsInvincible=true;_profile.SetInjury("Critical — downed; field first aid required",1);
+                _dog.Health=K9HealthScale.ToEntity(_dog.MaxHealth,1);_dog.IsInvincible=true;_profile.SetInjury("Critical — downed; field first aid required",1);
                 _state=K9State.Injured;_downed=true;PlaceDogInDownedPose();if(_blip!=null&&_blip.Exists()){_blip.Color=Color.Red;_blip.Name="K9 "+_profile.Name+" — DOWNED";}
             }
         }
@@ -4045,6 +4087,7 @@ namespace AdvancedK9
 
         private void MaintainState()
         {
+            if(_k9MedicalRecoveryDepth>0){MaintainReleasedBiteTarget();return;}
             if (!DogEntityExists()) return;
             if(_medicalProtectionUntil!=0&&Game.GameTime>=_medicalProtectionUntil){_medicalProtectionUntil=0;_dog.IsInvincible=false;ConfigureAmbientGunfireImmunity();}
             if(_commandWorkerRunning||_canineAnimationDepth>0)
@@ -4070,7 +4113,7 @@ namespace AdvancedK9
             MaintainContainment();
             MaintainControlledBiteHold();
             MaintainReleasedBiteTarget();
-            if(Game.GameTime>=_nextVitalsUpdate){_nextVitalsUpdate=Game.GameTime+5000;int liveHealth=(int)(100f*_dog.Health/Math.Max(1,_dog.MaxHealth));if(liveHealth<_profile.Health){string injury=liveHealth<=25?"Serious — veterinary treatment required":liveHealth<=55?"Moderate":"Minor";_profile.SetInjury(injury,liveHealth);K9IncidentLog.Write(_profile.Name,"Injury",injury,_dog.Position);}NativeFunction.Natives.SET_PED_MOVE_RATE_OVERRIDE(_dog,_profile.Health<=55?.65f:1f);if(_state==K9State.Searching||_state==K9State.Tracking||_state==K9State.Apprehending)_profile.UseStamina(2);else _profile.Recover(1);}
+            if(Game.GameTime>=_nextVitalsUpdate){_nextVitalsUpdate=Game.GameTime+5000;int liveHealth=K9HealthScale.ToProfile(_dog.MaxHealth,_dog.Health);if(liveHealth<_profile.Health){string injury=liveHealth<=25?"Serious — veterinary treatment required":liveHealth<=55?"Moderate":"Minor";_profile.SetInjury(injury,liveHealth);K9IncidentLog.Write(_profile.Name,"Injury",injury,_dog.Position);}NativeFunction.Natives.SET_PED_MOVE_RATE_OVERRIDE(_dog,_profile.Health<=55?.65f:1f);if(_state==K9State.Searching||_state==K9State.Tracking||_state==K9State.Apprehending)_profile.UseStamina(2);else _profile.Recover(1);}
             if (_state == K9State.Leashed)
             {
                 NativeFunction.Natives.FREEZE_ENTITY_POSITION(_dog,false);

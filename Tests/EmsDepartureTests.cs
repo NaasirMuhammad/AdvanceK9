@@ -32,6 +32,15 @@ static class EmsDepartureTests
         hold.Update(false,true,7200,1500);hold.Update(true,true,7300,1500);
         Check(!hold.Update(true,false,7400,1500),"Treatment invalidates arrival recovery.");
         Check(!hold.Update(true,true,9000,1500),"A cancelled hold must be released before retrying.");
+        foreach(int maximum in new[]{100,200,300,500})
+            foreach(int percent in new[]{1,20,35,70,100})
+            {
+                int native=K9HealthScale.ToEntity(maximum,percent);
+                Check(native>100&&native<=K9HealthScale.Maximum(maximum),"Treatment must stay in the living health range for every supported maximum.");
+                Check(System.Math.Abs(K9HealthScale.ToProfile(maximum,native)-percent)<=1,"Restored profile health must survive the next vitals sample.");
+            }
+        Check(K9HealthScale.ToEntity(200,35)==135,"35 percent first aid must not write terminal native health 70.");
+        Check(K9HealthScale.ToProfile(200,100)==0,"Terminal native health must not be reported as half healthy.");
         var signal=new NexusSceneClearSignal();
         string prefix="[11/1/2026 1:36:34 AM.052] LSPD First Response: NexusDispatch: ";
         Check(!signal.Feed(prefix+"[DispatchPipeline] Transcript: \"Code four\"\n"),"Transcript alone must not dismiss EMS.");
